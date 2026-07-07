@@ -1,0 +1,73 @@
+<?php
+
+namespace App\Services\Leave;
+
+use App\Enums\Leave\RequiredApproverType;
+use App\Models\Kdtph\Formspic;
+
+/**
+ * Builds leave_approval_requirement rows based on the filer's PIC role.
+ *
+ * Rules source: docs/APPROVAL_RULES.md
+ */
+class LeaveApprovalPolicy
+{
+    /**
+     * @return list<array{
+     *     display_order: int,
+     *     allowed_levels: ?array<int, int>,
+     *     required_approver_type: ?RequiredApproverType
+     * }>
+     */
+    public function requirementsForFiler(int $empId): array
+    {
+        $picRole = Formspic::query()
+            ->where('fldEmployeeNum', $empId)
+            ->value('fldRole');
+
+        return match ((int) $picRole) {
+            1 => [
+                $this->managerRequirement(1, [2]),
+                $this->managerRequirement(2, [3, 4]),
+            ],
+            2 => [
+                $this->managerRequirement(1, [3, 4]),
+            ],
+            3 => [
+                $this->managerRequirement(1, [4]),
+            ],
+            4 => [
+                $this->specialRequirement(1, RequiredApproverType::President),
+            ],
+            default => [
+                $this->managerRequirement(1, [1, 2]),
+                $this->managerRequirement(2, [3, 4]),
+            ],
+        };
+    }
+
+    /**
+     * @param  list<int>  $levels
+     * @return array{display_order: int, allowed_levels: array<int, int>, required_approver_type: null}
+     */
+    private function managerRequirement(int $displayOrder, array $levels): array
+    {
+        return [
+            'display_order' => $displayOrder,
+            'allowed_levels' => $levels,
+            'required_approver_type' => null,
+        ];
+    }
+
+    /**
+     * @return array{display_order: int, allowed_levels: null, required_approver_type: RequiredApproverType}
+     */
+    private function specialRequirement(int $displayOrder, RequiredApproverType $type): array
+    {
+        return [
+            'display_order' => $displayOrder,
+            'allowed_levels' => null,
+            'required_approver_type' => $type,
+        ];
+    }
+}

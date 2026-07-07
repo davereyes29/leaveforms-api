@@ -114,6 +114,63 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | kdtphdb — employee master data (read-only)
+        |--------------------------------------------------------------------------
+        |
+        | Employees, approvers (formspic), holidays, and portal login live here.
+        | The revamp must not alter this schema. Use $connection = 'kdtphdb' on
+        | models, or DB::connection('kdtphdb') for ad-hoc queries.
+        |
+        */
+        'kdtphdb' => [
+            'driver' => 'mysql',
+            'host' => env('KDT_PH_DB_HOST', '127.0.0.1'),
+            'port' => env('KDT_PH_DB_PORT', '3306'),
+            'database' => env('KDT_PH_DB_DATABASE', 'kdtphdb'),
+            'username' => env('KDT_PH_DB_USERNAME', 'root'),
+            'password' => env('KDT_PH_DB_PASSWORD', ''),
+            'unix_socket' => env('KDT_PH_DB_SOCKET', ''),
+            'charset' => env('KDT_PH_DB_CHARSET', 'utf8mb4'),
+            'collation' => env('KDT_PH_DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | kdtphdb_new — employee profiles and groups (read-only)
+        |--------------------------------------------------------------------------
+        |
+        | employee_list, employee_group, and group_list live here.
+        | Use $connection = 'kdtphdb_new' on models for employee data.
+        |
+        */
+        'kdtphdb_new' => [
+            'driver' => 'mysql',
+            'host' => env('KDT_PH_NEW_DB_HOST', '127.0.0.1'),
+            'port' => env('KDT_PH_NEW_DB_PORT', '3306'),
+            'database' => env('KDT_PH_NEW_DB_DATABASE', 'kdtphdb_new'),
+            'username' => env('KDT_PH_NEW_DB_USERNAME', 'root'),
+            'password' => env('KDT_PH_NEW_DB_PASSWORD', ''),
+            'unix_socket' => env('KDT_PH_NEW_DB_SOCKET', ''),
+            'charset' => env('KDT_PH_NEW_DB_CHARSET', 'utf8mb4'),
+            'collation' => env('KDT_PH_NEW_DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
     ],
 
     /*

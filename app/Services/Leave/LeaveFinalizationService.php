@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Services\Leave;
+
+use App\Enums\Leave\ActivityType;
+use App\Enums\Leave\LeaveStatus;
+use App\Models\Leave\LeaveActivityHistory;
+use App\Models\Leave\LeaveInfo;
+
+/**
+ * Finalizes a leave after all approval requirements are satisfied.
+ */
+class LeaveFinalizationService
+{
+    public function __construct(
+        private readonly LeaveBalanceService $balanceService,
+    ) {}
+
+    /**
+     * Must be called inside an outer DB::transaction.
+     */
+    public function finalize(LeaveInfo $leave): LeaveInfo
+    {
+        $leave->update([
+            'status' => LeaveStatus::Confirmed,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->balanceService->confirmPaidDays($leave);
+
+        LeaveActivityHistory::query()->create([
+            'leave_id' => $leave->id,
+            'performed_by_emp_id' => $leave->emp_id,
+            'activity_type' => ActivityType::LeaveConfirmed,
+        ]);
+
+        return $leave->fresh();
+    }
+}
