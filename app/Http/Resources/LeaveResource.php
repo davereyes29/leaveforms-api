@@ -29,7 +29,10 @@ class LeaveResource extends JsonResource
             'start_date' => $this->start_date->toDateString(),
             'end_date' => $this->end_date->toDateString(),
             'leave_reason' => $this->leave_reason,
-            'leave_attachment' => $this->leave_attachment,
+            'has_attachment' => filled($this->leave_attachment),
+            'attachment_url' => filled($this->leave_attachment)
+                ? url("/api/leaves/{$this->id}/attachment")
+                : null,
             'cancellation_reason' => $this->cancellation_reason,
             'approval_requirements' => $this->whenLoaded('approvalRequirements', function () {
                 return $this->approvalRequirements->map(fn ($requirement) => [

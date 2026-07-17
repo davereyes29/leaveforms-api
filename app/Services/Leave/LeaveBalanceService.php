@@ -181,6 +181,18 @@ class LeaveBalanceService
     }
 
     /**
+     * Credits available when editing a pending leave (includes this leave's current reserve).
+     */
+    public function availableForEdit(LeaveInfo $leave): string
+    {
+        return bcadd(
+            $this->availableFor($leave->emp_id, $leave->leave_type_id),
+            (string) $leave->paid_days,
+            2,
+        );
+    }
+
+    /**
      * Read available credits for one leave type (defaults to 0 when no row exists).
      */
     public function availableFor(int $empId, int $leaveTypeId): string

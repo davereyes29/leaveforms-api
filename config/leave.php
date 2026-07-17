@@ -38,4 +38,15 @@ return [
     */
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Leave attachments
+    |--------------------------------------------------------------------------
+    */
+    'attachments' => [
+        'disk' => env('LEAVE_ATTACHMENT_DISK', 'local'),
+        'max_kb' => (int) env('LEAVE_ATTACHMENT_MAX_KB', 5120),
+        'mimes' => ['pdf', 'jpg', 'jpeg', 'png'],
+    ],
+
 ];
