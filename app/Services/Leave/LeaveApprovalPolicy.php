@@ -25,10 +25,10 @@ class LeaveApprovalPolicy
             ->where('fldEmployeeNum', $empId)
             ->value('fldRole');
 
+        // VL: one approval is enough. Designated levels also receive submit email.
         return match ((int) $picRole) {
             1 => [
-                $this->managerRequirement(1, [2]),
-                $this->managerRequirement(2, [3, 4]),
+                $this->managerRequirement(1, [2, 3, 4]),
             ],
             2 => [
                 $this->managerRequirement(1, [3, 4]),
@@ -40,8 +40,7 @@ class LeaveApprovalPolicy
                 $this->specialRequirement(1, RequiredApproverType::President),
             ],
             default => [
-                $this->managerRequirement(1, [1, 2]),
-                $this->managerRequirement(2, [3, 4]),
+                $this->managerRequirement(1, [1, 2, 3, 4]),
             ],
         };
     }

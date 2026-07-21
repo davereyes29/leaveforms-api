@@ -53,9 +53,9 @@ Each row uses **exactly one** of:
 
 | Value | Meaning |
 |-------|---------|
-| `[1, 2]` | One approval from P1 **or** P2 |
-| `[3, 4]` | One approval from P3 **or** P4 |
-| `[2]` | P2 specifically |
+| `[1, 2, 3, 4]` | One approval from P1, P2, P3, or P4 |
+| `[2, 3, 4]` | One approval from P2, P3, or P4 |
+| `[3, 4]` | One approval from P3 or P4 |
 | `[4]` | P4 specifically |
 
 ### `required_approver_type` meanings
@@ -67,26 +67,27 @@ Each row uses **exactly one** of:
 
 ---
 
-## Required approvals by filer role
+## Required approvals by filer role (VL)
 
 Determine the filer’s PIC role from `formspic` (no row = regular employee).
 
-| Filer | Snapshot rows (`display_order`) |
-|-------|----------------------------------|
-| **Regular employee** | 1: `[1,2]` · 2: `[3,4]` |
-| **P1** | 1: `[2]` · 2: `[3,4]` |
-| **P2** | 1: `[3,4]` |
-| **P3** | 1: `[4]` |
-| **P4** | 1: `required_approver_type = president` |
+**One approval is enough.** The leave is confirmed as soon as any designated approver accepts. Submit emails go to the same designated set.
+
+| Filer | Snapshot (`display_order` 1) | Who may approve / who is emailed |
+|-------|------------------------------|----------------------------------|
+| **Regular employee** | `[1, 2, 3, 4]` | P1, P2, P3, or P4 |
+| **P1** | `[2, 3, 4]` | P2, P3, or P4 |
+| **P2** | `[3, 4]` | P3 or P4 |
+| **P3** | `[4]` | P4 |
+| **P4** | `required_approver_type = president` | President |
 
 ### Examples
 
-**Regular employee** — two rows:
+**Regular employee** — one row:
 
 | display_order | allowed_levels | required_approver_type |
 |---------------|----------------|------------------------|
-| 1 | `[1, 2]` | NULL |
-| 2 | `[3, 4]` | NULL |
+| 1 | `[1, 2, 3, 4]` | NULL |
 
 **P4 employee** — one row:
 
@@ -142,7 +143,7 @@ When an approver **rejects** on any requirement:
 3. Release reserved credits → `leave_reservation_released` (`BALANCE_FLOW.md`)
 4. `leave_activity_history` → `rejected`
 
-**No further approver actions.** Example: if P1 rejects on a `[1,2]` requirement, P2 cannot approve afterward — the leave is already `rejected`.
+**No further approver actions.** Example: if P1 rejects on a `[1,2,3,4]` requirement, no other approver can act afterward — the leave is already `rejected`.
 
 ---
 
@@ -240,11 +241,10 @@ Admin review lives on **`leave_conversion`**, not on the original VL approval ch
 
 | Step | status | Requirements |
 |------|--------|--------------|
-| Submit | `pending_approval` | Req 1 `[1,2]` open · Req 2 `[3,4]` open |
-| P1 approves (req 1) | `partially_approved` | Req 1 satisfied · Req 2 open |
-| P3 approves (req 2) | `confirmed` | All satisfied → finalize |
+| Submit | `pending_approval` | Req 1 `[1,2,3,4]` open (P1–P4 notified) |
+| P3 approves | `confirmed` | Req 1 satisfied → finalize |
 
-If P1 **rejects** on req 1 → `rejected` immediately; P3 never acts.
+If any designated approver **rejects** → `rejected` immediately.
 
 ---
 

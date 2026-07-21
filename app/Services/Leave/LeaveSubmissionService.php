@@ -25,6 +25,7 @@ class LeaveSubmissionService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveOverlapValidator $overlapValidator,
         private readonly LeaveOnBehalfAuthorizationService $onBehalfAuthorization,
+        private readonly LeaveNotificationService $notificationService,
     ) {}
 
     /**
@@ -62,7 +63,7 @@ class LeaveSubmissionService
         $paidDays = bccomp($duration, $available, 2) <= 0 ? $duration : $available;
         $lwopDays = bcsub($duration, $paidDays, 2);
 
-        return DB::transaction(function () use ($filer, $employeeOnLeave, $data, $vlType, $dayType, $duration, $paidDays, $lwopDays) {
+        $leave = DB::transaction(function () use ($filer, $employeeOnLeave, $data, $vlType, $dayType, $duration, $paidDays, $lwopDays) {
             $leave = LeaveInfo::query()->create([
                 'emp_id' => $employeeOnLeave->id,
                 'filed_by_emp_id' => $filer->id,
@@ -100,5 +101,9 @@ class LeaveSubmissionService
                 'approvalRequirements',
             ]);
         });
+
+        $this->notificationService->notifyApproversOnSubmit($leave);
+
+        return $leave;
     }
 }

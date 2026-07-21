@@ -63,7 +63,9 @@ class LeaveAttachmentService
             return false;
         }
 
-        if (in_array($viewer->id, [$leave->emp_id, $leave->filed_by_emp_id], true)) {
+        $viewerId = (int) $viewer->id;
+
+        if ($viewerId === (int) $leave->emp_id || $viewerId === (int) $leave->filed_by_emp_id) {
             return true;
         }
 

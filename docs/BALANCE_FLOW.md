@@ -286,8 +286,7 @@ Employee: `available = 15`, `reserved = 0`. Files **2-day VL**, fully paid.
 | Step | status | Transaction | available | reserved |
 |------|--------|-------------|-----------|----------|
 | Submit | `pending_approval` | `leave_reserved` | 13 | 2 |
-| 1st approver | `partially_approved` | — | 13 | 2 |
-| All approvers | `confirmed` | `leave_confirmed` | 13 | 0 |
+| Approver accepts | `confirmed` | `leave_confirmed` | 13 | 0 |
 
 To report “2 days VL taken” → read this `leave_info` row (`duration` / `paid_days`), not `leave_balance`.
 

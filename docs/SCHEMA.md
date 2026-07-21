@@ -175,9 +175,9 @@ Snapshotted when the request is **submitted**. Does not change if `formspic` or 
 
 | Value | Meaning |
 |-------|---------|
-| `[1, 2]` | One from P1 or P2 |
+| `[1, 2, 3, 4]` | One from P1, P2, P3, or P4 |
+| `[2, 3, 4]` | One from P2, P3, or P4 |
 | `[3, 4]` | One from P3 or P4 |
-| `[2]` | P2 specifically |
 | `[4]` | P4 specifically |
 
 ### `required_approver_type` values
@@ -189,12 +189,11 @@ admin
 
 (`admin` for leave types that need admin approval on the original request — PTB, maternity, emergency, etc.)
 
-### Example snapshot — regular employee
+### Example snapshot — regular employee (VL)
 
 | display_order | allowed_levels | required_approver_type |
 |---------------|----------------|------------------------|
-| 1 | `[1, 2]` | NULL |
-| 2 | `[3, 4]` | NULL |
+| 1 | `[1, 2, 3, 4]` | NULL |
 
 ### Example snapshot — P4 employee
 
