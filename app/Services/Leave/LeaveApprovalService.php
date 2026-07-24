@@ -21,13 +21,14 @@ class LeaveApprovalService
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveFinalizationService $finalizationService,
         private readonly LeaveBalanceService $balanceService,
+        private readonly LeaveNotificationService $notificationService,
     ) {}
 
     public function approve(LeaveInfo $leave, Employee $approver): LeaveInfo
     {
         $this->assertLeaveIsApprovable($leave);
 
-        return DB::transaction(function () use ($leave, $approver) {
+        $leave = DB::transaction(function () use ($leave, $approver) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -63,13 +64,19 @@ class LeaveApprovalService
                 'approvalRequirements.history',
             ]);
         });
+
+        if ($leave->status === LeaveStatus::Confirmed) {
+            $this->notificationService->notifyEmployeeOnConfirm($leave, $approver);
+        }
+
+        return $leave;
     }
 
     public function reject(LeaveInfo $leave, Employee $approver, string $remarks): LeaveInfo
     {
         $this->assertLeaveIsApprovable($leave);
 
-        return DB::transaction(function () use ($leave, $approver, $remarks) {
+        $leave = DB::transaction(function () use ($leave, $approver, $remarks) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -106,6 +113,10 @@ class LeaveApprovalService
                 'approvalRequirements.history',
             ]);
         });
+
+        $this->notificationService->notifyEmployeeOnReject($leave, $approver, $remarks);
+
+        return $leave;
     }
 
     private function assertLeaveIsApprovable(LeaveInfo $leave): void

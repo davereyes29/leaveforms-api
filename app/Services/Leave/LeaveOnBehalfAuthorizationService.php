@@ -9,8 +9,19 @@ use Illuminate\Validation\ValidationException;
 /**
  * Authorizes filing leave on behalf of another employee.
  *
- * Policy: P1 (Group Leader) may file for active members whose primary group
- * is in the leader's formspic.fldGroups.
+ * Who may file for whom (PIC roles from formspic.fldRole):
+ *
+ * | Person on leave | Who may file   |
+ * |-----------------|----------------|
+ * | Regular (not 1–4) | P1, P2       |
+ * | P1              | P2, P3, P4     |
+ * | P2              | P3, P4         |
+ * | P3              | P4             |
+ * | P4              | (deferred — President later) |
+ *
+ * Always required: target is active, and the target's primary group
+ * (employee_list.group_id → group_list.abbreviation) is in the filer's
+ * formspic.fldGroups.
  */
 class LeaveOnBehalfAuthorizationService
 {
@@ -57,9 +68,11 @@ class LeaveOnBehalfAuthorizationService
 
     public function canFileFor(Employee $filer, Employee $target): bool
     {
-        $context = $this->approverResolver->contextFor($filer->id);
+        $filerContext = $this->approverResolver->contextFor($filer->id);
+        $filerLevel = $this->picLevel($filerContext->approvalLevel);
 
-        if ($context->approvalLevel !== 1) {
+        // Only P1–P4 may file on behalf of someone else.
+        if ($filerLevel === null) {
             return false;
         }
 
@@ -69,6 +82,42 @@ class LeaveOnBehalfAuthorizationService
             return false;
         }
 
-        return in_array($targetGroupAbbreviation, $context->groupCodes, true);
+        // Filer's PIC scope must include the person-on-leave's primary group.
+        if (! in_array($targetGroupAbbreviation, $filerContext->groupCodes, true)) {
+            return false;
+        }
+
+        $targetContext = $this->approverResolver->contextFor($target->id);
+        $targetLevel = $this->picLevel($targetContext->approvalLevel);
+
+        return $this->filerLevelMayActForTarget($filerLevel, $targetLevel);
+    }
+
+    /**
+     * Normalize formspic.fldRole to P1–P4, or null for regulars / unknown.
+     */
+    private function picLevel(?int $approvalLevel): ?int
+    {
+        if ($approvalLevel === null || $approvalLevel < 1 || $approvalLevel > 4) {
+            return null;
+        }
+
+        return $approvalLevel;
+    }
+
+    /**
+     * Role matrix: higher PICs cover lower ones; only P1/P2 cover regulars.
+     * P4-as-target (President) is intentionally not allowed yet.
+     */
+    private function filerLevelMayActForTarget(int $filerLevel, ?int $targetLevel): bool
+    {
+        return match ($targetLevel) {
+            null => in_array($filerLevel, [1, 2], true),
+            1 => in_array($filerLevel, [2, 3, 4], true),
+            2 => in_array($filerLevel, [3, 4], true),
+            3 => $filerLevel === 4,
+            4 => false,
+            default => false,
+        };
     }
 }

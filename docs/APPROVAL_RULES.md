@@ -38,6 +38,26 @@ From **kdtphdb `formspic.fldRole`** at submit time:
 
 ---
 
+## Filing on behalf of another employee
+
+When `POST /api/leaves` includes `emp_id` different from the logged-in user, `LeaveOnBehalfAuthorizationService` decides if that is allowed.
+
+**Group scope (always):** the person on leave’s **primary** group abbreviation must appear in the filer’s `formspic.fldGroups`.
+
+**Role matrix** (who may submit for whom):
+
+| Person on leave (`emp_id`) | Who may file (`filed_by_emp_id`) |
+|----------------------------|----------------------------------|
+| Regular (no `formspic` role 1–4) | P1, P2 |
+| P1 | P2, P3, P4 |
+| P2 | P3, P4 |
+| P3 | P4 |
+| P4 | Not implemented yet (President later) |
+
+Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit.
+
+---
+
 ## Requirement snapshot (`leave_approval_requirement`)
 
 Created when the request is **submitted**, before approvers are notified.
@@ -142,6 +162,7 @@ When an approver **rejects** on any requirement:
 2. `leave_info.status = rejected` — **entire leave is closed**
 3. Release reserved credits → `leave_reservation_released` (`BALANCE_FLOW.md`)
 4. `leave_activity_history` → `rejected`
+5. Email the employee on leave (and the filer when on-behalf) via `LeaveRejectedMail`
 
 **No further approver actions.** Example: if P1 rejects on a `[1,2,3,4]` requirement, no other approver can act afterward — the leave is already `rejected`.
 
@@ -176,7 +197,7 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 
 Unexpected sickness is **not** filed as SL.
 
-1. Employee or **Group Leader** files **VL** (`filed_by_emp_id` may differ from `emp_id`).
+1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
 2. Snapshot requirements + reserve paid credits (or LWOP path).
 3. Approvers act per matrix above.
 4. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
