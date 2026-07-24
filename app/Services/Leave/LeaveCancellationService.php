@@ -18,6 +18,7 @@ class LeaveCancellationService
 {
     public function __construct(
         private readonly LeaveBalanceService $balanceService,
+        private readonly LeaveNotificationService $notificationService,
     ) {}
 
     public function cancel(LeaveInfo $leave, Employee $employee, string $cancellationReason): LeaveInfo
@@ -25,7 +26,7 @@ class LeaveCancellationService
         $this->assertEmployeeCanCancel($leave, $employee);
         $this->assertLeaveIsCancellable($leave);
 
-        return DB::transaction(function () use ($leave, $employee, $cancellationReason) {
+        $leave = DB::transaction(function () use ($leave, $employee, $cancellationReason) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -50,6 +51,10 @@ class LeaveCancellationService
 
             return $leave->fresh(['leaveType', 'approvalRequirements.history']);
         });
+
+        $this->notificationService->notifyApproversOnCancel($leave, $cancellationReason);
+
+        return $leave;
     }
 
     private function assertEmployeeCanCancel(LeaveInfo $leave, Employee $employee): void

@@ -2,6 +2,7 @@
 
 namespace App\Services\Leave;
 
+use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
 use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveSubmittedMail;
@@ -160,6 +161,52 @@ class LeaveNotificationService
                     'leave_id' => $leave->id,
                     'recipient_emp_id' => $recipient->id,
                     'recipient_email' => $recipient->email,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Notify designated approvers when a leave is cancelled by the employee.
+     */
+    public function notifyApproversOnCancel(LeaveInfo $leave, string $cancellationReason): void
+    {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $leave->loadMissing(['leaveType', 'approvalRequirements']);
+
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+
+        $approvers = $this->recipientService->forFirstPendingRequirement($leave);
+
+        if ($approvers->isEmpty()) {
+            Log::warning('Leave cancel: no approver emails found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+            ]);
+
+            return;
+        }
+
+        foreach ($approvers as $approver) {
+            try {
+                Mail::to($approver->email)->send(
+                    new LeaveCancelledMail(
+                        leave: $leave,
+                        employeeName: $employeeName,
+                        approverName: $approver->firstname ?: 'there',
+                        cancellationReason: $cancellationReason,
+                    ),
+                );
+            } catch (\Throwable $exception) {
+                Log::error('Leave cancel notification failed.', [
+                    'leave_id' => $leave->id,
+                    'approver_emp_id' => $approver->id,
+                    'approver_email' => $approver->email,
                     'error' => $exception->getMessage(),
                 ]);
             }
