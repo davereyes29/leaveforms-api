@@ -35,11 +35,16 @@ class LeaveCheckEnvironment extends Command
                 ['PORTAL_COOKIE_NAME', config('leave.portal_cookie_name')],
                 ['FRONTEND_URL', config('leave.frontend_url')],
                 ['LEAVE_PRESIDENT_EMP_ID', config('leave.president_emp_id') ?: '(not set yet)'],
+                ['LEAVE_ADMIN_EMP_ID', config('leave.admin_emp_id') ?: '(not set yet)'],
             ]
         );
 
         if (! config('leave.president_emp_id')) {
             $this->warn('LEAVE_PRESIDENT_EMP_ID is not set — required before approval routing works.');
+        }
+
+        if (! config('leave.admin_emp_id')) {
+            $this->warn('LEAVE_ADMIN_EMP_ID is not set — required before VL → SL conversion review works.');
         }
 
         $this->newLine();

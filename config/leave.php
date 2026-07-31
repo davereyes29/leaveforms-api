@@ -9,7 +9,10 @@ return [
     |
     | The KDT portal sets a cookie (default: userID) containing a hash that maps
     | to kdtphdb.kdtlogin.fldUserHash. This API reads that cookie — it does not
-    | issue its own login tokens.
+    | issue its own login tokens in production.
+    |
+    | Local only: POST /api/dev/login returns fldUserHash for an emp_id so the
+    | React app can set the userID cookie without KDTPortalLogin.
     |
     */
     'portal_cookie_name' => env('PORTAL_COOKIE_NAME', 'userID'),
@@ -26,6 +29,16 @@ return [
     |
     */
     'president_emp_id' => env('LEAVE_PRESIDENT_EMP_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin reviewer (VL → SL conversion, and admin leave requirements later)
+    |--------------------------------------------------------------------------
+    |
+    | employee_list.id of the HR/admin account that reviews conversions.
+    |
+    */
+    'admin_emp_id' => env('LEAVE_ADMIN_EMP_ID'),
 
     /*
     |--------------------------------------------------------------------------

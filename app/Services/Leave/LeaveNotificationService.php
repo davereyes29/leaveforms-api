@@ -2,11 +2,15 @@
 
 namespace App\Services\Leave;
 
+use App\Mail\Leave\ConversionApprovedMail;
+use App\Mail\Leave\ConversionRejectedMail;
+use App\Mail\Leave\ConversionRequestedMail;
 use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
 use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveSubmittedMail;
 use App\Models\Kdtph\Employee;
+use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -214,6 +218,194 @@ class LeaveNotificationService
     }
 
     /**
+     * Notify admin (To) and designated approvers (CC) when conversion is requested.
+     * Med cert is attached on the mailable.
+     */
+    public function notifyAdminOnConversionRequest(LeaveConversion $conversion): void
+    {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $conversion->loadMissing(['leaveInfo.leaveType', 'leaveInfo.approvalRequirements', 'fromLeaveType', 'toLeaveType']);
+        $leave = $conversion->leaveInfo;
+
+        if ($leave === null) {
+            Log::warning('Conversion request: leave missing.', [
+                'conversion_id' => $conversion->id,
+            ]);
+
+            return;
+        }
+
+        $admin = $this->adminEmployee();
+
+        if ($admin === null) {
+            Log::warning('Conversion request: admin email not found.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'admin_emp_id' => config('leave.admin_emp_id'),
+            ]);
+
+            return;
+        }
+
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+        $adminName = $admin->firstname ?: 'there';
+
+        $ccEmails = $this->recipientService
+            ->forFirstPendingRequirement($leave)
+            ->reject(fn (Employee $approver) => (int) $approver->id === (int) $admin->id)
+            ->pluck('email')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        try {
+            $mail = Mail::to($admin->email);
+
+            if ($ccEmails !== []) {
+                $mail->cc($ccEmails);
+            }
+
+            $mail->send(
+                new ConversionRequestedMail(
+                    leave: $leave,
+                    conversion: $conversion,
+                    employeeName: $employeeName,
+                    adminName: $adminName,
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Conversion request notification failed.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'admin_emp_id' => $admin->id,
+                'admin_email' => $admin->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notify the employee on leave when conversion is approved (no filer, no approver CC).
+     */
+    public function notifyEmployeeOnConversionApproved(LeaveConversion $conversion, Employee $admin): void
+    {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $conversion->loadMissing('leaveInfo.leaveType');
+        $leave = $conversion->leaveInfo;
+
+        if ($leave === null) {
+            Log::warning('Conversion approved: leave missing.', [
+                'conversion_id' => $conversion->id,
+            ]);
+
+            return;
+        }
+
+        $employee = $this->employeeRecipient($leave->emp_id);
+
+        if ($employee === null) {
+            Log::warning('Conversion approved: no employee email found.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+            ]);
+
+            return;
+        }
+
+        $adminName = $admin->fullName() !== ''
+            ? $admin->fullName()
+            : ($admin->firstname ?: 'Admin');
+
+        try {
+            Mail::to($employee->email)->send(
+                new ConversionApprovedMail(
+                    leave: $leave,
+                    employeeName: $employee->fullName() ?: 'An employee',
+                    recipientName: $employee->firstname ?: 'there',
+                    adminName: $adminName,
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Conversion approved notification failed.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'recipient_emp_id' => $employee->id,
+                'recipient_email' => $employee->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notify the employee on leave when conversion is rejected (no filer, no approver CC).
+     */
+    public function notifyEmployeeOnConversionRejected(
+        LeaveConversion $conversion,
+        Employee $admin,
+        string $remarks,
+    ): void {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $conversion->loadMissing('leaveInfo.leaveType');
+        $leave = $conversion->leaveInfo;
+
+        if ($leave === null) {
+            Log::warning('Conversion rejected: leave missing.', [
+                'conversion_id' => $conversion->id,
+            ]);
+
+            return;
+        }
+
+        $employee = $this->employeeRecipient($leave->emp_id);
+
+        if ($employee === null) {
+            Log::warning('Conversion rejected: no employee email found.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+            ]);
+
+            return;
+        }
+
+        $adminName = $admin->fullName() !== ''
+            ? $admin->fullName()
+            : ($admin->firstname ?: 'Admin');
+
+        try {
+            Mail::to($employee->email)->send(
+                new ConversionRejectedMail(
+                    leave: $leave,
+                    employeeName: $employee->fullName() ?: 'An employee',
+                    recipientName: $employee->firstname ?: 'there',
+                    adminName: $adminName,
+                    remarks: $remarks,
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Conversion rejected notification failed.', [
+                'conversion_id' => $conversion->id,
+                'leave_id' => $leave->id,
+                'recipient_emp_id' => $employee->id,
+                'recipient_email' => $employee->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Employee on leave always; filer only when different (on-behalf).
      *
      * @return Collection<int, Employee>
@@ -234,6 +426,36 @@ class LeaveNotificationService
             ->get()
             ->unique('id')
             ->values();
+    }
+
+    private function employeeRecipient(int $empId): ?Employee
+    {
+        if ($empId <= 0) {
+            return null;
+        }
+
+        return Employee::query()
+            ->whereKey($empId)
+            ->where('emp_status', 1)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->first();
+    }
+
+    private function adminEmployee(): ?Employee
+    {
+        $adminId = (int) config('leave.admin_emp_id');
+
+        if ($adminId <= 0) {
+            return null;
+        }
+
+        return Employee::query()
+            ->whereKey($adminId)
+            ->where('emp_status', 1)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->first();
     }
 }
 

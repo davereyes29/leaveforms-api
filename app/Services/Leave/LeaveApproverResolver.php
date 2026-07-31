@@ -23,6 +23,7 @@ class LeaveApproverResolver
             approvalLevel: $formspic ? (int) $formspic->fldRole : null,
             groupCodes: $formspic?->groupsArray() ?? [],
             isPresident: (int) $approverEmpId === (int) config('leave.president_emp_id'),
+            isAdmin: (int) $approverEmpId === (int) config('leave.admin_emp_id'),
         );
     }
 

@@ -5,6 +5,7 @@ namespace App\Services\Leave;
 use App\Enums\Leave\BalanceTransactionReason;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveBalanceTransaction;
+use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
 use Illuminate\Support\Collection;
@@ -175,6 +176,46 @@ class LeaveBalanceService
             '0.00',
             bcsub('0', $paidDays, 2),
             BalanceTransactionReason::LeaveConfirmed,
+            null,
+            $leave->id,
+        );
+    }
+
+    /**
+     * After admin approves VL → SL: restore VL paid days, deduct SL.
+     *
+     * Must be called inside an outer DB::transaction.
+     */
+    public function applyConversion(LeaveConversion $conversion): void
+    {
+        $leave = $conversion->leaveInfo()
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        $paidDays = (string) $leave->paid_days;
+
+        if (bccomp($paidDays, '0', 2) <= 0) {
+            return;
+        }
+
+        $vlBalance = $this->lockOrCreateBalance($leave->emp_id, $conversion->from_leave_type_id);
+
+        $this->recordChange(
+            $vlBalance,
+            $paidDays,
+            '0.00',
+            BalanceTransactionReason::VlToSlRestore,
+            null,
+            $leave->id,
+        );
+
+        $slBalance = $this->lockOrCreateBalance($leave->emp_id, $conversion->to_leave_type_id);
+
+        $this->recordChange(
+            $slBalance,
+            bcsub('0', $paidDays, 2),
+            '0.00',
+            BalanceTransactionReason::VlToSlDeduct,
             null,
             $leave->id,
         );

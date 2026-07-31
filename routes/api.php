@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\LeaveConversionController;
 use App\Http\Controllers\MeController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +21,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class);
 
+// Local only — returns portal userID hash for emp_id (frontend sets the cookie).
+Route::post('/dev/login', DevLoginController::class);
+
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
     Route::get('/balances', [LeaveBalanceController::class, 'index']);
@@ -29,7 +34,13 @@ Route::middleware('portal.auth')->group(function () {
     Route::match(['put', 'post'], '/leaves/{leave}', [LeaveController::class, 'update']);
     Route::get('/leaves/{leave}/attachment', [LeaveController::class, 'attachment']);
     Route::post('/leaves/{leave}/cancel', [LeaveController::class, 'cancel']);
+    Route::post('/leaves/{leave}/conversion', [LeaveConversionController::class, 'store']);
     Route::post('/leaves/{leave}/approve', [LeaveApprovalController::class, 'approve']);
     Route::post('/leaves/{leave}/reject', [LeaveApprovalController::class, 'reject']);
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
+
+    Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);
+    Route::post('/conversions/{conversion}/approve', [LeaveConversionController::class, 'approve']);
+    Route::post('/conversions/{conversion}/reject', [LeaveConversionController::class, 'reject']);
+    Route::get('/conversions/{conversion}/med-cert', [LeaveConversionController::class, 'medCert']);
 });

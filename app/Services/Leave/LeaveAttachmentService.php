@@ -30,6 +30,18 @@ class LeaveAttachmentService
         );
     }
 
+    public function storeMedCert(LeaveInfo $leave, UploadedFile $file): string
+    {
+        $extension = $file->getClientOriginalExtension();
+        $filename = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
+
+        return $file->storeAs(
+            "leave-conversions/{$leave->id}",
+            $filename,
+            $this->disk(),
+        );
+    }
+
     public function replace(LeaveInfo $leave, UploadedFile $file): void
     {
         $this->delete($leave->leave_attachment);

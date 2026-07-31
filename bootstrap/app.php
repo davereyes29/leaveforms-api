@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->encryptCookies(except: [
+            env('PORTAL_COOKIE_NAME', 'userID'),
+        ]);
+
         $middleware->alias([
             'portal.auth' => \App\Http\Middleware\AuthenticatePortal::class,
         ]);
