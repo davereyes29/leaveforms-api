@@ -54,7 +54,7 @@ if (res.status === 401) {
 | Field | Values |
 |-------|--------|
 | `day_type` | `full`, `half_am`, `half_pm` |
-| Leave `status` | `pending_approval`, `partially_approved`, `confirmed`, `rejected`, `cancelled`, `converted_to_sl` |
+| Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
 
 **VL** does **not** accept `leave_attachment`. Conversion uploads use field name **`med_cert`**.
@@ -166,12 +166,50 @@ Each item:
 
 ---
 
+### Holidays
+
+Company non-working days from `kdtholiday` (KDT / `fldLocID = 1` only). Use for date-picker disabling; weekends stay client-side. Duration is still validated on leave create/update.
+
+| Method | Path | Query |
+|--------|------|--------|
+| GET | `/holidays` | `from` + `to` (`YYYY-MM-DD`) **or** `year` (2000–2100) |
+
+- If both range and `year` are sent, `from`/`to` win.
+- Max range: **400 days**.
+- Invalid / missing params → **422**.
+- No pagination — response is `{ "data": [ ... ] }`.
+
+Each item:
+
+```json
+{
+  "id": 166,
+  "date": "2026-08-21",
+  "name": "Ninoy Aquino Day",
+  "holiday_type": 1,
+  "is_non_working": true,
+  "location_id": 1,
+  "location": "KDT"
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `date` | `YYYY-MM-DD` — treat as calendar date (no timezone shift) |
+| `holiday_type` | `0` or `1` (raw DB value) |
+| `is_non_working` | Always `true` in v1 — disable the day in the picker |
+
+Full detail: `docs/API_HOLIDAYS.md`.
+
+---
+
 ### Leaves (employee)
 
 | Method | Path | Body / notes |
 |--------|------|----------------|
-| GET | `/leaves` | Query: `status`, `per_page` (1–50, default 15) |
-| POST | `/leaves` | JSON — file VL (**201**) |
+| GET | `/leaves` | Query: `status`, `per_page` (1–50, default 15) — **slim** list rows |
+| POST | `/leaves` | JSON — file VL (**201**) — returns **detail** shape |
+| GET | `/leaves/{id}` | Full leave detail (approvals + conversion) |
 | PUT or POST | `/leaves/{id}` | JSON — edit pending VL (prefer POST if ever sending files; VL still prohibits files) |
 | POST | `/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required |
 | GET | `/leaves/{id}/attachment` | File download (VL usually has none) |
@@ -196,7 +234,26 @@ Each item:
 | `leave_reason` | Required string |
 | `leave_attachment` | **Prohibited** on VL |
 
-#### Leave resource (main fields)
+#### GET `/leaves` — list row (slim)
+
+```json
+{
+  "id": 1,
+  "status": "pending_approval",
+  "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+  "duration": "4.00",
+  "day_type": "full",
+  "start_date": "2026-08-17",
+  "end_date": "2026-08-20",
+  "created_at": "2026-07-28T08:00:00+00:00"
+}
+```
+
+Use `GET /leaves/{id}` when opening a leave for detail / edit / approve / convert.
+
+#### GET `/leaves/{id}` — detail
+
+Who can view: employee on leave, filer, eligible pending approver, past approver on the leave, or admin.
 
 ```json
 {
@@ -215,20 +272,45 @@ Each item:
   "has_attachment": false,
   "attachment_url": null,
   "cancellation_reason": null,
+  "confirmed_at": null,
+  "created_at": "2026-07-28T08:00:00+00:00",
   "approval_requirements": [
     {
       "display_order": 1,
       "allowed_levels": [1, 2, 3, 4],
       "required_approver_type": null,
-      "is_satisfied": false,
-      "satisfied_at": null,
-      "history": null
+      "is_satisfied": true,
+      "satisfied_at": "2026-07-28T09:00:00+00:00",
+      "history": {
+        "approver_emp_id": 12,
+        "approver_name": "Jordan Approver",
+        "approver_type": "am",
+        "is_approved": true,
+        "remarks": null,
+        "created_at": "2026-07-28T09:00:00+00:00"
+      }
     }
   ],
-  "confirmed_at": null,
-  "created_at": "2026-07-28T08:00:00+00:00"
+  "conversion": null
 }
 ```
+
+When status is `pending_conversion` (or after a conversion exists), `conversion` looks like:
+
+```json
+{
+  "id": 1,
+  "status": "pending_review",
+  "from_leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+  "to_leave_type": { "id": 2, "code": "SL", "name": "Sick Leave" },
+  "has_med_cert": true,
+  "med_cert_url": "http://localhost:8000/api/conversions/1/med-cert",
+  "remarks": null,
+  "created_at": "2026-07-28T10:00:00+00:00"
+}
+```
+
+Store / update / cancel / approve / reject also return this **detail** shape.
 
 **Edit rules:** only while status is `pending_approval` and no approval history yet.  
 **Cancel:** open requests (pending / partially approved); reason required.
@@ -259,11 +341,12 @@ Who appears in pending / can act: formspic PICs whose `fldGroups` include the em
 
 #### Business rules (UI)
 
-- Only **confirmed VL** can be converted.
+- Only **confirmed VL** can be converted (`status` becomes `pending_conversion` while admin reviews).
 - Only the **employee on leave** (`emp_id`) may request — not an on-behalf filer.
 - Med cert required: pdf / jpg / jpeg / png (default max 5120 KB).
-- Re-request allowed after **rejected** (upload a new med cert).
+- Re-request allowed after **rejected** (upload a new med cert; leave returns to `confirmed` on reject).
 - Approve / reject: **admin only** (`LEAVE_ADMIN_EMP_ID`).
+- Filter employee leave list with `GET /leaves?status=pending_conversion`.
 
 #### Multipart example
 
@@ -296,7 +379,7 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
   "leave": {
     "id": 10,
     "emp_id": 8,
-    "status": "confirmed",
+    "status": "pending_conversion",
     "duration": "2.00",
     "paid_days": "2.00",
     "start_date": "2026-07-01",
@@ -308,22 +391,22 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
 }
 ```
 
-After **approve**, leave status becomes `converted_to_sl` and leave type becomes SL.
+After **approve**, leave status becomes `converted_to_sl` and leave type becomes SL. On **reject**, leave returns to `confirmed`.
 
 ---
 
 ## Suggested UI screens
 
-1. **My leaves** — `GET /leaves` (+ status filter)
-2. **File VL** — `POST /leaves`
+1. **My leaves** — `GET /leaves` (+ status filter) → open detail with `GET /leaves/{id}`
+2. **File VL** — `POST /leaves` (load `GET /holidays` for picker non-working days)
 3. **Edit pending VL** — PUT/POST `/leaves/{id}`
 4. **Cancel** — reason form → cancel endpoint
-5. **Approver inbox** — `GET /approvals/pending` → approve / reject
+5. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 6. **Convert VL → SL** — on confirmed VL, upload med cert
 7. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 8. **Balances** — `GET /balances`
 
-Build order tip: start with `/me` + balances + my leaves + file VL, then approvals, then conversion.
+Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion.
 
 ---
 
@@ -356,5 +439,6 @@ Controlled by `LEAVE_NOTIFICATIONS_ENABLED` (default `true`) and `MAIL_*` SMTP.
 |-----|--------|
 | `docs/APPROVAL_RULES.md` | Who can approve / on-behalf / conversion rules |
 | `docs/BALANCE_FLOW.md` | Credits, reserve, confirm, VL→SL ledger |
+| `docs/API_HOLIDAYS.md` | Holidays list (`kdtholiday`) for date picker |
 | `docs/SCHEMA.md` | Table / enum reference |
 | `docs/LEGACY_NOTES.md` | Legacy vs revamp differences |

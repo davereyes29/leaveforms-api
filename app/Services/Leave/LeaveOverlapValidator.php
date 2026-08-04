@@ -18,8 +18,8 @@ class LeaveOverlapValidator
      */
     private const BLOCKING_STATUSES = [
         LeaveStatus::PendingApproval,
-        LeaveStatus::PartiallyApproved,
         LeaveStatus::Confirmed,
+        LeaveStatus::PendingConversion,
         LeaveStatus::ConvertedToSl,
     ];
 

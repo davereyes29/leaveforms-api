@@ -88,7 +88,12 @@ class LeaveModificationService
                 'activity_type' => ActivityType::Modified,
             ]);
 
-            return $leave->fresh(['leaveType', 'approvalRequirements.history']);
+            return $leave->fresh([
+                'leaveType',
+                'approvalRequirements.history',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
+            ]);
         });
     }
 

@@ -54,7 +54,8 @@ class LeaveInfo extends Model
 
     public function approvalRequirements(): HasMany
     {
-        return $this->hasMany(LeaveApprovalRequirement::class, 'leave_id');
+        return $this->hasMany(LeaveApprovalRequirement::class, 'leave_id')
+            ->orderBy('display_order');
     }
 
     public function approvalHistories(): HasMany

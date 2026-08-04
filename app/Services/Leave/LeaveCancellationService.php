@@ -49,7 +49,12 @@ class LeaveCancellationService
                 'remarks' => $cancellationReason,
             ]);
 
-            return $leave->fresh(['leaveType', 'approvalRequirements.history']);
+            return $leave->fresh([
+                'leaveType',
+                'approvalRequirements.history',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
+            ]);
         });
 
         $this->notificationService->notifyApproversOnCancel($leave, $cancellationReason);
@@ -66,9 +71,9 @@ class LeaveCancellationService
 
     private function assertLeaveIsCancellable(LeaveInfo $leave): void
     {
-        if (! in_array($leave->status, [LeaveStatus::PendingApproval, LeaveStatus::PartiallyApproved], true)) {
+        if ($leave->status !== LeaveStatus::PendingApproval) {
             throw ValidationException::withMessages([
-                'leave' => ['Only pending or partially approved leave can be cancelled.'],
+                'leave' => ['Only pending leave can be cancelled.'],
             ]);
         }
     }

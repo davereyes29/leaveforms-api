@@ -93,13 +93,15 @@ class LeaveConversionService
                 ])->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
             }
 
+            $leave->update(['status' => LeaveStatus::PendingConversion]);
+
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
                 'performed_by_emp_id' => $employee->id,
                 'activity_type' => ActivityType::ConversionRequested,
             ]);
 
-            return $conversion;
+            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
         });
 
         $this->notificationService->notifyAdminOnConversionRequest($conversion);
@@ -126,9 +128,9 @@ class LeaveConversionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($leave->status !== LeaveStatus::Confirmed) {
+            if ($leave->status !== LeaveStatus::PendingConversion) {
                 throw ValidationException::withMessages([
-                    'leave' => ['Only a confirmed leave can be converted.'],
+                    'leave' => ['Only a leave pending conversion can be approved.'],
                 ]);
             }
 
@@ -180,6 +182,19 @@ class LeaveConversionService
 
             $this->assertConversionIsPending($conversion);
 
+            $leave = LeaveInfo::query()
+                ->whereKey($conversion->leave_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leave->status !== LeaveStatus::PendingConversion) {
+                throw ValidationException::withMessages([
+                    'leave' => ['Only a leave pending conversion can be rejected.'],
+                ]);
+            }
+
+            $leave->update(['status' => LeaveStatus::Confirmed]);
+
             $conversion->update([
                 'status' => ConversionStatus::Rejected,
                 'reviewed_by_emp_id' => $admin->id,
@@ -188,7 +203,7 @@ class LeaveConversionService
             ]);
 
             LeaveActivityHistory::query()->create([
-                'leave_id' => $conversion->leave_id,
+                'leave_id' => $leave->id,
                 'performed_by_emp_id' => $admin->id,
                 'activity_type' => ActivityType::ConversionRejected,
                 'remarks' => $remarks,

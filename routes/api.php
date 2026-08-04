@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveController;
@@ -27,8 +28,10 @@ Route::post('/dev/login', DevLoginController::class);
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
     Route::get('/balances', [LeaveBalanceController::class, 'index']);
+    Route::get('/holidays', [HolidayController::class, 'index']);
     Route::get('/leaves', [LeaveController::class, 'index']);
     Route::post('/leaves', [LeaveController::class, 'store']);
+    Route::get('/leaves/{leave}', [LeaveController::class, 'show']);
     // POST is preferred for multipart/form-data (PHP does not parse files on PUT).
     // PUT still works for JSON bodies without a file.
     Route::match(['put', 'post'], '/leaves/{leave}', [LeaveController::class, 'update']);

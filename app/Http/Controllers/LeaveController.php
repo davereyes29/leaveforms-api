@@ -6,20 +6,21 @@ use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\CancelLeaveRequest;
 use App\Http\Requests\Leave\IndexLeaveRequest;
 use App\Http\Requests\Leave\StoreLeaveRequest;
+use App\Http\Requests\Leave\UpdateLeaveRequest;
 use App\Http\Resources\LeaveResource;
+use App\Http\Resources\LeaveSummaryResource;
 use App\Models\Leave\LeaveInfo;
 use App\Services\Leave\LeaveAttachmentService;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveListService;
-use App\Http\Requests\Leave\UpdateLeaveRequest;
 use App\Services\Leave\LeaveModificationService;
 use App\Services\Leave\LeaveSubmissionService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class LeaveController extends Controller
 {
@@ -32,7 +33,7 @@ class LeaveController extends Controller
     ) {}
 
     /**
-     * GET /api/leaves — list the current employee's leave requests.
+     * GET /api/leaves — list the current employee's leave requests (slim rows).
      *
      * Optional query: ?status=pending_approval&per_page=10
      */
@@ -44,7 +45,17 @@ class LeaveController extends Controller
             $request->integer('per_page', 15),
         );
 
-        return LeaveResource::collection($leaves);
+        return LeaveSummaryResource::collection($leaves);
+    }
+
+    /**
+     * GET /api/leaves/{leave} — full leave detail (approvals + conversion).
+     */
+    public function show(Request $request, LeaveInfo $leave): LeaveResource
+    {
+        $leave = $this->listService->detailForViewer($leave, $request->employee());
+
+        return LeaveResource::make($leave);
     }
 
     /**

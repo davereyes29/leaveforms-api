@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Model;
  */
 class KdtHoliday extends Model
 {
+    /** KDT head office — only location exposed by the holidays API for now. */
+    public const KDT_LOCATION_ID = 1;
+
     protected $connection = 'kdtphdb';
 
     protected $table = 'kdtholiday';
@@ -23,6 +26,8 @@ class KdtHoliday extends Model
         'fldDate',
         'fldHoliday',
         'fldHolidayType',
+        'fldLocID',
+        'fldLocation',
     ];
 
     protected function casts(): array
@@ -30,6 +35,7 @@ class KdtHoliday extends Model
         return [
             'fldDate' => 'date',
             'fldHolidayType' => 'integer',
+            'fldLocID' => 'integer',
         ];
     }
 }

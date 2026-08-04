@@ -140,8 +140,8 @@ When an approver **approves** a requirement:
    - `is_approved = true`
 2. Set `leave_approval_requirement.is_satisfied = true`, `satisfied_at = now`.
 3. Check remaining requirements:
-   - **Some still open** → `leave_info.status = partially_approved`
    - **All satisfied** → finalize (below)
+   - (VL policy snapshots a single requirement, so one approve always finalizes.)
 
 ### Finalize (all requirements satisfied)
 
@@ -170,7 +170,7 @@ When an approver **rejects** on any requirement:
 
 ## Employee cancel
 
-While `status` is `pending_approval` or `partially_approved`:
+While `status` is `pending_approval`:
 
 1. Employee submits **`cancellation_reason`** (required).
 2. `leave_info.status = cancelled`
@@ -222,7 +222,7 @@ Use the same requirement snapshot pattern. Include a requirement row with `requi
 After the employee **returns to work**:
 
 1. Original absence must be **confirmed VL** (`status = confirmed`).
-2. Employee requests conversion + uploads med cert → `leave_conversion` (`status = pending_review`).
+2. Employee requests conversion + uploads med cert → `leave_conversion` (`status = pending_review`) and `leave_info.status` → `pending_conversion`.
 3. `leave_activity_history` → `conversion_requested`.
 4. **Admin** reviews (`leave_conversion.reviewed_by_emp_id`, `reviewed_at`, `remarks`).
 
@@ -237,11 +237,11 @@ After the employee **returns to work**:
 **If rejected:**
 
 - No balance changes
-- Leave stays **VL** / `confirmed`
+- Leave stays **VL**; `leave_info.status` → `confirmed`
 - `leave_conversion.status` → `rejected`
 - Activity → `conversion_rejected`
 
-Admin review lives on **`leave_conversion`**, not on the original VL approval chain.
+Admin review lives on **`leave_conversion`**, not on the original VL approval chain. Employee list filters use `leave_info.status = pending_conversion`.
 
 ---
 
@@ -249,9 +249,9 @@ Admin review lives on **`leave_conversion`**, not on the original VL approval ch
 
 | Status | Meaning |
 |--------|---------|
-| `pending_approval` | Submitted; no requirement satisfied yet |
-| `partially_approved` | At least one requirement satisfied; not all |
-| `confirmed` | All requirements satisfied; leave finalized |
+| `pending_approval` | Submitted; awaiting the designated approver |
+| `confirmed` | Approver accepted; leave finalized |
+| `pending_conversion` | VL → SL conversion requested; awaiting admin review |
 | `rejected` | Approver rejected; leave closed |
 | `cancelled` | Employee cancelled; leave closed |
 | `converted_to_sl` | VL → SL conversion approved |

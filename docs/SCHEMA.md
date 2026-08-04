@@ -63,8 +63,8 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 
 ```
 pending_approval
-partially_approved
 confirmed
+pending_conversion
 rejected
 cancelled
 converted_to_sl
@@ -299,7 +299,9 @@ rejected
 
 **Approved:** restore VL + deduct SL (transactions), `leave_info.status` → `converted_to_sl`, update `leave_type_id` to SL.
 
-**Rejected:** no balance changes; leave stays VL / `confirmed`.
+**Rejected:** no balance changes; leave stays VL; `leave_info.status` → `confirmed`.
+
+**Requested:** `leave_info.status` → `pending_conversion` while `leave_conversion.status` is `pending_review`.
 
 ---
 

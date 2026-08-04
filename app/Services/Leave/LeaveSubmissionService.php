@@ -99,6 +99,8 @@ class LeaveSubmissionService
             return $leave->fresh([
                 'leaveType',
                 'approvalRequirements',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
             ]);
         });
 

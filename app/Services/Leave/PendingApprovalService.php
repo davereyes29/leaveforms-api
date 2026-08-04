@@ -24,11 +24,13 @@ class PendingApprovalService
         $context = $this->approverResolver->contextFor($approver->id);
 
         $leaves = LeaveInfo::query()
-            ->with(['leaveType', 'approvalRequirements.history'])
-            ->whereIn('status', [
-                LeaveStatus::PendingApproval,
-                LeaveStatus::PartiallyApproved,
+            ->with([
+                'leaveType',
+                'approvalRequirements.history',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
             ])
+            ->where('status', LeaveStatus::PendingApproval)
             ->orderByDesc('created_at')
             ->get();
 

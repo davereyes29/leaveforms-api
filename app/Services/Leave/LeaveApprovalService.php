@@ -55,13 +55,13 @@ class LeaveApprovalService
 
             if ($this->allRequirementsSatisfied($leave)) {
                 $this->finalizationService->finalize($leave);
-            } else {
-                $leave->update(['status' => LeaveStatus::PartiallyApproved]);
             }
 
             return $leave->fresh([
                 'leaveType',
                 'approvalRequirements.history',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
             ]);
         });
 
@@ -111,6 +111,8 @@ class LeaveApprovalService
             return $leave->fresh([
                 'leaveType',
                 'approvalRequirements.history',
+                'conversion.fromLeaveType',
+                'conversion.toLeaveType',
             ]);
         });
 
@@ -121,7 +123,7 @@ class LeaveApprovalService
 
     private function assertLeaveIsApprovable(LeaveInfo $leave): void
     {
-        if (! in_array($leave->status, [LeaveStatus::PendingApproval, LeaveStatus::PartiallyApproved], true)) {
+        if ($leave->status !== LeaveStatus::PendingApproval) {
             throw ValidationException::withMessages([
                 'leave' => ['This leave request is no longer open for approval.'],
             ]);

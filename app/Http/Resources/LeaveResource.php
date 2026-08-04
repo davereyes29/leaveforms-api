@@ -2,16 +2,102 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Kdtph\Employee;
+use App\Models\Leave\LeaveInfo;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 
 class LeaveResource extends JsonResource
 {
+    /**
+     * @var array<int, string|null>
+     */
+    private static array $approverNameCache = [];
+
+    /**
+     * @param  iterable<int, LeaveInfo>  $leaves
+     */
+    public static function hydrateApproverNames(iterable $leaves): void
+    {
+        $ids = collect($leaves)
+            ->flatMap(function (LeaveInfo $leave) {
+                if (! $leave->relationLoaded('approvalRequirements')) {
+                    return [];
+                }
+
+                return $leave->approvalRequirements->map(function ($requirement) {
+                    if (! $requirement->relationLoaded('history') || $requirement->history === null) {
+                        return null;
+                    }
+
+                    return (int) $requirement->history->approver_emp_id;
+                });
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->reject(fn (int $id) => array_key_exists($id, self::$approverNameCache));
+
+        if ($ids->isNotEmpty()) {
+            Employee::query()
+                ->whereIn('id', $ids->all())
+                ->get()
+                ->each(function (Employee $employee) {
+                    self::$approverNameCache[(int) $employee->id] = $employee->fullName();
+                });
+
+            foreach ($ids as $id) {
+                if (! array_key_exists($id, self::$approverNameCache)) {
+                    self::$approverNameCache[$id] = null;
+                }
+            }
+        }
+
+        foreach ($leaves as $leave) {
+            if (! $leave->relationLoaded('approvalRequirements')) {
+                continue;
+            }
+
+            foreach ($leave->approvalRequirements as $requirement) {
+                if (! $requirement->relationLoaded('history') || $requirement->history === null) {
+                    continue;
+                }
+
+                $approverId = (int) $requirement->history->approver_emp_id;
+                $requirement->history->setAttribute(
+                    'approver_name',
+                    self::$approverNameCache[$approverId] ?? null,
+                );
+            }
+        }
+    }
+
+    public static function collection($resource): AnonymousResourceCollection
+    {
+        $items = $resource instanceof Collection
+            ? $resource
+            : collect(
+                method_exists($resource, 'getCollection')
+                    ? $resource->getCollection()
+                    : $resource
+            );
+
+        static::hydrateApproverNames($items->filter(fn ($item) => $item instanceof LeaveInfo));
+
+        return parent::collection($resource);
+    }
+
     /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
+        if ($this->resource instanceof LeaveInfo) {
+            static::hydrateApproverNames([$this->resource]);
+        }
+
         return [
             'id' => $this->id,
             'emp_id' => $this->emp_id,
@@ -34,6 +120,8 @@ class LeaveResource extends JsonResource
                 ? url("/api/leaves/{$this->id}/attachment")
                 : null,
             'cancellation_reason' => $this->cancellation_reason,
+            'confirmed_at' => $this->confirmed_at?->toIso8601String(),
+            'created_at' => $this->created_at?->toIso8601String(),
             'approval_requirements' => $this->whenLoaded('approvalRequirements', function () {
                 return $this->approvalRequirements->map(fn ($requirement) => [
                     'display_order' => $requirement->display_order,
@@ -44,6 +132,9 @@ class LeaveResource extends JsonResource
                     'history' => $requirement->relationLoaded('history') && $requirement->history
                         ? [
                             'approver_emp_id' => $requirement->history->approver_emp_id,
+                            'approver_name' => $requirement->history->approver_name
+                                ?? self::$approverNameCache[(int) $requirement->history->approver_emp_id]
+                                ?? null,
                             'approver_type' => $requirement->history->approver_type->value,
                             'is_approved' => $requirement->history->is_approved,
                             'remarks' => $requirement->history->remarks,
@@ -52,8 +143,38 @@ class LeaveResource extends JsonResource
                         : null,
                 ]);
             }),
-            'confirmed_at' => $this->confirmed_at?->toIso8601String(),
-            'created_at' => $this->created_at?->toIso8601String(),
+            'conversion' => $this->whenLoaded('conversion', function () {
+                if ($this->conversion === null) {
+                    return null;
+                }
+
+                $conversion = $this->conversion;
+
+                return [
+                    'id' => $conversion->id,
+                    'status' => $conversion->status->value,
+                    'from_leave_type' => $conversion->relationLoaded('fromLeaveType') && $conversion->fromLeaveType
+                        ? [
+                            'id' => $conversion->fromLeaveType->id,
+                            'code' => $conversion->fromLeaveType->code,
+                            'name' => $conversion->fromLeaveType->type,
+                        ]
+                        : null,
+                    'to_leave_type' => $conversion->relationLoaded('toLeaveType') && $conversion->toLeaveType
+                        ? [
+                            'id' => $conversion->toLeaveType->id,
+                            'code' => $conversion->toLeaveType->code,
+                            'name' => $conversion->toLeaveType->type,
+                        ]
+                        : null,
+                    'has_med_cert' => filled($conversion->med_cert_attachment),
+                    'med_cert_url' => filled($conversion->med_cert_attachment)
+                        ? url("/api/conversions/{$conversion->id}/med-cert")
+                        : null,
+                    'remarks' => $conversion->remarks,
+                    'created_at' => $conversion->created_at?->toIso8601String(),
+                ];
+            }),
         ];
     }
 }

@@ -81,7 +81,7 @@ class LeaveAttachmentService
             return true;
         }
 
-        if (! in_array($leave->status, [LeaveStatus::PendingApproval, LeaveStatus::PartiallyApproved], true)) {
+        if ($leave->status !== LeaveStatus::PendingApproval) {
             return false;
         }
 

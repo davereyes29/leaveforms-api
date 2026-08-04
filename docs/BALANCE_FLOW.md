@@ -12,7 +12,7 @@ How paid leave credits move between **`available`** and **`reserved`**, and when
 | Bucket | Meaning |
 |--------|---------|
 | **available** | Paid credits the employee can still use. Grows via accrual. |
-| **reserved** | Paid credits held for `pending_approval` / `partially_approved` requests. |
+| **reserved** | Paid credits held for `pending_approval` requests. |
 
 There is **no `used` column** and **no balance_year**. One rolling row per `(emp_id, leave_type_id)`.
 
@@ -175,7 +175,7 @@ No further approver actions. Leave is closed.
 
 ## Cancel (employee)
 
-**When:** Employee cancels while `pending_approval` or `partially_approved`.
+**When:** Employee cancels while `pending_approval`.
 
 1. `cancellation_reason` required.
 2. `leave_info.status` → `cancelled`.
