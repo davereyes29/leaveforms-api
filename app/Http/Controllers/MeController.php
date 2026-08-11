@@ -36,6 +36,12 @@ class MeController extends Controller
                 'abbreviation' => $employee->group->abbreviation,
                 'name' => $employee->group->name,
             ] : null,
+            'designation_id' => $employee->designation,
+            'designation' => $employee->jobDesignation ? [
+                'id' => $employee->jobDesignation->id,
+                'acronym' => $employee->jobDesignation->acronym,
+                'name' => $employee->jobDesignation->name,
+            ] : null,
             'date_hired' => $employee->date_hired?->toDateString(),
             'role' => [
                 'approval_level' => $role->approvalLevel,

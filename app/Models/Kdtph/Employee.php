@@ -47,6 +47,14 @@ class Employee extends Model
         return $this->belongsTo(Group::class, 'group_id');
     }
 
+    /**
+     * Named jobDesignation to avoid colliding with the integer FK attribute `designation`.
+     */
+    public function jobDesignation(): BelongsTo
+    {
+        return $this->belongsTo(Designation::class, 'designation');
+    }
+
     public function fullName(): string
     {
         return trim("{$this->firstname} {$this->surname}");

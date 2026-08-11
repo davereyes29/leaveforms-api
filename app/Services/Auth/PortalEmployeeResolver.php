@@ -26,7 +26,7 @@ class PortalEmployeeResolver
         }
 
         $employee = Employee::query()
-            ->with('group')
+            ->with(['group', 'jobDesignation'])
             ->find($login->getEmployeeId());
 
         if ($employee === null || ! $employee->isActive()) {

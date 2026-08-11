@@ -126,6 +126,12 @@ Example response:
     "abbreviation": "SYS",
     "name": "Systems"
   },
+  "designation_id": 3,
+  "designation": {
+    "id": 3,
+    "acronym": "SDE",
+    "name": "Senior Design Engineer"
+  },
   "date_hired": "2020-01-15",
   "role": {
     "approval_level": 2,
@@ -135,6 +141,8 @@ Example response:
   }
 }
 ```
+
+`designation` comes from `kdtphdb_new.designation_list` via `employee_list.designation` (nullable if unset / missing).
 
 `role` comes from `formspic` + config (`LEAVE_PRESIDENT_EMP_ID`, `LEAVE_ADMIN_EMP_ID`):
 
@@ -513,7 +521,7 @@ Open detail with `GET /leaves/{id}` before approve/reject if you need the full l
 | GET | `/conversions/pending` | Admin inbox |
 | POST | `/conversions/{id}/approve` | empty |
 | POST | `/conversions/{id}/reject` | `{ "remarks": "..." }` required |
-| GET | `/conversions/{id}/med-cert` | Download (employee on leave or admin) |
+| GET | `/conversions/{id}/med-cert` | Download (employee on leave, PIC-group approvers, or admin) |
 
 #### Business rules (UI)
 

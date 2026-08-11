@@ -24,6 +24,7 @@ class LeaveConversionService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveApproverResolver $approverResolver,
+        private readonly LeaveListService $listService,
         private readonly LeaveNotificationService $notificationService,
     ) {}
 
@@ -225,11 +226,12 @@ class LeaveConversionService
 
         $leave = $conversion->leaveInfo;
 
-        if ($leave !== null && (int) $viewer->id === (int) $leave->emp_id) {
-            return true;
+        if ($leave === null) {
+            return false;
         }
 
-        return $this->approverResolver->contextFor($viewer->id)->isAdmin;
+        // Same viewers as leave detail: employee, PIC-group approvers, past/current approvers, admin.
+        return $this->listService->canView($leave, $viewer);
     }
 
     private function assertEmployeeOwnsLeave(LeaveInfo $leave, Employee $employee): void
