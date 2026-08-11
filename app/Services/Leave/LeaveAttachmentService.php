@@ -2,7 +2,6 @@
 
 namespace App\Services\Leave;
 
-use App\Enums\Leave\LeaveStatus;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveInfo;
 use Illuminate\Http\UploadedFile;
@@ -15,7 +14,7 @@ use Illuminate\Support\Str;
 class LeaveAttachmentService
 {
     public function __construct(
-        private readonly LeaveApproverResolver $approverResolver,
+        private readonly LeaveListService $listService,
     ) {}
 
     public function store(LeaveInfo $leave, UploadedFile $file): string
@@ -75,28 +74,7 @@ class LeaveAttachmentService
             return false;
         }
 
-        $viewerId = (int) $viewer->id;
-
-        if ($viewerId === (int) $leave->emp_id || $viewerId === (int) $leave->filed_by_emp_id) {
-            return true;
-        }
-
-        if ($leave->status !== LeaveStatus::PendingApproval) {
-            return false;
-        }
-
-        $leave->loadMissing('approvalRequirements.history');
-
-        $context = $this->approverResolver->contextFor($viewer->id);
-        $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
-
-        foreach ($leave->approvalRequirements as $requirement) {
-            if ($this->approverResolver->canActOnRequirement($context, $requirement, $filerGroup)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->listService->canView($leave, $viewer);
     }
 
     public function disk(): string

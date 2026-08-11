@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveInfo;
+use App\Services\Leave\LeaveEligibleApproverService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -15,6 +16,11 @@ class LeaveResource extends JsonResource
      * @var array<int, string|null>
      */
     private static array $approverNameCache = [];
+
+    /**
+     * @var array<int, Employee|null>
+     */
+    private static array $employeeOnLeaveCache = [];
 
     /**
      * @param  iterable<int, LeaveInfo>  $leaves
@@ -74,6 +80,51 @@ class LeaveResource extends JsonResource
         }
     }
 
+    /**
+     * Attach person-on-leave (employee_list + group) for LeaveResource `employee` nest.
+     *
+     * @param  iterable<int, LeaveInfo>  $leaves
+     */
+    public static function hydrateEmployeesOnLeave(iterable $leaves): void
+    {
+        $leaves = collect($leaves)->filter(fn ($item) => $item instanceof LeaveInfo);
+
+        $missingIds = $leaves
+            ->reject(fn (LeaveInfo $leave) => $leave->getAttribute('employee_on_leave') instanceof Employee)
+            ->map(fn (LeaveInfo $leave) => (int) $leave->emp_id)
+            ->unique()
+            ->values()
+            ->reject(fn (int $id) => array_key_exists($id, self::$employeeOnLeaveCache));
+
+        if ($missingIds->isNotEmpty()) {
+            Employee::query()
+                ->with('group.department')
+                ->whereIn('id', $missingIds->all())
+                ->get()
+                ->each(function (Employee $employee) {
+                    self::$employeeOnLeaveCache[(int) $employee->id] = $employee;
+                });
+
+            foreach ($missingIds as $id) {
+                if (! array_key_exists($id, self::$employeeOnLeaveCache)) {
+                    self::$employeeOnLeaveCache[$id] = null;
+                }
+            }
+        }
+
+        foreach ($leaves as $leave) {
+            if ($leave->getAttribute('employee_on_leave') instanceof Employee) {
+                continue;
+            }
+
+            $empId = (int) $leave->emp_id;
+            $leave->setAttribute(
+                'employee_on_leave',
+                self::$employeeOnLeaveCache[$empId] ?? null,
+            );
+        }
+    }
+
     public static function collection($resource): AnonymousResourceCollection
     {
         $items = $resource instanceof Collection
@@ -84,7 +135,9 @@ class LeaveResource extends JsonResource
                     : $resource
             );
 
-        static::hydrateApproverNames($items->filter(fn ($item) => $item instanceof LeaveInfo));
+        $leaves = $items->filter(fn ($item) => $item instanceof LeaveInfo);
+        static::hydrateApproverNames($leaves);
+        static::hydrateEmployeesOnLeave($leaves);
 
         return parent::collection($resource);
     }
@@ -96,7 +149,12 @@ class LeaveResource extends JsonResource
     {
         if ($this->resource instanceof LeaveInfo) {
             static::hydrateApproverNames([$this->resource]);
+            static::hydrateEmployeesOnLeave([$this->resource]);
         }
+
+        $employee = $this->employee_on_leave instanceof Employee
+            ? $this->employee_on_leave
+            : null;
 
         return [
             'id' => $this->id,
@@ -122,6 +180,7 @@ class LeaveResource extends JsonResource
             'cancellation_reason' => $this->cancellation_reason,
             'confirmed_at' => $this->confirmed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
+            'employee' => EmployeeNest::from($employee),
             'approval_requirements' => $this->whenLoaded('approvalRequirements', function () {
                 return $this->approvalRequirements->map(fn ($requirement) => [
                     'display_order' => $requirement->display_order,
@@ -143,6 +202,9 @@ class LeaveResource extends JsonResource
                         : null,
                 ]);
             }),
+            'eligible_approvers' => $this->resource instanceof LeaveInfo
+                ? app(LeaveEligibleApproverService::class)->forLeave($this->resource)
+                : [],
             'conversion' => $this->whenLoaded('conversion', function () {
                 if ($this->conversion === null) {
                     return null;
@@ -171,7 +233,9 @@ class LeaveResource extends JsonResource
                     'med_cert_url' => filled($conversion->med_cert_attachment)
                         ? url("/api/conversions/{$conversion->id}/med-cert")
                         : null,
+                    'reviewed_by_emp_id' => $conversion->reviewed_by_emp_id,
                     'remarks' => $conversion->remarks,
+                    'reviewed_at' => $conversion->reviewed_at?->toIso8601String(),
                     'created_at' => $conversion->created_at?->toIso8601String(),
                 ];
             }),

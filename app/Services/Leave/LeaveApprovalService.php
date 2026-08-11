@@ -54,7 +54,7 @@ class LeaveApprovalService
             ]);
 
             if ($this->allRequirementsSatisfied($leave)) {
-                $this->finalizationService->finalize($leave);
+                $this->finalizationService->finalize($leave, $approver);
             }
 
             return $leave->fresh([

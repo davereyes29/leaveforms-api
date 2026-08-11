@@ -26,15 +26,13 @@ class PendingApprovalService
         $leaves = LeaveInfo::query()
             ->with([
                 'leaveType',
-                'approvalRequirements.history',
-                'conversion.fromLeaveType',
-                'conversion.toLeaveType',
+                'approvalRequirements',
             ])
             ->where('status', LeaveStatus::PendingApproval)
             ->orderByDesc('created_at')
             ->get();
 
-        return $leaves->filter(function (LeaveInfo $leave) use ($approver, $context) {
+        $pending = $leaves->filter(function (LeaveInfo $leave) use ($context) {
             $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
 
             foreach ($leave->approvalRequirements as $requirement) {
@@ -45,5 +43,29 @@ class PendingApprovalService
 
             return false;
         })->values();
+
+        $this->attachEmployees($pending);
+
+        return $pending;
+    }
+
+    /**
+     * @param  Collection<int, LeaveInfo>  $leaves
+     */
+    private function attachEmployees(Collection $leaves): void
+    {
+        if ($leaves->isEmpty()) {
+            return;
+        }
+
+        $employees = Employee::query()
+            ->with('group.department')
+            ->whereIn('id', $leaves->pluck('emp_id')->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($leaves as $leave) {
+            $leave->setAttribute('employee_on_leave', $employees->get($leave->emp_id));
+        }
     }
 }

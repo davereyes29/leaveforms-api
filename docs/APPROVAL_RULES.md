@@ -129,6 +129,17 @@ At action time, an approver must:
 
 **First actor wins:** `leave_approval_history` has **`UNIQUE (requirement_id)`**. The first approver who acts on that requirement inserts the only row. No updates, no second row.
 
+### API display: `eligible_approvers` on `GET /leaves/{id}`
+
+Stage-based list of who is responsible (still shown after someone acts). Built by `LeaveEligibleApproverService`:
+
+| Leave status | List contents |
+|--------------|---------------|
+| `pending_approval`, `confirmed`, `rejected`, `cancelled` | Match snapshotted requirements (formspic + group + levels, or president/admin when required) — ignores `is_satisfied` |
+| `pending_conversion`, `converted_to_sl` | Admin only (`LEAVE_ADMIN_EMP_ID`) |
+
+Who actually approved/rejected remains on `approval_requirements[].history` (leave) or conversion review fields.
+
 ---
 
 ## Approve path

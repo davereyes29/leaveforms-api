@@ -72,6 +72,13 @@ class LeaveListService
             return true;
         }
 
+        $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
+
+        // Same PIC coverage as GET /approvals (any status).
+        if ($filerGroup !== null && in_array($filerGroup, $context->groupCodes, true)) {
+            return true;
+        }
+
         $leave->loadMissing('approvalRequirements.history');
 
         foreach ($leave->approvalRequirements as $requirement) {
@@ -84,8 +91,6 @@ class LeaveListService
         if ($leave->status !== LeaveStatus::PendingApproval) {
             return false;
         }
-
-        $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
 
         foreach ($leave->approvalRequirements as $requirement) {
             if ($this->approverResolver->canActOnRequirement($context, $requirement, $filerGroup)) {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\LeaveActivityController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveController;
@@ -28,6 +29,7 @@ Route::post('/dev/login', DevLoginController::class);
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
     Route::get('/balances', [LeaveBalanceController::class, 'index']);
+    Route::get('/activities', [LeaveActivityController::class, 'index']);
     Route::get('/holidays', [HolidayController::class, 'index']);
     Route::get('/leaves', [LeaveController::class, 'index']);
     Route::post('/leaves', [LeaveController::class, 'store']);
@@ -40,6 +42,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::post('/leaves/{leave}/conversion', [LeaveConversionController::class, 'store']);
     Route::post('/leaves/{leave}/approve', [LeaveApprovalController::class, 'approve']);
     Route::post('/leaves/{leave}/reject', [LeaveApprovalController::class, 'reject']);
+    Route::get('/approvals', [LeaveApprovalController::class, 'index']);
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
 
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);

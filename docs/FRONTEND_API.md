@@ -56,6 +56,7 @@ if (res.status === 401) {
 | `day_type` | `full`, `half_am`, `half_pm` |
 | Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
+| `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected` |
 
 **VL** does **not** accept `leave_attachment`. Conversion uploads use field name **`med_cert`**.
 
@@ -166,6 +167,88 @@ Each item:
 
 ---
 
+### Activities (Activity Log)
+
+Timeline of actions on leaves where **you** are the person on leave (`leave_info.emp_id`). Does **not** include leaves you only filed on behalf of someone else (unless you are also on leave), or leaves you only approved.
+
+| Method | Path | Query |
+|--------|------|--------|
+| GET | `/activities` | optional `?code=VL`, `?activity_type=submitted`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50, default 15) |
+
+Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`. Sorted by timestamp (`created_at`); default **newest first** (`sort=desc`). Balance Impact is derived from matching `leave_balance_transaction` rows for that leave.
+
+**Response envelope** (paginated):
+
+```json
+{
+  "data": [
+    {
+      "id": 12,
+      "leave_id": 41,
+      "timestamp": "2026-07-08T11:05:00+00:00",
+      "activity_type": "submitted",
+      "activity": "Leave request submitted",
+      "leave_type": {
+        "id": 1,
+        "code": "VL",
+        "name": "Vacation Leave"
+      },
+      "balance_impact": "3.0 VL reserved",
+      "ledger": [
+        {
+          "id": 55,
+          "reason": "leave_reserved",
+          "leave_type_code": "VL",
+          "available_delta": "-3.00",
+          "reserved_delta": "3.00"
+        }
+      ],
+      "performed_by": {
+        "id": 8,
+        "name": "Alex Employee"
+      },
+      "remarks": null
+    }
+  ],
+  "links": {
+    "first": "http://localhost:8000/api/activities?page=1",
+    "last": "http://localhost:8000/api/activities?page=3",
+    "prev": null,
+    "next": "http://localhost:8000/api/activities?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 3,
+    "per_page": 15,
+    "to": 15,
+    "total": 42
+  }
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `activity` | UI label (`leave_confirmed` → **"Leave request approved"**) |
+| `balance_impact` | Display string from ledger, or **"No change"** when no matching rows (e.g. LWOP submit, conversion request) |
+| `ledger` | Structured deltas paired to this activity; empty array when no change |
+| `performed_by.name` | Display name — same key as `eligible_approvers[].name` on leave detail (`/me` still uses `full_name`) |
+| `remarks` | Present on reject / cancel; otherwise usually `null` |
+
+**`activity_type` values:** `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`
+
+**Balance Impact examples:**
+
+| Event | Typical `balance_impact` |
+|-------|--------------------------|
+| Submitted (paid) | `3.0 VL reserved` |
+| Approved / confirmed | `3.0 VL confirmed` |
+| Cancelled / rejected | `3.0 VL released` |
+| Modified (amount change) | `2.0 VL released; 3.0 VL reserved` |
+| Conversion approved | `3.0 VL restored; 3.0 SL deducted` |
+
+---
+
 ### Holidays
 
 Company non-working days from `kdtholiday` (KDT / `fldLocID = 1` only). Use for date-picker disabling; weekends stay client-side. Duration is still validated on leave create/update.
@@ -207,7 +290,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 
 | Method | Path | Body / notes |
 |--------|------|----------------|
-| GET | `/leaves` | Query: `status`, `per_page` (1–50, default 15) — **slim** list rows |
+| GET | `/leaves` | Query: `status`, `page`, `per_page` (1–50, default 15) — **slim** list rows; same `data` / `links` / `meta` envelope as `/activities` |
 | POST | `/leaves` | JSON — file VL (**201**) — returns **detail** shape |
 | GET | `/leaves/{id}` | Full leave detail (approvals + conversion) |
 | PUT or POST | `/leaves/{id}` | JSON — edit pending VL (prefer POST if ever sending files; VL still prohibits files) |
@@ -253,7 +336,7 @@ Use `GET /leaves/{id}` when opening a leave for detail / edit / approve / conver
 
 #### GET `/leaves/{id}` — detail
 
-Who can view: employee on leave, filer, eligible pending approver, past approver on the leave, or admin.
+Who can view: employee on leave, filer, admin, past approver on the leave, **PIC whose formspic `fldGroups` include the employee’s primary group** (same coverage as `GET /approvals`, any status), or an eligible pending approver (e.g. president/admin requirement).
 
 ```json
 {
@@ -274,6 +357,21 @@ Who can view: employee on leave, filer, eligible pending approver, past approver
   "cancellation_reason": null,
   "confirmed_at": null,
   "created_at": "2026-07-28T08:00:00+00:00",
+  "employee": {
+    "id": 8,
+    "employee_number": "8",
+    "name": "Alex Employee",
+    "group": {
+      "id": 3,
+      "abbreviation": "SYS",
+      "name": "Systems"
+    },
+    "department": {
+      "id": 1,
+      "abbreviation": "IT",
+      "name": "Information Technology"
+    }
+  },
   "approval_requirements": [
     {
       "display_order": 1,
@@ -291,9 +389,28 @@ Who can view: employee on leave, filer, eligible pending approver, past approver
       }
     }
   ],
+  "eligible_approvers": [
+    {
+      "emp_id": 12,
+      "name": "Jordan Approver",
+      "approver_type": "am",
+      "purpose": "Leave approval"
+    }
+  ],
   "conversion": null
 }
 ```
+
+`employee` is the person on leave (`leave_info.emp_id`) — same nest shape as `GET /approvals` (`group` from `group_list`, `department` from `department_list` via `group_list.dept_id`). `emp_id` remains for convenience.
+
+`eligible_approvers` is who is responsible for the **current stage** (always shown for that stage, even after someone acts). Who actually acted is in `approval_requirements[].history` / conversion review.
+
+| Leave `status` | `eligible_approvers` |
+|----------------|----------------------|
+| `pending_approval`, `confirmed`, `rejected`, `cancelled` | People matching snapshotted leave requirements (formspic + group + `allowed_levels`, or president/admin when the requirement type says so) |
+| `pending_conversion`, `converted_to_sl` | Admin only (`LEAVE_ADMIN_EMP_ID`, purpose `Admin validation`) |
+
+If conversion is rejected, leave returns to `confirmed` and the VL leave-approval list comes back.
 
 When status is `pending_conversion` (or after a conversion exists), `conversion` looks like:
 
@@ -305,7 +422,9 @@ When status is `pending_conversion` (or after a conversion exists), `conversion`
   "to_leave_type": { "id": 2, "code": "SL", "name": "Sick Leave" },
   "has_med_cert": true,
   "med_cert_url": "http://localhost:8000/api/conversions/1/med-cert",
+  "reviewed_by_emp_id": null,
   "remarks": null,
+  "reviewed_at": null,
   "created_at": "2026-07-28T10:00:00+00:00"
 }
 ```
@@ -319,13 +438,70 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 ### Approvals (designated PIC)
 
-| Method | Path | Body |
-|--------|------|------|
-| GET | `/approvals/pending` | — |
+| Method | Path | Body / query |
+|--------|------|----------------|
+| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|converted_to_sl`, `?code=VL\|SL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/approvals/pending` | — actionable inbox only (slim rows; not paginated) |
 | POST | `/leaves/{id}/approve` | empty |
 | POST | `/leaves/{id}/reject` | `{ "remarks": "..." }` required |
 
-Who appears in pending / can act: formspic PICs whose `fldGroups` include the employee’s **primary** group (`employee_list.group_id`), at allowed levels for that leave. One approval confirms VL.
+**Scope**
+
+| Endpoint | Who | Statuses |
+|----------|-----|----------|
+| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `converted_to_sl`. Optional `?status=` narrows to one of those. |
+| `GET /approvals/pending` | Leaves the viewer can **act on** now (PIC group ∩ open requirement) | `pending_approval` only |
+
+If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` and `pending_conversion` are **not** included here (use `/approvals/pending` and `/conversions/pending`). `cancelled` is also omitted. Converted leaves have type **SL** (`leave_type.code`); use `?code=SL` to filter them.
+
+`GET /approvals` uses the same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by `created_at` (default newest first).
+
+Who can act on pending: formspic PICs whose `fldGroups` include the employee’s **primary** group (`employee_list.group_id`), at allowed levels for that leave. One approval confirms VL.
+
+Slim row shape (`GET /approvals` and `GET /approvals/pending`):
+
+```json
+{
+  "data": [
+    {
+      "id": 41,
+      "status": "pending_approval",
+      "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+      "duration": "3.00",
+      "start_date": "2026-08-17",
+      "end_date": "2026-08-19",
+      "created_at": "2026-07-28T08:00:00+00:00",
+      "employee": {
+        "id": 8,
+        "employee_number": "8",
+        "name": "Alex Employee",
+        "group": {
+          "id": 3,
+          "abbreviation": "SYS",
+          "name": "Systems"
+        },
+        "department": {
+          "id": 1,
+          "abbreviation": "IT",
+          "name": "Information Technology"
+        }
+      },
+      "approvals_completed": 0,
+      "approvals_required": 1
+    }
+  ]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `employee` | Person on leave (`leave_info.emp_id`) |
+| `employee.group` | Primary group (`group_list`) |
+| `employee.department` | Parent department (`department_list` via `group_list.dept_id`) |
+| `employee_number` | String of `employee_list.id` (same as `employee.id`) |
+| `approvals_completed` / `approvals_required` | From snapshotted `leave_approval_requirement` rows |
+
+Open detail with `GET /leaves/{id}` before approve/reject if you need the full leave payload.
 
 ---
 
@@ -402,11 +578,13 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 3. **Edit pending VL** — PUT/POST `/leaves/{id}`
 4. **Cancel** — reason form → cancel endpoint
 5. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
-6. **Convert VL → SL** — on confirmed VL, upload med cert
-7. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
-8. **Balances** — `GET /balances`
+6. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
+7. **Convert VL → SL** — on confirmed VL, upload med cert
+8. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
+9. **Balances** — `GET /balances`
+10. **Activity Log** — `GET /activities` (+ leave-type filter)
 
-Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion.
+Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.
 
 ---
 

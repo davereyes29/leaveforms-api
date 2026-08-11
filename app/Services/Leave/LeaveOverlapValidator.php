@@ -46,15 +46,7 @@ class LeaveOverlapValidator
         }
 
         throw ValidationException::withMessages([
-            'start_date' => [
-                sprintf(
-                    'These dates overlap with leave request #%d (%s) from %s to %s.',
-                    $conflict->id,
-                    $conflict->status->value,
-                    $conflict->start_date->toDateString(),
-                    $conflict->end_date->toDateString(),
-                ),
-            ],
+            'start_date' => ['You already have leave filed for these dates.'],
         ]);
     }
 }

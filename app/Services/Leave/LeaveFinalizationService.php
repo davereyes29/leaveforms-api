@@ -4,6 +4,7 @@ namespace App\Services\Leave;
 
 use App\Enums\Leave\ActivityType;
 use App\Enums\Leave\LeaveStatus;
+use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveInfo;
 
@@ -19,7 +20,7 @@ class LeaveFinalizationService
     /**
      * Must be called inside an outer DB::transaction.
      */
-    public function finalize(LeaveInfo $leave): LeaveInfo
+    public function finalize(LeaveInfo $leave, Employee $approver): LeaveInfo
     {
         $leave->update([
             'status' => LeaveStatus::Confirmed,
@@ -30,7 +31,7 @@ class LeaveFinalizationService
 
         LeaveActivityHistory::query()->create([
             'leave_id' => $leave->id,
-            'performed_by_emp_id' => $leave->emp_id,
+            'performed_by_emp_id' => $approver->id,
             'activity_type' => ActivityType::LeaveConfirmed,
         ]);
 
