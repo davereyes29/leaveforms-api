@@ -3,7 +3,9 @@
 namespace App\Services\Leave;
 
 use App\Models\Kdtph\Employee;
+use App\Models\Kdtph\Group;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -19,8 +21,8 @@ use Illuminate\Validation\ValidationException;
  * | P3              | P4             |
  * | P4              | (deferred — President later) |
  *
- * Always required: target is active, and the target's primary group
- * (employee_list.group_id → group_list.abbreviation) is in the filer's
+ * Always required: target is active, and the target's effective primary group
+ * (employee_list.group_id, or LEAVE_EMPLOYEE_GROUP_OVERRIDES) is in the filer's
  * formspic.fldGroups.
  */
 class LeaveOnBehalfAuthorizationService
@@ -30,7 +32,7 @@ class LeaveOnBehalfAuthorizationService
     ) {}
 
     /**
-     * Resolve who the leave is for — defaults to the logged-in employee.
+     * Resolve the target employee (self or on-behalf). Defaults to the logged-in employee.
      *
      * @throws ValidationException
      * @throws AuthorizationException
@@ -66,6 +68,53 @@ class LeaveOnBehalfAuthorizationService
         return $target;
     }
 
+    /**
+     * Active employees in the group that this PIC may file for (same matrix as POST /leaves).
+     * Excludes the filer. Throws if the viewer is not a PIC for this group.
+     *
+     * @return Collection<int, Employee>
+     *
+     * @throws AuthorizationException
+     */
+    public function eligibleMembersInGroup(Employee $filer, Group $group): Collection
+    {
+        $filerContext = $this->approverResolver->contextFor($filer->id);
+        $filerLevel = $this->picLevel($filerContext->approvalLevel);
+
+        if ($filerLevel === null || ! in_array($group->abbreviation, $filerContext->groupCodes, true)) {
+            throw new AuthorizationException(
+                'You are not allowed to file leave for members of this group.',
+            );
+        }
+
+        $empIds = $this->approverResolver->employeeIdsInEffectiveGroups(
+            [(int) $group->id],
+            (int) $filer->id,
+            activeOnly: true,
+        );
+
+        if ($empIds === []) {
+            return collect();
+        }
+
+        $members = Employee::query()
+            ->whereIn('id', $empIds)
+            ->orderBy('id')
+            ->get();
+
+        $levels = $this->approverResolver->approvalLevelsFor(
+            $members->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+        );
+
+        return $members
+            ->filter(function (Employee $member) use ($filerLevel, $levels): bool {
+                $targetLevel = $this->picLevel($levels[(int) $member->id] ?? null);
+
+                return $this->filerLevelMayActForTarget($filerLevel, $targetLevel);
+            })
+            ->values();
+    }
+
     public function canFileFor(Employee $filer, Employee $target): bool
     {
         $filerContext = $this->approverResolver->contextFor($filer->id);
@@ -76,7 +125,7 @@ class LeaveOnBehalfAuthorizationService
             return false;
         }
 
-        $targetGroupAbbreviation = $target->group?->abbreviation;
+        $targetGroupAbbreviation = $this->approverResolver->filerGroupAbbreviation((int) $target->id);
 
         if ($targetGroupAbbreviation === null) {
             return false;

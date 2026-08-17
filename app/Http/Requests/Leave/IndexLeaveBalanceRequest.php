@@ -34,6 +34,7 @@ class IndexLeaveBalanceRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'emp_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'code' => [
                 'sometimes',
                 'nullable',

@@ -36,6 +36,7 @@ class LeaveCheckEnvironment extends Command
                 ['FRONTEND_URL', config('leave.frontend_url')],
                 ['LEAVE_PRESIDENT_EMP_ID', config('leave.president_emp_id') ?: '(not set yet)'],
                 ['LEAVE_ADMIN_EMP_ID', config('leave.admin_emp_id') ?: '(not set yet)'],
+                ['LEAVE_EMPLOYEE_GROUP_OVERRIDES', $this->formatGroupOverrides()],
             ]
         );
 
@@ -50,6 +51,23 @@ class LeaveCheckEnvironment extends Command
         $this->newLine();
 
         return $ok ? self::SUCCESS : self::FAILURE;
+    }
+
+    private function formatGroupOverrides(): string
+    {
+        $overrides = config('leave.employee_group_overrides', []);
+
+        if ($overrides === []) {
+            return '(none)';
+        }
+
+        $pairs = [];
+
+        foreach ($overrides as $empId => $groupId) {
+            $pairs[] = $empId.':'.$groupId;
+        }
+
+        return implode(', ', $pairs);
     }
 
     private function checkDatabase(string $label, string $connection): bool

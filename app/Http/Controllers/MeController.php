@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Kdtph\Employee;
+use App\Models\Kdtph\Group;
 use App\Services\Leave\LeaveApproverResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,8 +48,45 @@ class MeController extends Controller
                 'approval_level' => $role->approvalLevel,
                 'is_president' => $role->isPresident,
                 'is_admin' => $role->isAdmin,
-                'pic_groups' => $role->groupCodes,
+                'pic_groups' => $this->picGroups($role->groupCodes),
             ],
         ]);
+    }
+
+    /**
+     * Hydrate formspic.fldGroups abbreviations from kdtphdb_new.group_list.
+     * Order follows formspic; unknown codes are omitted.
+     *
+     * @param  list<string>  $groupCodes
+     * @return list<array{id: int, abbreviation: string|null, name: string|null}>
+     */
+    private function picGroups(array $groupCodes): array
+    {
+        if ($groupCodes === []) {
+            return [];
+        }
+
+        $groupsByCode = Group::query()
+            ->whereIn('abbreviation', $groupCodes)
+            ->get()
+            ->keyBy('abbreviation');
+
+        $picGroups = [];
+
+        foreach ($groupCodes as $code) {
+            $group = $groupsByCode->get($code);
+
+            if ($group === null) {
+                continue;
+            }
+
+            $picGroups[] = [
+                'id' => $group->id,
+                'abbreviation' => $group->abbreviation,
+                'name' => $group->name,
+            ];
+        }
+
+        return $picGroups;
     }
 }

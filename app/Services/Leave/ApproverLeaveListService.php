@@ -12,9 +12,9 @@ use Illuminate\Support\Collection;
 /**
  * All leave requests for employees in the approver's formspic PIC groups.
  *
- * Unlike PendingApprovalService (actionable inbox), this is a settled/history view.
- * Default statuses: confirmed, rejected, converted_to_sl.
- * Pending items live on GET /approvals/pending and GET /conversions/pending.
+ * Unlike PendingApprovalService (actionable inbox), this is a team history view.
+ * Default statuses: confirmed, rejected, pending_conversion, converted_to_sl.
+ * pending_approval stays on GET /approvals/pending; admin review on GET /conversions/pending.
  * The viewer's own leaves are excluded (use GET /leaves).
  */
 class ApproverLeaveListService
@@ -23,6 +23,7 @@ class ApproverLeaveListService
     public const DEFAULT_STATUSES = [
         LeaveStatus::Confirmed,
         LeaveStatus::Rejected,
+        LeaveStatus::PendingConversion,
         LeaveStatus::ConvertedToSl,
     ];
 
@@ -87,19 +88,14 @@ class ApproverLeaveListService
         $groupIds = Group::query()
             ->whereIn('abbreviation', $groupCodes)
             ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
             ->all();
 
         if ($groupIds === []) {
             return [];
         }
 
-        return Employee::query()
-            ->whereIn('group_id', $groupIds)
-            ->whereKeyNot($excludeEmpId)
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->values()
-            ->all();
+        return $this->approverResolver->employeeIdsInEffectiveGroups($groupIds, $excludeEmpId);
     }
 
     /**
@@ -116,6 +112,10 @@ class ApproverLeaveListService
             ->whereIn('id', $leaves->pluck('emp_id')->unique()->all())
             ->get()
             ->keyBy('id');
+
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
 
         foreach ($leaves as $leave) {
             $leave->setAttribute('employee_on_leave', $employees->get($leave->emp_id));

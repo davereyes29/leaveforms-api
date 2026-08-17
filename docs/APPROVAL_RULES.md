@@ -32,7 +32,9 @@ From **kdtphdb `formspic.fldRole`** at submit time:
 | — | President | NULL | `president` |
 | — | Admin | NULL | `admin` |
 
-**Department scope:** Use the filer’s **primary group** (`employee_list.group_id`) matched against PIC rows whose `formspic.fldGroups` contains that group code.
+**Department scope:** Use the filer’s **primary group** (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES` when set) matched against PIC rows whose `formspic.fldGroups` contains that group code.
+
+**Leaveforms group override:** `LEAVE_EMPLOYEE_GROUP_OVERRIDES=emp_id:group_id` (comma-separated). Example: employee `212` is stored in Ship (`group_id` 22) but is treated as Systems (`16`) for routing, `GET /approvals`, on-behalf members, and `GET /me` group. Does not write to `kdtphdb_new`.
 
 **President fallback:** If no PIC matches the filer’s group, route to President (legacy parity).
 
@@ -41,6 +43,8 @@ From **kdtphdb `formspic.fldRole`** at submit time:
 ## Filing on behalf of another employee
 
 When `POST /api/leaves` includes `emp_id` different from the logged-in user, `LeaveOnBehalfAuthorizationService` decides if that is allowed.
+
+**Group members dropdown:** `GET /api/groups/{group}/members` returns only people this PIC may file for in that group (same matrix and group scope as below). `{group}` is `group_list.id` from `GET /me` `role.pic_groups`.
 
 **Group scope (always):** the person on leave’s **primary** group abbreviation must appear in the filer’s `formspic.fldGroups`.
 

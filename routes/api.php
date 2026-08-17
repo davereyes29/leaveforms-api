@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DevLoginController;
+use App\Http\Controllers\GroupMemberController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\LeaveActivityController;
@@ -28,6 +29,7 @@ Route::post('/dev/login', DevLoginController::class);
 
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
+    Route::get('/groups/{group}/members', [GroupMemberController::class, 'index']);
     Route::get('/balances', [LeaveBalanceController::class, 'index']);
     Route::get('/activities', [LeaveActivityController::class, 'index']);
     Route::get('/holidays', [HolidayController::class, 'index']);

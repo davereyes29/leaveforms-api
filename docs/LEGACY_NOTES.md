@@ -46,7 +46,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 |------------|--------|
 | **Do not alter schema** | Per project decision |
 | **Employees** | `employee_list`, `group_list`, `employee_group` |
-| **Primary group** | `employee_list.group_id` — used for approver routing at **submit** |
+| **Primary group** | `employee_list.group_id` — used for approver routing at **submit** (leaveforms may override via `LEAVE_EMPLOYEE_GROUP_OVERRIDES`) |
 | **Extra groups** | `employee_group` — not used for approval snapshot |
 | **Approvers** | `formspic` (`fldRole` 1–4, serialized `fldGroups`) |
 | **Holidays** | `kdtholiday` |

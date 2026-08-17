@@ -42,6 +42,45 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Primary-group overrides (leaveforms only)
+    |--------------------------------------------------------------------------
+    |
+    | kdtphdb_new.employee_list.group_id is read-only. Use this when an
+    | employee's stored group is a dummy (e.g. Ship) but leave routing must
+    | treat them as another group (e.g. Systems).
+    |
+    | Format: emp_id:group_id,emp_id:group_id
+    | Example: 212:16
+    |
+    */
+    'employee_group_overrides' => (static function (): array {
+        $raw = trim((string) env('LEAVE_EMPLOYEE_GROUP_OVERRIDES', ''));
+
+        if ($raw === '') {
+            return [];
+        }
+
+        $map = [];
+
+        foreach (preg_split('/\s*,\s*/', $raw, -1, PREG_SPLIT_NO_EMPTY) as $pair) {
+            if (! str_contains($pair, ':')) {
+                continue;
+            }
+
+            [$empId, $groupId] = array_map('trim', explode(':', $pair, 2));
+
+            if (! ctype_digit($empId) || ! ctype_digit($groupId) || (int) $empId < 1 || (int) $groupId < 1) {
+                continue;
+            }
+
+            $map[(int) $empId] = (int) $groupId;
+        }
+
+        return $map;
+    })(),
+
+    /*
+    |--------------------------------------------------------------------------
     | React frontend (separate repo)
     |--------------------------------------------------------------------------
     |

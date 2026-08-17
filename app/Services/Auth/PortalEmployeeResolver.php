@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\KdtLogin;
+use App\Services\Leave\LeaveApproverResolver;
 
 /**
  * Resolves the portal userID cookie to an active employee.
@@ -11,6 +12,10 @@ use App\Models\Kdtph\KdtLogin;
  */
 class PortalEmployeeResolver
 {
+    public function __construct(
+        private readonly LeaveApproverResolver $approverResolver,
+    ) {}
+
     public function resolveFromCookie(?string $cookieValue): ?Employee
     {
         if ($cookieValue === null || $cookieValue === '') {
@@ -33,6 +38,6 @@ class PortalEmployeeResolver
             return null;
         }
 
-        return $employee;
+        return $this->approverResolver->applyEffectiveGroup($employee);
     }
 }

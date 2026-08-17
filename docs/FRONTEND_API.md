@@ -137,12 +137,18 @@ Example response:
     "approval_level": 2,
     "is_president": false,
     "is_admin": false,
-    "pic_groups": ["SYS", "HR"]
+    "pic_groups": [
+      { "id": 12, "abbreviation": "SYS", "name": "Systems" },
+      { "id": 18, "abbreviation": "EE", "name": "Electrical Engineering" },
+      { "id": 21, "abbreviation": "IT", "name": "Information Technology" }
+    ]
   }
 }
 ```
 
 `designation` comes from `kdtphdb_new.designation_list` via `employee_list.designation` (nullable if unset / missing).
+
+`group` / `group_id` use `employee_list.group_id`, except employees listed in `LEAVE_EMPLOYEE_GROUP_OVERRIDES` (currently `212:16` — treated as Systems for this app).
 
 `role` comes from `formspic` + config (`LEAVE_PRESIDENT_EMP_ID`, `LEAVE_ADMIN_EMP_ID`):
 
@@ -151,7 +157,35 @@ Example response:
 | `approval_level` | `1`–`4` (P1–P4) from `formspic.fldRole`, or `null` if not a PIC |
 | `is_president` | Employee id matches `LEAVE_PRESIDENT_EMP_ID` |
 | `is_admin` | Employee id matches `LEAVE_ADMIN_EMP_ID` |
-| `pic_groups` | Group abbreviations from `formspic.fldGroups` (empty if not a PIC) |
+| `pic_groups` | Groups this PIC covers. Abbreviations from `formspic.fldGroups`, hydrated with `id` / `name` from `kdtphdb_new.group_list`. Same object shape as `group`. Order follows `fldGroups`. Empty if not a PIC. Codes with no `group_list` row are omitted. |
+
+---
+
+### Group members (File Leave for Members)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/groups/{group}/members` | Dropdown of employees the viewer may file leave for in that PIC group |
+
+`{group}` is `group_list.id` — the same `id` as `role.pic_groups[].id` on `GET /me`.
+
+The viewer must be a PIC (P1–P4) whose `formspic.fldGroups` includes this group’s abbreviation. Otherwise **403**. Unknown group id → **404**.
+
+The list is the same people `POST /leaves` would accept for on-behalf (`LeaveOnBehalfAuthorizationService`): active employees (`emp_status = 1`) in that group, excluding the viewer, filtered by the on-behalf role matrix. Not paginated. Sorted by `id` (same as `emp_id`).
+
+```json
+{
+  "data": [
+    { "id": 8, "name": "Jane Doe" },
+    { "id": 15, "name": "Alex Employee" }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `id` | `employee_list.id` — send as `emp_id` on `POST /leaves` |
+| `name` | Full name (`firstname` + `surname`), same value as `full_name` on `GET /me` |
 
 ---
 
@@ -159,7 +193,9 @@ Example response:
 
 | Method | Path | Query |
 |--------|------|--------|
-| GET | `/balances` | optional `?code=VL` (case-insensitive) |
+| GET | `/balances` | optional `?emp_id=212`, optional `?code=VL` (case-insensitive) |
+
+`emp_id` is the same as `POST /leaves`: omit or send the logged-in user → self. A different id uses the on-behalf PIC matrix (`LeaveOnBehalfAuthorizationService`). Not allowed → **403**. Unknown or inactive employee → **422** on `emp_id`. Use `id` from `GET /groups/{group}/members` when filing for a member.
 
 Each item:
 
@@ -319,7 +355,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 
 | Field | Rules |
 |-------|--------|
-| `emp_id` | Optional. Omit → self. Different from logged-in user → on-behalf (PIC rules) |
+| `emp_id` | Optional. Omit → self. Different from logged-in user → on-behalf (PIC rules). Use `id` from `GET /groups/{group}/members`. |
 | `start_date` / `end_date` | Required dates; end ≥ start |
 | `day_type` | `full` \| `half_am` \| `half_pm` |
 | `leave_reason` | Required string |
@@ -448,7 +484,7 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Method | Path | Body / query |
 |--------|------|----------------|
-| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|converted_to_sl`, `?code=VL\|SL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|pending_conversion\|converted_to_sl`, `?code=VL\|SL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
 | GET | `/approvals/pending` | — actionable inbox only (slim rows; not paginated) |
 | POST | `/leaves/{id}/approve` | empty |
 | POST | `/leaves/{id}/reject` | `{ "remarks": "..." }` required |
@@ -457,14 +493,14 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Endpoint | Who | Statuses |
 |----------|-----|----------|
-| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `converted_to_sl`. Optional `?status=` narrows to one of those. |
+| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `pending_conversion`, `converted_to_sl`. Optional `?status=` narrows to one of those. |
 | `GET /approvals/pending` | Leaves the viewer can **act on** now (PIC group ∩ open requirement) | `pending_approval` only |
 
-If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` and `pending_conversion` are **not** included here (use `/approvals/pending` and `/conversions/pending`). `cancelled` is also omitted. Converted leaves have type **SL** (`leave_type.code`); use `?code=SL` to filter them.
+If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` is **not** included here (use `/approvals/pending`). Admin conversion action stays on `/conversions/pending`. `cancelled` is omitted. While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) — use `?code=SL` for converted rows.
 
 `GET /approvals` uses the same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by `created_at` (default newest first).
 
-Who can act on pending: formspic PICs whose `fldGroups` include the employee’s **primary** group (`employee_list.group_id`), at allowed levels for that leave. One approval confirms VL.
+Who can act on pending: formspic PICs whose `fldGroups` include the employee’s **primary** group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`), at allowed levels for that leave. One approval confirms VL.
 
 Slim row shape (`GET /approvals` and `GET /approvals/pending`):
 
@@ -582,14 +618,14 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 ## Suggested UI screens
 
 1. **My leaves** — `GET /leaves` (+ status filter) → open detail with `GET /leaves/{id}`
-2. **File VL** — `POST /leaves` (load `GET /holidays` for picker non-working days)
+2. **File VL** — `POST /leaves` (load `GET /holidays` for picker non-working days). On-behalf: `GET /me` `pic_groups` → `GET /groups/{id}/members` → `GET /balances?emp_id=` then `emp_id` on submit
 3. **Edit pending VL** — PUT/POST `/leaves/{id}`
 4. **Cancel** — reason form → cancel endpoint
 5. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 6. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
 7. **Convert VL → SL** — on confirmed VL, upload med cert
 8. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
-9. **Balances** — `GET /balances`
+9. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
 10. **Activity Log** — `GET /activities` (+ leave-type filter)
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.

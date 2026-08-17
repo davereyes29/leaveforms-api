@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveInfo;
+use App\Services\Leave\LeaveApproverResolver;
 use App\Services\Leave\LeaveEligibleApproverService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -97,11 +98,14 @@ class LeaveResource extends JsonResource
             ->reject(fn (int $id) => array_key_exists($id, self::$employeeOnLeaveCache));
 
         if ($missingIds->isNotEmpty()) {
+            $resolver = app(LeaveApproverResolver::class);
+
             Employee::query()
                 ->with('group.department')
                 ->whereIn('id', $missingIds->all())
                 ->get()
-                ->each(function (Employee $employee) {
+                ->each(function (Employee $employee) use ($resolver) {
+                    $resolver->applyEffectiveGroup($employee);
                     self::$employeeOnLeaveCache[(int) $employee->id] = $employee;
                 });
 

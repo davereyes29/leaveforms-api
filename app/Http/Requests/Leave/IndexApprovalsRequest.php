@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 /**
  * Validates query parameters for GET /api/approvals (All Leave Requests).
  *
- * Default statuses when omitted: confirmed, rejected, converted_to_sl.
+ * Default statuses when omitted: confirmed, rejected, pending_conversion, converted_to_sl.
  */
 class IndexApprovalsRequest extends FormRequest
 {
@@ -57,6 +57,7 @@ class IndexApprovalsRequest extends FormRequest
                 Rule::in([
                     LeaveStatus::Confirmed->value,
                     LeaveStatus::Rejected->value,
+                    LeaveStatus::PendingConversion->value,
                     LeaveStatus::ConvertedToSl->value,
                 ]),
             ],

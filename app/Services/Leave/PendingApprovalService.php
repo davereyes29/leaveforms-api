@@ -64,6 +64,10 @@ class PendingApprovalService
             ->get()
             ->keyBy('id');
 
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
+
         foreach ($leaves as $leave) {
             $leave->setAttribute('employee_on_leave', $employees->get($leave->emp_id));
         }
