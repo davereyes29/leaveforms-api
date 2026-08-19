@@ -10,6 +10,7 @@ use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\LeaveConversionController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\TeamCalendarController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,6 +47,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::post('/leaves/{leave}/reject', [LeaveApprovalController::class, 'reject']);
     Route::get('/approvals', [LeaveApprovalController::class, 'index']);
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
+    Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
 
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);
     Route::post('/conversions/{conversion}/approve', [LeaveConversionController::class, 'approve']);

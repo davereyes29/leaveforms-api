@@ -549,6 +549,63 @@ Open detail with `GET /leaves/{id}` before approve/reject if you need the full l
 
 ---
 
+### Team Leave Calendar (approver)
+
+Month/week grid of **who is out** in the viewer’s PIC groups. Bars are not clickable; `id` is a stable row key only.
+
+| Method | Path | Query |
+|--------|------|--------|
+| GET | `/team/calendar` | `from` + `to` (`YYYY-MM-DD`) required. Optional `?code=VL`, optional `?group_id=` (`pic_groups[].id`) |
+
+**Scope**
+
+- Employees whose **effective primary group** is in the viewer’s `formspic.fldGroups` (**includes the viewer’s own leave**)
+- Statuses: `confirmed`, `pending_conversion`, `converted_to_sl` only (`pending_approval`, `rejected`, `cancelled` omitted)
+- `pending_conversion` is still **VL**; `converted_to_sl` is **SL** — `?code=` filters the current type
+- Optional `group_id` must be one of `GET /me` `role.pic_groups` — otherwise **403**. Omit for all PIC groups. With `group_id`, the viewer’s own leave is included only if their effective group matches that id
+- Not a PIC (and no `group_id`): the viewer’s own approved leaves only
+- No pagination. Max range: **62 days**. Invalid / missing `from`/`to` → **422**
+
+Leaves overlapping the range with **no workdays** in view (weekends/holidays only) are omitted.
+
+Paint cells from `dates` (workdays only, already clipped to `from`–`to`). Skip painting from `start_date`/`end_date` or you will put bars on weekends and holidays.
+
+```json
+{
+  "data": [
+    {
+      "id": 41,
+      "status": "confirmed",
+      "duration": "5.00",
+      "day_type": "full",
+      "start_date": "2026-07-15",
+      "end_date": "2026-07-21",
+      "dates": ["2026-07-15", "2026-07-17", "2026-07-20", "2026-07-21"],
+      "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+      "employee": {
+        "id": 15,
+        "employee_number": "15",
+        "name": "Emman De Leon",
+        "group": { "id": 16, "abbreviation": "SYS", "name": "Systems" }
+      }
+    }
+  ]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `dates` | Workdays the person is out, clipped to `from`–`to`. Same weekend/holiday rules as leave duration. |
+| `duration` | Full leave length (not clipped to `from`–`to`). Half-day is `"0.50"` with one date in `dates`. |
+| `day_type` | `full`, `half_am`, or `half_pm` |
+| `employee.employee_number` | String of `employee_list.id` (same as `employee.id`) |
+| `employee.group` | Effective primary group (`LEAVE_EMPLOYEE_GROUP_OVERRIDES` applied) |
+| `id` | `leave_info.id` — list key only (calendar bars are not clickable) |
+
+Filter dropdowns: leave types from `leave_type.code`; groups from `GET /me` `role.pic_groups`.
+
+---
+
 ### VL → SL conversion
 
 | Method | Path | Body |
@@ -623,10 +680,11 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 4. **Cancel** — reason form → cancel endpoint
 5. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 6. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
-7. **Convert VL → SL** — on confirmed VL, upload med cert
-8. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
-9. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
-10. **Activity Log** — `GET /activities` (+ leave-type filter)
+7. **Team Leave Calendar** — `GET /team/calendar?from=&to=` (optional `code`, `group_id` from `pic_groups`)
+8. **Convert VL → SL** — on confirmed VL, upload med cert
+9. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
+10. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
+11. **Activity Log** — `GET /activities` (+ leave-type filter)
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.
 

@@ -53,14 +53,79 @@ class LeaveDurationService
         return '0.50';
     }
 
-    private function isWorkday(Carbon $date): bool
+    /**
+     * Holiday dates in [from, to] (inclusive), as Y-m-d strings.
+     *
+     * @return list<string>
+     */
+    public function holidayDatesBetween(string $from, string $to): array
+    {
+        return KdtHoliday::query()
+            ->whereDate('fldDate', '>=', $from)
+            ->whereDate('fldDate', '<=', $to)
+            ->pluck('fldDate')
+            ->map(function (mixed $date): string {
+                if ($date instanceof \DateTimeInterface) {
+                    return $date->format('Y-m-d');
+                }
+
+                return (string) $date;
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Workdays in [startDate, endDate], clipped to [clipFrom, clipTo].
+     * Weekends and $holidayDates are skipped (same rules as duration).
+     *
+     * @param  list<string>  $holidayDates  Y-m-d
+     * @return list<string>
+     */
+    public function workdaysBetween(
+        string $startDate,
+        string $endDate,
+        string $clipFrom,
+        string $clipTo,
+        array $holidayDates,
+    ): array {
+        $from = Carbon::parse($startDate)->max(Carbon::parse($clipFrom))->startOfDay();
+        $to = Carbon::parse($endDate)->min(Carbon::parse($clipTo))->startOfDay();
+
+        if ($from->gt($to)) {
+            return [];
+        }
+
+        $dates = [];
+
+        foreach (CarbonPeriod::create($from, $to) as $date) {
+            if ($this->isWorkday($date, $holidayDates)) {
+                $dates[] = $date->toDateString();
+            }
+        }
+
+        return $dates;
+    }
+
+    /**
+     * @param  list<string>|null  $holidayDates  Y-m-d; null queries kdtphdb
+     */
+    public function isWorkday(Carbon $date, ?array $holidayDates = null): bool
     {
         if ($date->isWeekend()) {
             return false;
         }
 
+        $ymd = $date->toDateString();
+
+        if ($holidayDates !== null) {
+            return ! in_array($ymd, $holidayDates, true);
+        }
+
         return ! KdtHoliday::query()
-            ->whereDate('fldDate', $date->toDateString())
+            ->whereDate('fldDate', $ymd)
             ->exists();
     }
 }

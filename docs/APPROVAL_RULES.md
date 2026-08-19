@@ -34,7 +34,7 @@ From **kdtphdb `formspic.fldRole`** at submit time:
 
 **Department scope:** Use the filer’s **primary group** (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES` when set) matched against PIC rows whose `formspic.fldGroups` contains that group code.
 
-**Leaveforms group override:** `LEAVE_EMPLOYEE_GROUP_OVERRIDES=emp_id:group_id` (comma-separated). Example: employee `212` is stored in Ship (`group_id` 22) but is treated as Systems (`16`) for routing, `GET /approvals`, on-behalf members, and `GET /me` group. Does not write to `kdtphdb_new`.
+**Leaveforms group override:** `LEAVE_EMPLOYEE_GROUP_OVERRIDES=emp_id:group_id` (comma-separated). Example: employee `212` is stored in Ship (`group_id` 22) but is treated as Systems (`16`) for routing, `GET /approvals`, `GET /team/calendar`, on-behalf members, and `GET /me` group. Does not write to `kdtphdb_new`.
 
 **President fallback:** If no PIC matches the filer’s group, route to President (legacy parity).
 
