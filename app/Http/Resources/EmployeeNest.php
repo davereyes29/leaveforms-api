@@ -37,4 +37,22 @@ final class EmployeeNest
             ],
         ];
     }
+
+    /**
+     * Slim nest (id / employee_number / name) for filers and similar actors.
+     *
+     * @return array{id: int, employee_number: string, name: string}|null
+     */
+    public static function summary(?Employee $employee): ?array
+    {
+        if ($employee === null) {
+            return null;
+        }
+
+        return [
+            'id' => $employee->id,
+            'employee_number' => (string) $employee->id,
+            'name' => $employee->fullName(),
+        ];
+    }
 }

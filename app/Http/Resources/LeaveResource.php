@@ -24,6 +24,11 @@ class LeaveResource extends JsonResource
     private static array $employeeOnLeaveCache = [];
 
     /**
+     * @var array<int, Employee|null>
+     */
+    private static array $filedByCache = [];
+
+    /**
      * @param  iterable<int, LeaveInfo>  $leaves
      */
     public static function hydrateApproverNames(iterable $leaves): void
@@ -129,6 +134,57 @@ class LeaveResource extends JsonResource
         }
     }
 
+    /**
+     * Attach filer for LeaveResource `filed_by` nest.
+     *
+     * Reuses the person-on-leave cache when `filed_by_emp_id` equals `emp_id`.
+     *
+     * @param  iterable<int, LeaveInfo>  $leaves
+     */
+    public static function hydrateFiledBy(iterable $leaves): void
+    {
+        $leaves = collect($leaves)->filter(fn ($item) => $item instanceof LeaveInfo);
+
+        $missingIds = $leaves
+            ->reject(fn (LeaveInfo $leave) => $leave->getAttribute('filed_by_employee') instanceof Employee)
+            ->map(fn (LeaveInfo $leave) => (int) $leave->filed_by_emp_id)
+            ->unique()
+            ->values()
+            ->reject(function (int $id) {
+                return array_key_exists($id, self::$employeeOnLeaveCache)
+                    || array_key_exists($id, self::$filedByCache);
+            });
+
+        if ($missingIds->isNotEmpty()) {
+            Employee::query()
+                ->whereIn('id', $missingIds->all())
+                ->get()
+                ->each(function (Employee $employee) {
+                    self::$filedByCache[(int) $employee->id] = $employee;
+                });
+
+            foreach ($missingIds as $id) {
+                if (! array_key_exists($id, self::$filedByCache)) {
+                    self::$filedByCache[$id] = null;
+                }
+            }
+        }
+
+        foreach ($leaves as $leave) {
+            if ($leave->getAttribute('filed_by_employee') instanceof Employee) {
+                continue;
+            }
+
+            $filerId = (int) $leave->filed_by_emp_id;
+            $leave->setAttribute(
+                'filed_by_employee',
+                self::$employeeOnLeaveCache[$filerId]
+                    ?? self::$filedByCache[$filerId]
+                    ?? null,
+            );
+        }
+    }
+
     public static function collection($resource): AnonymousResourceCollection
     {
         $items = $resource instanceof Collection
@@ -142,6 +198,7 @@ class LeaveResource extends JsonResource
         $leaves = $items->filter(fn ($item) => $item instanceof LeaveInfo);
         static::hydrateApproverNames($leaves);
         static::hydrateEmployeesOnLeave($leaves);
+        static::hydrateFiledBy($leaves);
 
         return parent::collection($resource);
     }
@@ -154,10 +211,15 @@ class LeaveResource extends JsonResource
         if ($this->resource instanceof LeaveInfo) {
             static::hydrateApproverNames([$this->resource]);
             static::hydrateEmployeesOnLeave([$this->resource]);
+            static::hydrateFiledBy([$this->resource]);
         }
 
         $employee = $this->employee_on_leave instanceof Employee
             ? $this->employee_on_leave
+            : null;
+
+        $filedBy = $this->filed_by_employee instanceof Employee
+            ? $this->filed_by_employee
             : null;
 
         return [
@@ -185,6 +247,7 @@ class LeaveResource extends JsonResource
             'confirmed_at' => $this->confirmed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'employee' => EmployeeNest::from($employee),
+            'filed_by' => EmployeeNest::summary($filedBy),
             'approval_requirements' => $this->whenLoaded('approvalRequirements', function () {
                 return $this->approvalRequirements->map(fn ($requirement) => [
                     'display_order' => $requirement->display_order,

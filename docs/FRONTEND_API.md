@@ -416,6 +416,11 @@ Who can view: employee on leave, filer, admin, past approver on the leave, **PIC
       "name": "Information Technology"
     }
   },
+  "filed_by": {
+    "id": 8,
+    "employee_number": "8",
+    "name": "Alex Employee"
+  },
   "approval_requirements": [
     {
       "display_order": 1,
@@ -446,6 +451,8 @@ Who can view: employee on leave, filer, admin, past approver on the leave, **PIC
 ```
 
 `employee` is the person on leave (`leave_info.emp_id`) — same nest shape as `GET /approvals` (`group` from `group_list`, `department` from `department_list` via `group_list.dept_id`). `emp_id` remains for convenience.
+
+`filed_by` is who submitted the request (`leave_info.filed_by_emp_id`) — slim nest (`id`, `employee_number`, `name`). Same as `employee` when the person files for themselves; a PIC when filed on behalf. `filed_by_emp_id` remains for convenience.
 
 `eligible_approvers` is who is responsible for the **current stage** (always shown for that stage, even after someone acts). Who actually acted is in `approval_requirements[].history` / conversion review.
 
@@ -662,11 +669,28 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
     "start_date": "2026-07-01",
     "end_date": "2026-07-02",
     "leave_reason": "...",
-    "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" }
+    "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+    "employee": {
+      "id": 8,
+      "employee_number": "8",
+      "name": "Alex Employee",
+      "group": {
+        "id": 3,
+        "abbreviation": "SYS",
+        "name": "Systems"
+      },
+      "department": {
+        "id": 1,
+        "abbreviation": "IT",
+        "name": "Information Technology"
+      }
+    }
   },
   "created_at": "2026-07-28T10:00:00+00:00"
 }
 ```
+
+`leave.employee` is the person on leave (`leave_info.emp_id`) — same nest as `GET /leaves/{id}` and `GET /approvals`. `emp_id` remains for convenience.
 
 After **approve**, leave status becomes `converted_to_sl` and leave type becomes SL. On **reject**, leave returns to `confirmed`.
 
