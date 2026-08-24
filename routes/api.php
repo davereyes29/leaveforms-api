@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminLeaveController;
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\GroupMemberController;
 use App\Http\Controllers\HealthController;
@@ -49,6 +50,8 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
 
+    Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
+    Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);
     Route::post('/conversions/{conversion}/approve', [LeaveConversionController::class, 'approve']);
     Route::post('/conversions/{conversion}/reject', [LeaveConversionController::class, 'reject']);

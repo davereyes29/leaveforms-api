@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Slim row for GET /api/approvals and GET /api/approvals/pending.
+ * Slim row for GET /api/approvals, GET /api/approvals/pending, and GET /api/admin/leaves.
  *
  * Expects LeaveInfo with leaveType + approvalRequirements loaded,
  * and transient employee_on_leave (Employee|null) set by the list service.
