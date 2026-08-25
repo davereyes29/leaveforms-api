@@ -110,4 +110,17 @@ return [
         'enabled' => env('LEAVE_NOTIFICATIONS_ENABLED', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin approval reminders
+    |--------------------------------------------------------------------------
+    |
+    | Bulk is once per Asia/Manila calendar day and does not lock singles.
+    | Single is once per (leave, approver) per Manila day and does not lock bulk.
+    |
+    */
+    'reminders' => [
+        'timezone' => 'Asia/Manila',
+    ],
+
 ];

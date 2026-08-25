@@ -39,6 +39,26 @@ class LeaveApproverRecipientService
     }
 
     /**
+     * Approvers who can still act on the first unsatisfied requirement.
+     *
+     * @return Collection<int, Employee>
+     */
+    public function forOpenRequirement(LeaveInfo $leave): Collection
+    {
+        $leave->loadMissing('approvalRequirements');
+
+        $requirement = $leave->approvalRequirements
+            ->sortBy('display_order')
+            ->first(fn (LeaveApprovalRequirement $requirement) => ! $requirement->is_satisfied);
+
+        if ($requirement === null) {
+            return collect();
+        }
+
+        return $this->forRequirement($leave, $requirement);
+    }
+
+    /**
      * @return Collection<int, Employee>
      */
     public function forRequirement(LeaveInfo $leave, LeaveApprovalRequirement $requirement): Collection

@@ -454,7 +454,7 @@ Who can view: employee on leave, filer, admin, past approver on the leave, **PIC
 
 `filed_by` is who submitted the request (`leave_info.filed_by_emp_id`) — slim nest (`id`, `employee_number`, `name`). Same as `employee` when the person files for themselves; a PIC when filed on behalf. `filed_by_emp_id` remains for convenience.
 
-`eligible_approvers` is who is responsible for the **current stage** (always shown for that stage, even after someone acts). Who actually acted is in `approval_requirements[].history` / conversion review.
+`eligible_approvers` is who is responsible for the **current stage** (always shown for that stage, even after someone acts). Who actually acted is in `approval_requirements[].history` / `conversion.reviewed_by`.
 
 | Leave `status` | `eligible_approvers` |
 |----------------|----------------------|
@@ -474,11 +474,14 @@ When status is `pending_conversion` (or after a conversion exists), `conversion`
   "has_med_cert": true,
   "med_cert_url": "http://localhost:8000/api/conversions/1/med-cert",
   "reviewed_by_emp_id": null,
+  "reviewed_by": null,
   "remarks": null,
   "reviewed_at": null,
   "created_at": "2026-07-28T10:00:00+00:00"
 }
 ```
+
+`reviewed_by` is who approved or rejected the conversion (`leave_conversion.reviewed_by_emp_id`) — slim nest (`id`, `employee_number`, `name`), same as `filed_by`. Null while `status` is `pending_review`. `reviewed_by_emp_id` remains for convenience.
 
 Store / update / cancel / approve / reject also return this **detail** shape.
 
@@ -580,6 +583,73 @@ Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` 
 Optional `?status=` narrows to one of the allowed values (`rejected` / `cancelled` return **422**). While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) — use `?code=SL` for converted rows.
 
 Open detail with `GET /leaves/{id}` (admin can view any leave). Conversion review stays on `GET /conversions/pending`.
+
+### Approval reminders (admin)
+
+Nudge waiting PICs / president on `pending_approval` leaves. **`LEAVE_ADMIN_EMP_ID` only** (403 otherwise). Does not mail the admin even if they are also a PIC.
+
+Locks are **independent** and reset on the **Asia/Manila calendar day**. Do not use localStorage.
+
+| Action | Lock |
+|--------|------|
+| **Bulk** | Once per Manila day (`can_send: false`). Does **not** disable singles. Generic email with that approver’s pending count (no leave list). |
+| **Single** | Once per `(leave_id, approver_emp_id)` per Manila day. Does **not** disable bulk. Other singles stay available. Detailed leave email. |
+
+| Method | Path | Body |
+|--------|------|------|
+| GET | `/admin/reminders` | — banner stats, no send |
+| POST | `/admin/reminders` | empty — org-wide **generic** reminder (one email per waiting approver) |
+| POST | `/leaves/{id}/reminders` | `{ "approver_emp_id": 12 }` — that leave only |
+
+**GET**
+
+```json
+{
+  "approver_count": 8,
+  "request_count": 14,
+  "last_sent_at": "2026-08-24T09:12:00+08:00",
+  "can_send": true,
+  "singles_locked": false,
+  "reminded_pairs": [
+    { "leave_id": 41, "approver_emp_id": 12 }
+  ]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `approver_count` | Unique waiting approvers with email (excludes admin) |
+| `request_count` | Unique `pending_approval` leaves those people can still act on |
+| `last_sent_at` | Last successful **bulk** send, Manila offset; `null` if never. All-tab “Last Reminder Sent”. |
+| `can_send` | `false` if mail is off or **bulk** already went out today (Manila) |
+| `singles_locked` | Always `false`. Bulk does not lock singles; ignore this for disabling buttons. |
+| `reminded_pairs` | Singles sent today — disable those buttons only |
+
+**POST bulk / single** (on success)
+
+```json
+{
+  "approver_count": 8,
+  "request_count": 14,
+  "email_count": 8,
+  "sent_at": "2026-08-24T09:12:00+08:00"
+}
+```
+
+Single returns `approver_count` / `request_count` / `email_count` of `1`. Bulk `email_count` matches `approver_count` when every send succeeds.
+
+| Status | When |
+|--------|------|
+| **429** | Bulk already sent today, or that leave+approver already singled today — `{ "message": "...", "last_sent_at": "..." }` |
+| **422** | Mail disabled, nobody to remind, leave not `pending_approval`, or `approver_emp_id` is not waiting / is admin |
+| **403** | Caller is not admin |
+
+429 messages:
+
+- `"An org-wide reminder was already sent today."` — bulk today (blocks `POST /admin/reminders` only)
+- `"This approver was already reminded for this leave today."` — that pair already singled today
+
+Scope is always org-wide for bulk (ignores All-tab `group_id` / `code` filters). Recipients are people who can still act on the open requirement (same set as submit mail, minus admin). No activity-log row.
 
 ---
 
@@ -685,6 +755,7 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
   "has_med_cert": true,
   "med_cert_url": "http://localhost:8000/api/conversions/1/med-cert",
   "reviewed_by_emp_id": null,
+  "reviewed_by": null,
   "remarks": null,
   "reviewed_at": null,
   "leave": {
@@ -719,6 +790,8 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
 
 `leave.employee` is the person on leave (`leave_info.emp_id`) — same nest as `GET /leaves/{id}` and `GET /approvals`. `emp_id` remains for convenience.
 
+After **approve** or **reject**, `reviewed_by` is the admin (slim nest, same as `filed_by`). It is `null` while `pending_review`.
+
 After **approve**, leave status becomes `converted_to_sl` and leave type becomes SL. On **reject**, leave returns to `confirmed`.
 
 ---
@@ -731,7 +804,7 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 4. **Cancel** — reason form → cancel endpoint
 5. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 6. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
-7. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; filter by status / leave type / group)
+7. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; filter by status / leave type / group). Banner: `GET /admin/reminders` → `POST /admin/reminders`. Detail: `POST /leaves/{id}/reminders`
 8. **Team Leave Calendar** — `GET /team/calendar?from=&to=` (optional `code`, `group_id` from `pic_groups`)
 9. **Convert VL → SL** — on confirmed VL, upload med cert
 10. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
@@ -742,11 +815,17 @@ Build order tip: start with `/me` + balances + holidays + my leaves + file VL, t
 
 ---
 
-## Emails (backend only — no frontend work)
+## Emails
+
+Submit / confirm / reject / cancel / conversion mail is sent by the API with no extra frontend call.
+
+Admin reminders are triggered from the UI (`GET`/`POST /admin/reminders`, `POST /leaves/{id}/reminders`).
 
 | Event | To | CC |
 |-------|----|----|
 | Leave submitted | Designated approvers | — |
+| Admin reminder (bulk) | Each waiting PIC / president (generic: N pending requests need approval) | — |
+| Admin reminder (single) | That waiting approver | — |
 | Leave confirmed / rejected | Employee (+ filer if on-behalf) | — |
 | Leave cancelled | Designated approvers | — |
 | Conversion requested | Admin | Same designated approvers (med cert attached) |

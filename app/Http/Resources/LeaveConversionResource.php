@@ -12,6 +12,11 @@ use Illuminate\Support\Collection;
 
 class LeaveConversionResource extends JsonResource
 {
+    /**
+     * @var array<int, Employee|null>
+     */
+    private static array $reviewedByCache = [];
+
     public static function collection($resource): AnonymousResourceCollection
     {
         $items = $resource instanceof Collection
@@ -23,8 +28,88 @@ class LeaveConversionResource extends JsonResource
             );
 
         self::hydrateEmployeesOnLeave($items);
+        self::hydrateReviewers($items);
 
         return parent::collection($resource);
+    }
+
+    /**
+     * Attach conversion reviewer for `reviewed_by` nest.
+     *
+     * @param  iterable<int, mixed>  $items
+     */
+    public static function hydrateReviewers(iterable $items): void
+    {
+        $conversions = collect($items)->filter(fn ($item) => $item instanceof LeaveConversion);
+
+        $missingIds = $conversions
+            ->reject(fn (LeaveConversion $conversion) => $conversion->getAttribute('reviewed_by_employee') instanceof Employee)
+            ->map(fn (LeaveConversion $conversion) => $conversion->reviewed_by_emp_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->reject(fn (int $id) => array_key_exists($id, self::$reviewedByCache));
+
+        if ($missingIds->isNotEmpty()) {
+            Employee::query()
+                ->whereIn('id', $missingIds->all())
+                ->get()
+                ->each(function (Employee $employee) {
+                    self::$reviewedByCache[(int) $employee->id] = $employee;
+                });
+
+            foreach ($missingIds as $id) {
+                if (! array_key_exists($id, self::$reviewedByCache)) {
+                    self::$reviewedByCache[$id] = null;
+                }
+            }
+        }
+
+        foreach ($conversions as $conversion) {
+            if ($conversion->getAttribute('reviewed_by_employee') instanceof Employee) {
+                continue;
+            }
+
+            if ($conversion->reviewed_by_emp_id === null) {
+                $conversion->setAttribute('reviewed_by_employee', null);
+
+                continue;
+            }
+
+            $reviewerId = (int) $conversion->reviewed_by_emp_id;
+            $conversion->setAttribute(
+                'reviewed_by_employee',
+                self::$reviewedByCache[$reviewerId] ?? null,
+            );
+        }
+    }
+
+    /**
+     * @param  iterable<int, mixed>  $leaves
+     */
+    public static function hydrateReviewersFromLeaves(iterable $leaves): void
+    {
+        $conversions = collect($leaves)
+            ->filter(fn ($item) => $item instanceof LeaveInfo)
+            ->filter(fn (LeaveInfo $leave) => $leave->relationLoaded('conversion') && $leave->conversion instanceof LeaveConversion)
+            ->map(fn (LeaveInfo $leave) => $leave->conversion);
+
+        self::hydrateReviewers($conversions);
+    }
+
+    /**
+     * Slim nest (id / employee_number / name) for the admin who reviewed.
+     *
+     * @return array{id: int, employee_number: string, name: string}|null
+     */
+    public static function reviewedByFrom(LeaveConversion $conversion): ?array
+    {
+        $employee = $conversion->getAttribute('reviewed_by_employee') instanceof Employee
+            ? $conversion->getAttribute('reviewed_by_employee')
+            : null;
+
+        return EmployeeNest::summary($employee);
     }
 
     /**
@@ -47,6 +132,7 @@ class LeaveConversionResource extends JsonResource
     {
         if ($this->resource instanceof LeaveConversion) {
             self::hydrateEmployeesOnLeave([$this->resource]);
+            self::hydrateReviewers([$this->resource]);
         }
 
         return [
@@ -68,6 +154,9 @@ class LeaveConversionResource extends JsonResource
                 ? url("/api/conversions/{$this->id}/med-cert")
                 : null,
             'reviewed_by_emp_id' => $this->reviewed_by_emp_id,
+            'reviewed_by' => $this->resource instanceof LeaveConversion
+                ? self::reviewedByFrom($this->resource)
+                : null,
             'remarks' => $this->remarks,
             'reviewed_at' => $this->reviewed_at?->toIso8601String(),
             'leave' => $this->whenLoaded('leaveInfo', function () {

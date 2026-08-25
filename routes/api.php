@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminLeaveController;
+use App\Http\Controllers\AdminReminderController;
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\GroupMemberController;
 use App\Http\Controllers\HealthController;
@@ -46,12 +47,15 @@ Route::middleware('portal.auth')->group(function () {
     Route::post('/leaves/{leave}/conversion', [LeaveConversionController::class, 'store']);
     Route::post('/leaves/{leave}/approve', [LeaveApprovalController::class, 'approve']);
     Route::post('/leaves/{leave}/reject', [LeaveApprovalController::class, 'reject']);
+    Route::post('/leaves/{leave}/reminders', [AdminReminderController::class, 'storeForLeave']);
     Route::get('/approvals', [LeaveApprovalController::class, 'index']);
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
     Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
+    Route::get('/admin/reminders', [AdminReminderController::class, 'show']);
+    Route::post('/admin/reminders', [AdminReminderController::class, 'store']);
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);
     Route::post('/conversions/{conversion}/approve', [LeaveConversionController::class, 'approve']);
     Route::post('/conversions/{conversion}/reject', [LeaveConversionController::class, 'reject']);

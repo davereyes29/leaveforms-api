@@ -199,6 +199,7 @@ class LeaveResource extends JsonResource
         static::hydrateApproverNames($leaves);
         static::hydrateEmployeesOnLeave($leaves);
         static::hydrateFiledBy($leaves);
+        LeaveConversionResource::hydrateReviewersFromLeaves($leaves);
 
         return parent::collection($resource);
     }
@@ -212,6 +213,7 @@ class LeaveResource extends JsonResource
             static::hydrateApproverNames([$this->resource]);
             static::hydrateEmployeesOnLeave([$this->resource]);
             static::hydrateFiledBy([$this->resource]);
+            LeaveConversionResource::hydrateReviewersFromLeaves([$this->resource]);
         }
 
         $employee = $this->employee_on_leave instanceof Employee
@@ -301,6 +303,7 @@ class LeaveResource extends JsonResource
                         ? url("/api/conversions/{$conversion->id}/med-cert")
                         : null,
                     'reviewed_by_emp_id' => $conversion->reviewed_by_emp_id,
+                    'reviewed_by' => LeaveConversionResource::reviewedByFrom($conversion),
                     'remarks' => $conversion->remarks,
                     'reviewed_at' => $conversion->reviewed_at?->toIso8601String(),
                     'created_at' => $conversion->created_at?->toIso8601String(),

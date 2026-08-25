@@ -6,7 +6,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 
 ---
 
-## Tables (8)
+## Tables (9)
 
 | Table | Purpose |
 |-------|---------|
@@ -18,6 +18,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `leave_approval_history` | One immutable decision per requirement |
 | `leave_activity_history` | User/system activity audit |
 | `leave_conversion` | VL → SL conversion (med cert) |
+| `leave_admin_reminder` | Admin approval-reminder sends (bulk and per-leave singles) |
 
 ---
 
@@ -305,6 +306,31 @@ rejected
 
 ---
 
+## `leave_admin_reminder`
+
+Admin approval reminders. **One row per successful send**. Locks are independent and use the Asia/Manila calendar day:
+
+- **Bulk** — at most one `kind = bulk` row per Manila day. Does not lock singles. Generic email with that approver’s pending count (no leave list).
+- **Single** — at most one `kind = single` row per `(leave_id, target_emp_id)` per Manila day. Does not lock bulk.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint | PK |
+| `kind` | varchar | `bulk` or `single` |
+| `sent_by_emp_id` | bigint | Admin who clicked send |
+| `leave_id` | bigint | Nullable; set for `single` |
+| `target_emp_id` | bigint | Nullable; set for `single` |
+| `approver_count` | unsigned int | Unique waiting approvers mailed (or intended) |
+| `request_count` | unsigned int | Unique pending leaves in that send |
+| `email_count` | unsigned int | Messages that actually went out |
+| `sent_at` | datetime | Stored in app timezone (UTC); compared in Asia/Manila |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
+
+Not an activity-log event. Recipients exclude `LEAVE_ADMIN_EMP_ID`.
+
+---
+
 ## Indexes
 
 ### `leave_info`
@@ -352,6 +378,12 @@ INDEX (leave_type_id, created_at)
 ```
 INDEX (leave_id)
 INDEX (status, created_at)
+```
+
+### `leave_admin_reminder`
+
+```
+INDEX (sent_at)
 ```
 
 ### `leave_activity_history`
