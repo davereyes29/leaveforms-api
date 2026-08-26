@@ -90,9 +90,9 @@ leave_id        = NULL
 
 ### `manual_adjustment`
 
-**When:** HR corrects a balance.
+**When:** HR corrects a balance via `POST /api/admin/balances`.
 
-Set deltas as needed. Always record `remarks`.
+Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`). Always record `remarks`. No `leave_activity_history` row.
 
 ---
 
@@ -321,6 +321,7 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Approver reject | `rejected` | `leave_reservation_released` |
 | Employee cancel | `cancelled` | `leave_reservation_released` |
 | Conversion approved | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
+| Admin available correction | — | `manual_adjustment` |
 
 Reserved credit release is **only** in the ledger (`leave_reservation_released`), not a separate activity type.
 
@@ -338,7 +339,7 @@ LeaveBalanceService
   releaseReservation(LeaveInfo $leave, reason remarks)
   applyConversion(LeaveConversion $conversion)
   reverseConfirmedLeave(LeaveInfo $leave)
-  manualAdjust(...)
+  applyManualAdjustment(empId, leaveTypeId, availableDelta, remarks)
 
 LeaveFinalizationService
   finalizeIfApproved(LeaveInfo $leave)   // calls confirm; skips ledger if full LWOP

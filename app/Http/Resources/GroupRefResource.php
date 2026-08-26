@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Slim group_list row (`id` / `abbreviation` / `name`) — same nest as `/me` group.
+ * Slim group_list row (`id` / `abbreviation` / `name` / `dept_id`).
  */
 class GroupRefResource extends JsonResource
 {
@@ -19,6 +19,7 @@ class GroupRefResource extends JsonResource
             'id' => (int) $this->id,
             'abbreviation' => $this->abbreviation,
             'name' => $this->name,
+            'dept_id' => (int) $this->dept_id,
         ];
     }
 }

@@ -57,6 +57,7 @@ if (res.status === 401) {
 | Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
 | `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected` |
+| `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `designation_list`) |
 
 **VL** does **not** accept `leave_attachment`. Conversion uploads use field name **`med_cert`**.
 
@@ -566,7 +567,8 @@ Org-wide leave list for **`LEAVE_ADMIN_EMP_ID` only**. No PIC / formspic scoping
 | Method | Path | Query |
 |--------|------|--------|
 | GET | `/admin/leaves` | Optional: `?status=pending_approval\|pending_conversion\|confirmed\|converted_to_sl`, `?code=VL\|SL`, `?group_id=` (`group_list.id`), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
-| GET | `/admin/groups` | No query. Org-wide `group_list` for the All Leave Requests group dropdown (`LEAVE_ADMIN_EMP_ID` only) |
+| GET | `/admin/groups` | No query. Org-wide `group_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only). Includes `dept_id` so the UI can cascade after a department pick. |
+| GET | `/admin/departments` | No query. Org-wide `department_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only) |
 
 Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /approvals` and `GET /activities`. Sorted by `created_at` (default newest first).
 
@@ -583,6 +585,104 @@ Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` 
 Optional `?status=` narrows to one of the allowed values (`rejected` / `cancelled` return **422**). While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) — use `?code=SL` for converted rows.
 
 Open detail with `GET /leaves/{id}` (admin can view any leave). Conversion review stays on `GET /conversions/pending`.
+
+### Employee balances (admin)
+
+Org-wide leave-credit table for **`LEAVE_ADMIN_EMP_ID` only**. Active employees only (`employee_list.emp_status = 1`). Includes the admin.
+
+| Method | Path | Query / body |
+|--------|------|--------|
+| GET | `/admin/balances` | Optional: `?q=` (name or employee number), `?department_id=` (`department_list.id`), `?group_id=` (`group_list.id`), `?employment_status=regular\|probationary\|contractual`, `?sort=asc\|desc` (default `asc`, by employee number), `?page=1`, `?per_page=15` (1–50) |
+| POST | `/admin/balances` | `{ "emp_id": 8, "code": "VL", "available_delta": "-3.00", "remarks": "Opening balance overstated" }` — signed **available** correction only (`reserved` unchanged) |
+
+Non-admin callers get **403**. Same Laravel `data` / `links` / `meta` pagination as `GET /admin/leaves`. Sorted by employee number (`employee_list.id` / `employee.employee_number`); default **lowest first** (`sort=asc`).
+
+**Scope**
+
+| | |
+|--|--|
+| Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
+| Employees | Entire org, **active only**, including the admin |
+| `department_id` | Optional. Filters by the employee’s **effective** primary group’s department (`group_list.dept_id`). Unknown id → **422**. Dropdown: `GET /admin/departments`. |
+| `group_id` | Optional. Filters by the employee’s **effective** primary group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`). Unknown id → **422**. Dropdown: `GET /admin/groups` (use `dept_id` to cascade). If both `department_id` and `group_id` are sent, the group must belong to that department → **422** otherwise. |
+| `employment_status` | Optional. Derived from `employee_list.designation` (`designation_list`), **not** `emp_status`. Omit for all three. Invalid value → **422**. |
+| `q` | Optional. Search bar. Case-insensitive **contains** match on full name (`firstname` + space + `surname`) or employee number (`employee_list.id`, same as `employee.employee_number`). Combines with the other filters (AND). Omit or whitespace-only → no search. Max 100 characters. |
+| `sort` | Optional. `asc` (default) or `desc`. Orders by employee number (`employee_list.id`). Numeric, not string order. Invalid value → **422**. |
+
+`employment_status` mapping (`config/leave.php` → `employment`):
+
+| Value | `designation_list.id` |
+|-------|------------------------|
+| `probationary` | 8, 20, 54 |
+| `contractual` | 9, 49, 51, 53 |
+| `regular` | any other designation |
+
+Each item is **one employee** with every `leave_type` (stable column set). Missing `leave_balance` rows are `"0.00"`. **ML** is applicable only for female employees (`employee_list.gender = 1`); **PL** only for male (`gender = 0`). When `applicable` is `false`, show “—” (do not treat `"0.00"` as a real balance of that type).
+
+```json
+{
+  "data": [
+    {
+      "employee": {
+        "id": 8,
+        "employee_number": "8",
+        "name": "Alex Employee",
+        "group": {
+          "id": 3,
+          "abbreviation": "SYS",
+          "name": "Systems"
+        },
+        "department": {
+          "id": 1,
+          "abbreviation": "IT",
+          "name": "Information Technology"
+        }
+      },
+      "employment_status": "regular",
+      "balances": [
+        {
+          "leave_type_id": 1,
+          "code": "VL",
+          "name": "Vacation Leave",
+          "available": "12.00",
+          "reserved": "1.00",
+          "applicable": true
+        },
+        {
+          "leave_type_id": 4,
+          "code": "ML",
+          "name": "Maternity Leave",
+          "available": "0.00",
+          "reserved": "0.00",
+          "applicable": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+`GET /admin/groups` row now includes `dept_id` (`group_list.dept_id`) for the department → group cascade.
+
+**POST** — HR correction of **available** credits. Writes a `manual_adjustment` ledger row. No activity-log row (there is no leave). Non-admin callers get **403**. Success is **200** with **one** employee row in the same shape as a GET item (`{ "data": { "employee", "employment_status", "balances" } }`) so the table can refresh that line.
+
+```json
+{
+  "emp_id": 8,
+  "code": "VL",
+  "available_delta": "-3.00",
+  "remarks": "Opening balance overstated"
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `emp_id` | Required. Active employee (`employee_list`). Unknown or inactive → **422**. |
+| `code` | Required. Must exist on `leave_type` (case-insensitive; stored uppercase). Unknown → **422**. |
+| `available_delta` | Required. Signed number, not zero, at most 2 decimal places. `+3` adds, `-3` subtracts **available** only. Would make available negative → **422** (`available_delta`: “Balance cannot go negative.”). |
+| `remarks` | Required. Same as other admin remarks (`string`, max 2000). |
+
+**ML** for a male employee or **PL** for a female employee → **422** on `code` (same `applicable` rule as GET). After 15 available / 3 reserved, `-2` VL → available `13.00`, reserved `3.00`.
 
 ### Approval reminders (admin)
 
@@ -809,7 +909,8 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 9. **Convert VL → SL** — on confirmed VL, upload med cert
 10. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 11. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
-12. **Activity Log** — `GET /activities` (+ leave-type filter)
+12. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
+13. **Activity Log** — `GET /activities` (+ leave-type filter)
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.
 

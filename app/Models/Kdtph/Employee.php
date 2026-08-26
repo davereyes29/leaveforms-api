@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Employee extends Model
 {
+    public const GENDER_MALE = 0;
+
+    public const GENDER_FEMALE = 1;
+
     protected $connection = 'kdtphdb_new';
 
     protected $table = 'employee_list';
@@ -26,6 +30,7 @@ class Employee extends Model
         'email',
         'group_id',
         'designation',
+        'gender',
         'date_hired',
         'emp_status',
     ];
@@ -35,6 +40,7 @@ class Employee extends Model
         return [
             'group_id' => 'integer',
             'designation' => 'integer',
+            'gender' => 'integer',
             'emp_status' => 'integer',
             'date_hired' => 'date',
             'birthdate' => 'date',
@@ -63,5 +69,15 @@ class Employee extends Model
     public function isActive(): bool
     {
         return (int) $this->emp_status === 1;
+    }
+
+    public function isMale(): bool
+    {
+        return (int) $this->gender === self::GENDER_MALE;
+    }
+
+    public function isFemale(): bool
+    {
+        return (int) $this->gender === self::GENDER_FEMALE;
     }
 }

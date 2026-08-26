@@ -123,4 +123,19 @@ return [
         'timezone' => 'Asia/Manila',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Employment status (admin balance table)
+    |--------------------------------------------------------------------------
+    |
+    | kdtphdb_new.designation_list has no employment-type column. Map
+    | employee_list.designation to regular / probationary / contractual.
+    | Regular is everyone whose designation is not in the lists below.
+    |
+    */
+    'employment' => [
+        'probationary_designation_ids' => [8, 20, 54],
+        'contractual_designation_ids' => [9, 49, 51, 53],
+    ],
+
 ];

@@ -3,6 +3,7 @@
 namespace App\Services\Leave;
 
 use App\Enums\Leave\LeaveStatus;
+use App\Models\Kdtph\Department;
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\Group;
 use App\Models\Leave\LeaveInfo;
@@ -99,6 +100,25 @@ class AdminLeaveListService
         }
 
         return Group::query()
+            ->orderBy('abbreviation')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Org-wide department_list rows for admin group / balance filters.
+     *
+     * @return Collection<int, Department>
+     *
+     * @throws AuthorizationException
+     */
+    public function departmentsForAdmin(Employee $admin): Collection
+    {
+        if (! $this->approverResolver->contextFor($admin->id)->isAdmin) {
+            throw new AuthorizationException('Only admin can view all leave requests.');
+        }
+
+        return Department::query()
             ->orderBy('abbreviation')
             ->orderBy('name')
             ->get();

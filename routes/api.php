@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminBalanceController;
 use App\Http\Controllers\AdminLeaveController;
 use App\Http\Controllers\AdminReminderController;
 use App\Http\Controllers\DevLoginController;
@@ -54,6 +55,9 @@ Route::middleware('portal.auth')->group(function () {
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
     Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
+    Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);
+    Route::get('/admin/balances', [AdminBalanceController::class, 'index']);
+    Route::post('/admin/balances', [AdminBalanceController::class, 'store']);
     Route::get('/admin/reminders', [AdminReminderController::class, 'show']);
     Route::post('/admin/reminders', [AdminReminderController::class, 'store']);
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);

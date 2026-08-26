@@ -4,10 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\IndexAdminLeavesRequest;
+use App\Http\Resources\DepartmentRefResource;
 use App\Http\Resources\GroupRefResource;
 use App\Http\Resources\PendingApprovalResource;
-use Illuminate\Http\Request;
 use App\Services\Leave\AdminLeaveListService;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AdminLeaveController extends Controller
@@ -38,12 +39,22 @@ class AdminLeaveController extends Controller
     }
 
     /**
-     * GET /api/admin/groups — org-wide group_list for admin All Leave Requests filter.
+     * GET /api/admin/groups — org-wide group_list for admin filters.
      */
     public function groups(Request $request): AnonymousResourceCollection
     {
         $groups = $this->adminLeaveListService->groupsForAdmin($request->employee());
 
         return GroupRefResource::collection($groups);
+    }
+
+    /**
+     * GET /api/admin/departments — org-wide department_list for admin filters.
+     */
+    public function departments(Request $request): AnonymousResourceCollection
+    {
+        $departments = $this->adminLeaveListService->departmentsForAdmin($request->employee());
+
+        return DepartmentRefResource::collection($departments);
     }
 }
