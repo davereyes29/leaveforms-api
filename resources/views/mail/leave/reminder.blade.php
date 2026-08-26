@@ -1,20 +1,21 @@
 <x-mail::message>
-# Reminder: leave request pending your approval
+@include('mail.leave._heading', [
+    'title' => 'Reminder: Leave request awaiting your approval',
+    'icon' => 'reminder.png',
+    'circle' => '#e0f2f1',
+])
 
 Hello {{ $approverName }},
 
-**{{ $employeeName }}** filed a **{{ $leave->leaveType->type }}** request that still needs your review.
+This is a reminder that **{{ $employeeName }}'s {{ $leave->leaveType->type }}** request is still awaiting your approval.
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)  
-**Reason:** {{ $leave->leave_reason }}
+@include('mail.leave._details', ['leave' => $leave])
 
-@if($frontendUrl)
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View pending approvals
+View leave request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

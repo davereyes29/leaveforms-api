@@ -1,19 +1,27 @@
 <x-mail::message>
-# Your VL → SL conversion was approved
+@include('mail.leave._heading', [
+    'title' => 'Your leave conversion request has been approved',
+    'icon' => 'approved.png',
+    'circle' => '#e8f5ec',
+])
 
 Hello {{ $recipientName }},
 
-Your conversion request for **{{ $employeeName }}** has been approved by **{{ $adminName }}**. The leave is now recorded as **{{ $leave->leaveType->type }}**.
+Your request to convert your **{{ $leave->leaveType->type }}** to **SICK LEAVE** has been approved by **{{ $adminName }}**.
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)
+Your leave is now recorded as **SICK LEAVE**.
 
-@if($frontendUrl)
+@include('mail.leave._details', [
+    'leave' => $leave,
+    'heading' => 'Conversion Details',
+    'showReason' => false,
+])
+
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave details
+View leave request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

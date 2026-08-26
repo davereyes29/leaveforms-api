@@ -1,21 +1,28 @@
 <x-mail::message>
-# Your leave request was rejected
+@include('mail.leave._heading', [
+    'title' => 'Your leave request has been rejected',
+    'icon' => 'rejected.png',
+    'circle' => '#fdecea',
+])
 
 Hello {{ $recipientName }},
 
-The **{{ $leave->leaveType->type }}** request for **{{ $employeeName }}** has been rejected by **{{ $approverName }}**.
+Your **{{ $leave->leaveType->type }}** request has been rejected by **{{ $approverName }}**.
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)  
-**Reason:** {{ $leave->leave_reason }}  
-**Rejection remarks:** {{ $remarks }}
+@include('mail.leave._details', [
+    'leave' => $leave,
+    'showDuration' => false,
+    'showReason' => false,
+    'extra' => filled($remarks) ? [
+        ['label' => 'Reason for Rejection', 'value' => $remarks],
+    ] : [],
+])
 
-@if($frontendUrl)
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave details
+View leave request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

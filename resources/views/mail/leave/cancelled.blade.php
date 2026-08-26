@@ -1,21 +1,28 @@
 <x-mail::message>
-# Leave request was cancelled
+@include('mail.leave._heading', [
+    'title' => 'Leave request cancelled',
+    'icon' => 'cancelled.png',
+    'circle' => '#f0f1f2',
+])
 
 Hello {{ $approverName }},
 
-**{{ $employeeName }}** cancelled their **{{ $leave->leaveType->type }}** request. No further action is needed.
+**{{ $employeeName }}** cancelled their **{{ $leave->leaveType->type }}** request.
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)  
-**Reason:** {{ $leave->leave_reason }}  
-**Cancellation reason:** {{ $cancellationReason }}
+@include('mail.leave._details', [
+    'leave' => $leave,
+    'showDuration' => false,
+    'showReason' => false,
+    'extra' => [
+        ['label' => 'Reason for Cancellation', 'value' => $cancellationReason],
+    ],
+])
 
-@if($frontendUrl)
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave details
+View leave request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

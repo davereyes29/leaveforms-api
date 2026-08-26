@@ -1,22 +1,32 @@
 <x-mail::message>
-# VL → SL conversion pending your review
+@include('mail.leave._heading', [
+    'title' => 'Leave conversion request awaiting your review',
+    'icon' => 'pending-conversion.png',
+    'circle' => '#fff3e8',
+])
 
 Hello {{ $adminName }},
 
-**{{ $employeeName }}** requested conversion of a confirmed leave from **{{ $conversion->fromLeaveType->type }}** to **{{ $conversion->toLeaveType->type }}**.
+**{{ $employeeName }}** submitted a request to convert their approved **{{ $conversion->fromLeaveType->type }}** to **{{ $conversion->toLeaveType->type }}**.
 
-The medical certificate is attached to this email. Designated approvers are CC’d for awareness.
+@include('mail.leave._details', [
+    'leave' => $leave,
+    'heading' => 'Conversion details',
+    'before' => [
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+    ],
+])
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)  
-**Reason:** {{ $leave->leave_reason }}
+A medical certificate is attached for your review.
 
-@if($frontendUrl)
+Please review the conversion request and submit your decision.
+
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-Review conversion
+Review conversion request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

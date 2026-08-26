@@ -1,16 +1,21 @@
 <x-mail::message>
-# Reminder: pending leave {{ $pendingCount === 1 ? 'request' : 'requests' }}
+@include('mail.leave._heading', [
+    'title' => 'Reminder: Pending leave '.($pendingCount === 1 ? 'request' : 'requests'),
+    'icon' => 'reminder.png',
+    'circle' => '#e0f2f1',
+])
 
 Hello {{ $approverName }},
 
-You have **{{ $pendingCount }}** pending leave {{ $pendingCount === 1 ? 'request' : 'requests' }} that still {{ $pendingCount === 1 ? 'needs' : 'need' }} your approval.
+You have **{{ $pendingCount }}** leave {{ $pendingCount === 1 ? 'request' : 'requests' }} awaiting your approval.
 
-@if($frontendUrl)
+Please review the pending requests and submit your decisions when available.
+
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
 View pending approvals
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>

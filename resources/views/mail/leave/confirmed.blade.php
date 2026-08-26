@@ -1,20 +1,21 @@
 <x-mail::message>
-# Your leave request was approved
+@include('mail.leave._heading', [
+    'title' => 'Your leave request has been approved',
+    'icon' => 'approved.png',
+    'circle' => '#e8f5ec',
+])
 
 Hello {{ $recipientName }},
 
-The **{{ $leave->leaveType->type }}** request for **{{ $employeeName }}** has been approved by **{{ $approverName }}**.
+Your **{{ $leave->leaveType->type }}** request has been approved by **{{ $approverName }}**.
 
-**Dates:** {{ $leave->start_date->format('M j, Y') }} – {{ $leave->end_date->format('M j, Y') }}  
-**Duration:** {{ $leave->duration }} day(s)  
-**Reason:** {{ $leave->leave_reason }}
+@include('mail.leave._details', ['leave' => $leave])
 
-@if($frontendUrl)
+@if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave details
+View leave request
 </x-mail::button>
 @endif
 
-Thanks,<br>
-{{ config('app.name') }}
+@include('mail.leave._automated')
 </x-mail::message>
