@@ -26,7 +26,7 @@ class ConversionRejectedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your VL → SL conversion was rejected',
+            subject: 'Your leave conversion request has been rejected',
         );
     }
 

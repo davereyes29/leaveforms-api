@@ -22,7 +22,7 @@ class LeaveReminderDigestMail extends Mailable
         $noun = $this->pendingCount === 1 ? 'leave request' : 'leave requests';
 
         return new Envelope(
-            subject: "Reminder: you have {$this->pendingCount} pending {$noun}",
+            subject: "Reminder: Pending leave requests",
         );
     }
 

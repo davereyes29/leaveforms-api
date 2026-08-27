@@ -23,7 +23,7 @@ class LeaveConfirmedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your leave request was approved',
+            subject: 'Your leave request has been approved',
         );
     }
 

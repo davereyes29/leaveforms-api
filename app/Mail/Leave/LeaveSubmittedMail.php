@@ -22,7 +22,7 @@ class LeaveSubmittedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Leave request pending your approval',
+            subject: 'Leave request awaiting your approval',
         );
     }
 

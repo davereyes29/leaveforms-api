@@ -22,7 +22,7 @@ class LeaveReminderMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Reminder: leave request pending your approval',
+            subject: 'Reminder: Leave request awaiting your approval',
         );
     }
 

@@ -23,7 +23,7 @@ class LeaveCancelledMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Leave request was cancelled',
+            subject: 'Leave request cancelled',
         );
     }
 

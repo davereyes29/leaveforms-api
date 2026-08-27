@@ -24,7 +24,7 @@ class LeaveRejectedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your leave request was rejected',
+            subject: 'Your leave request has been rejected',
         );
     }
 

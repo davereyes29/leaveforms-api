@@ -25,7 +25,7 @@ class ConversionApprovedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your VL → SL conversion was approved',
+            subject: 'Your leave conversion request has been approved',
         );
     }
 

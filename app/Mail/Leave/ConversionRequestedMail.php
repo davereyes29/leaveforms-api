@@ -26,7 +26,7 @@ class ConversionRequestedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'VL → SL conversion pending your review',
+            subject: 'Leave conversion request awaiting your review',
         );
     }
 
