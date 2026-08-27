@@ -6,10 +6,26 @@
     $before = $before ?? [];
     $extra = $extra ?? [];
 
+    $start = $leave->start_date;
+    $end = $leave->end_date;
+
+    if ($start->isSameDay($end)) {
+        $datesValue = $start->format('F j, Y');
+    } elseif ($start->isSameMonth($end)) {
+        // e.g. August 27–29, 2026
+        $datesValue = $start->format('F j').'–'.$end->format('j, Y');
+    } elseif ($start->isSameYear($end)) {
+        // e.g. August 27–September 2, 2026
+        $datesValue = $start->format('F j').'–'.$end->format('F j, Y');
+    } else {
+        // e.g. December 30, 2025 – January 2, 2026
+        $datesValue = $start->format('F j, Y').' – '.$end->format('F j, Y');
+    }
+
     $rows = $before;
     $rows[] = [
         'label' => 'Dates',
-        'value' => $leave->start_date->format('M j, Y').' – '.$leave->end_date->format('M j, Y'),
+        'value' => $datesValue,
     ];
     if ($showDuration) {
         $rows[] = [
