@@ -7,6 +7,7 @@ use App\Mail\Leave\ConversionRejectedMail;
 use App\Mail\Leave\ConversionRequestedMail;
 use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
+use App\Mail\Leave\LeaveEditedMail;
 use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveSubmittedMail;
 use App\Mail\Leave\SickLeaveSubmittedMail;
@@ -68,6 +69,51 @@ class LeaveNotificationService
                 );
             } catch (\Throwable $exception) {
                 Log::error('Leave submit notification failed.', [
+                    'leave_id' => $leave->id,
+                    'approver_emp_id' => $approver->id,
+                    'approver_email' => $approver->email,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Notify approvers when a pending leave is edited and needs review again.
+     */
+    public function notifyApproversOnEdit(LeaveInfo $leave): void
+    {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $leave->loadMissing(['leaveType', 'approvalRequirements']);
+
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+
+        $approvers = $this->recipientService->forFirstPendingRequirement($leave);
+
+        if ($approvers->isEmpty()) {
+            Log::warning('Leave edit: no approver emails found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+            ]);
+
+            return;
+        }
+
+        foreach ($approvers as $approver) {
+            try {
+                Mail::to($approver->email)->send(
+                    new LeaveEditedMail(
+                        leave: $leave,
+                        employeeName: $employeeName,
+                        approverName: $approver->firstname ?: 'there',
+                    ),
+                );
+            } catch (\Throwable $exception) {
+                Log::error('Leave edit notification failed.', [
                     'leave_id' => $leave->id,
                     'approver_emp_id' => $approver->id,
                     'approver_email' => $approver->email,

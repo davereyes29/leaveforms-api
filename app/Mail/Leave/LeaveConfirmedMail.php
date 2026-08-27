@@ -11,14 +11,16 @@ use Illuminate\Queue\SerializesModels;
 
 class LeaveConfirmedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
         public string $employeeName,
         public string $recipientName,
         public string $approverName,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('approved.png');
+    }
 
     public function envelope(): Envelope
     {

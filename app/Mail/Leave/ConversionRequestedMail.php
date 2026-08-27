@@ -14,14 +14,16 @@ use Illuminate\Support\Facades\Storage;
 
 class ConversionRequestedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
         public LeaveConversion $conversion,
         public string $employeeName,
         public string $adminName,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('pending-conversion.png');
+    }
 
     public function envelope(): Envelope
     {

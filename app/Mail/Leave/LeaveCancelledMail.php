@@ -11,14 +11,16 @@ use Illuminate\Queue\SerializesModels;
 
 class LeaveCancelledMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
         public string $employeeName,
         public string $approverName,
         public string $cancellationReason,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('cancelled.png');
+    }
 
     public function envelope(): Envelope
     {

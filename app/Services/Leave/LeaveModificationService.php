@@ -25,6 +25,7 @@ class LeaveModificationService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveOverlapValidator $overlapValidator,
         private readonly LeaveAttachmentService $attachmentService,
+        private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
     ) {}
 
@@ -85,7 +86,7 @@ class LeaveModificationService
             $lwopDays = bcsub($duration, $paidDays, 2);
         }
 
-        return DB::transaction(function () use (
+        $leave = DB::transaction(function () use (
             $leave,
             $actor,
             $data,
@@ -141,6 +142,10 @@ class LeaveModificationService
                 'conversion.toLeaveType',
             ]);
         });
+
+        $this->notificationService->notifyApproversOnEdit($leave);
+
+        return $leave;
     }
 
     private function assertActorCanModify(LeaveInfo $leave, Employee $actor): void

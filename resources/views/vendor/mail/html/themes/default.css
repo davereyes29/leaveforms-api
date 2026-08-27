@@ -6,7 +6,6 @@ body,
 body *:not(html):not(style):not(br):not(tr):not(code) {
     box-sizing: border-box;
     font-family: 'Poppins', Arial, Helvetica, sans-serif;
-    position: relative;
 }
 
 body {
@@ -74,7 +73,8 @@ h3,
     color: #212529;
     font-size: 14px;
     font-weight: 700;
-    margin: 24px 0 12px;
+    margin: 24px 0 0;
+    padding-bottom: 12px;
     text-align: left;
 }
 
@@ -119,7 +119,6 @@ img {
 /* Header — icon + brand inside card */
 
 .header {
-    border-bottom: 1px solid #d9dde5;
     padding: 24px 32px 16px;
     text-align: left;
 }
@@ -250,7 +249,8 @@ img {
     -premailer-cellpadding: 0;
     -premailer-cellspacing: 0;
     -premailer-width: 100%;
-    margin: 30px auto;
+    background-color: #ffffff;
+    margin: 8px auto 20px;
     padding: 0;
     text-align: center;
     width: 100%;
@@ -264,37 +264,27 @@ img {
     display: inline-block;
     font-size: 14px;
     font-weight: 600;
+    line-height: 40px;
     overflow: hidden;
+    padding: 0 16px;
     text-decoration: none;
 }
 
 .button-blue,
 .button-primary {
     background-color: #009688;
-    border-bottom: 10px solid #009688;
-    border-left: 16px solid #009688;
-    border-right: 16px solid #009688;
-    border-top: 10px solid #009688;
     color: #ffffff;
 }
 
 .button-green,
 .button-success {
     background-color: #198754;
-    border-bottom: 10px solid #198754;
-    border-left: 16px solid #198754;
-    border-right: 16px solid #198754;
-    border-top: 10px solid #198754;
     color: #ffffff;
 }
 
 .button-red,
 .button-error {
     background-color: #dc3545;
-    border-bottom: 10px solid #dc3545;
-    border-left: 16px solid #dc3545;
-    border-right: 16px solid #dc3545;
-    border-top: 10px solid #dc3545;
     color: #ffffff;
 }
 
@@ -335,7 +325,7 @@ img {
     background-color: #f4f5f7;
     border: 1px solid #d9dde5;
     border-radius: 8px;
-    margin: 0 0 8px;
+    margin: 0;
     width: 100%;
 }
 

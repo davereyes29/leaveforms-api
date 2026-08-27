@@ -11,13 +11,15 @@ use Illuminate\Queue\SerializesModels;
 
 class LeaveReminderMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
         public string $employeeName,
         public string $approverName,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('reminder.png');
+    }
 
     public function envelope(): Envelope
     {
