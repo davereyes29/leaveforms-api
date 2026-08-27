@@ -6,7 +6,6 @@ body,
 body *:not(html):not(style):not(br):not(tr):not(code) {
     box-sizing: border-box;
     font-family: 'Poppins', Arial, Helvetica, sans-serif;
-    position: relative;
 }
 
 body {
