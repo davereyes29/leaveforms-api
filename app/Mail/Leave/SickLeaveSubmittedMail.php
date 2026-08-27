@@ -28,7 +28,7 @@ class SickLeaveSubmittedMail extends Mailable
         $leaveTypeName = $this->leave->leaveType?->type ?? 'Leave';
 
         return new Envelope(
-            subject: $leaveTypeName.' request awaiting your review',
+            subject: $leaveTypeName.' request awaiting your approval',
         );
     }
 
