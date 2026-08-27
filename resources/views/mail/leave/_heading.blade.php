@@ -9,7 +9,7 @@
 <table cellpadding="0" cellspacing="0" role="presentation">
 <tr>
 <td class="email-heading-icon" align="center" valign="middle" width="{{ $circleSize }}" height="{{ $circleSize }}" bgcolor="{{ $circle }}" style="width: {{ $circleSize }}px; height: {{ $circleSize }}px; background-color: {{ $circle }}; border-radius: 50%; text-align: center; vertical-align: middle; line-height: {{ $circleSize }}px;">
-<img src="{{ asset('status-icons/'.$icon) }}" width="{{ $iconSize }}" height="{{ $iconSize }}" alt="" style="display: inline-block; border: 0; outline: none; text-decoration: none; vertical-align: middle;">
+<img src="cid:status-icon" width="{{ $iconSize }}" height="{{ $iconSize }}" alt="" style="display: block; border: 0; outline: none; text-decoration: none;">
 </td>
 </tr>
 </table>

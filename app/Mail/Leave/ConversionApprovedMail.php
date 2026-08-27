@@ -12,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class ConversionApprovedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
@@ -20,7 +20,9 @@ class ConversionApprovedMail extends Mailable
         public string $employeeName,
         public string $recipientName,
         public string $adminName,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('approved.png');
+    }
 
     public function envelope(): Envelope
     {

@@ -10,12 +10,14 @@ use Illuminate\Queue\SerializesModels;
 
 class LeaveReminderDigestMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public string $approverName,
         public int $pendingCount,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('reminder.png');
+    }
 
     public function envelope(): Envelope
     {

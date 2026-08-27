@@ -11,7 +11,7 @@ use Illuminate\Queue\SerializesModels;
 
 class LeaveRejectedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
@@ -19,7 +19,9 @@ class LeaveRejectedMail extends Mailable
         public string $recipientName,
         public string $approverName,
         public string $remarks,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('rejected.png');
+    }
 
     public function envelope(): Envelope
     {
