@@ -12,11 +12,11 @@
     if ($start->isSameDay($end)) {
         $datesValue = $start->format('F j, Y');
     } elseif ($start->isSameMonth($end)) {
-        // e.g. August 27–29, 2026
-        $datesValue = $start->format('F j').'–'.$end->format('j, Y');
+        // e.g. August 27 – 29, 2026
+        $datesValue = $start->format('F j').' – '.$end->format('j, Y');
     } elseif ($start->isSameYear($end)) {
-        // e.g. August 27–September 2, 2026
-        $datesValue = $start->format('F j').'–'.$end->format('F j, Y');
+        // e.g. August 27 – September 2, 2026
+        $datesValue = $start->format('F j').' – '.$end->format('F j, Y');
     } else {
         // e.g. December 30, 2025 – January 2, 2026
         $datesValue = $start->format('F j, Y').' – '.$end->format('F j, Y');
@@ -28,9 +28,15 @@
         'value' => $datesValue,
     ];
     if ($showDuration) {
+        $durationRaw = number_format((float) $leave->duration, 2, '.', '');
+        $durationValue = rtrim(rtrim($durationRaw, '0'), '.') ?: '0';
+        $durationUnit = ((float) $durationValue == 1.0 || (float) $durationValue < 1.0)
+            ? 'day'
+            : 'days';
+
         $rows[] = [
             'label' => 'Duration',
-            'value' => $leave->duration.' day(s)',
+            'value' => $durationValue.' '.$durationUnit,
         ];
     }
     if ($showReason) {
