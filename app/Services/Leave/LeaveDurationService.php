@@ -13,8 +13,20 @@ use Illuminate\Validation\ValidationException;
  */
 class LeaveDurationService
 {
-    public function calculate(string $startDate, string $endDate, DayType $dayType): string
+    public function calculate(string $startDate, string $endDate, DayType $dayType, string $leaveTypeCode = 'VL'): string
     {
+        if (LeaveTypeRules::requiresFullDay($leaveTypeCode) && $dayType !== DayType::Full) {
+            throw ValidationException::withMessages([
+                'day_type' => ['This leave type can only be filed as a full day.'],
+            ]);
+        }
+
+        if (LeaveTypeRules::usesCalendarDays($leaveTypeCode)) {
+            $this->assertCalendarMonthSpan($startDate, $endDate, $leaveTypeCode);
+
+            return $this->calculateCalendarDays($startDate, $endDate);
+        }
+
         if ($dayType !== DayType::Full) {
             return $this->calculateHalfDay($startDate, $endDate);
         }
@@ -34,6 +46,40 @@ class LeaveDurationService
         }
 
         return bcadd((string) $workdays, '0', 2);
+    }
+
+    public function calculateCalendarDays(string $startDate, string $endDate): string
+    {
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $days = (int) $start->diffInDays($end) + 1;
+
+        return bcadd((string) $days, '0', 2);
+    }
+
+    private function assertCalendarMonthSpan(string $startDate, string $endDate, string $leaveTypeCode): void
+    {
+        $bounds = LeaveTypeRules::calendarMonthBounds($leaveTypeCode);
+
+        if ($bounds === null) {
+            return;
+        }
+
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $minEnd = $start->copy()->addMonthsNoOverflow($bounds['min'])->subDay();
+        $maxEnd = $start->copy()->addMonthsNoOverflow($bounds['max'])->subDay();
+
+        if ($end->lt($minEnd) || $end->gt($maxEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => [
+                    'Long Leave must be at least '.$bounds['min'].' month(s) and at most '.$bounds['max']
+                    .' month(s). For a start date of '.$start->toDateString()
+                    .', the end date must be between '.$minEnd->toDateString()
+                    .' and '.$maxEnd->toDateString().'.',
+                ],
+            ]);
+        }
     }
 
     private function calculateHalfDay(string $startDate, string $endDate): string
@@ -104,6 +150,34 @@ class LeaveDurationService
             if ($this->isWorkday($date, $holidayDates)) {
                 $dates[] = $date->toDateString();
             }
+        }
+
+        return $dates;
+    }
+
+    /**
+     * Inclusive calendar dates in [startDate, endDate], clipped to [clipFrom, clipTo].
+     * Weekends and holidays are included (PTB, LL).
+     *
+     * @return list<string>
+     */
+    public function calendarDatesBetween(
+        string $startDate,
+        string $endDate,
+        string $clipFrom,
+        string $clipTo,
+    ): array {
+        $from = Carbon::parse($startDate)->max(Carbon::parse($clipFrom))->startOfDay();
+        $to = Carbon::parse($endDate)->min(Carbon::parse($clipTo))->startOfDay();
+
+        if ($from->gt($to)) {
+            return [];
+        }
+
+        $dates = [];
+
+        foreach (CarbonPeriod::create($from, $to) as $date) {
+            $dates[] = $date->toDateString();
         }
 
         return $dates;

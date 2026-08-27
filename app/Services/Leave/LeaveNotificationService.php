@@ -9,6 +9,7 @@ use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
 use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveSubmittedMail;
+use App\Mail\Leave\SickLeaveSubmittedMail;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
@@ -35,6 +36,12 @@ class LeaveNotificationService
         }
 
         $leave->loadMissing(['leaveType', 'approvalRequirements']);
+
+        if ($this->isAdminMedCertLeave($leave)) {
+            $this->notifyAdminOnMedCertLeaveSubmit($leave);
+
+            return;
+        }
 
         $employeeOnLeave = Employee::query()->find($leave->emp_id);
         $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
@@ -181,6 +188,12 @@ class LeaveNotificationService
         }
 
         $leave->loadMissing(['leaveType', 'approvalRequirements']);
+
+        if ($this->isAdminMedCertLeave($leave)) {
+            $this->notifyAdminOnMedCertLeaveCancel($leave, $cancellationReason);
+
+            return;
+        }
 
         $employeeOnLeave = Employee::query()->find($leave->emp_id);
         $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
@@ -408,6 +421,121 @@ class LeaveNotificationService
     }
 
     /**
+     * Notify admin (To) and designated managers (CC) when SL, PTB, EL, or LL is filed.
+     * A supporting file is attached on the mailable when the leave type requires one.
+     */
+    private function notifyAdminOnMedCertLeaveSubmit(LeaveInfo $leave): void
+    {
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+
+        $admin = $this->adminEmployee();
+
+        if ($admin === null) {
+            Log::warning('Admin leave submit: admin email not found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+                'admin_emp_id' => config('leave.admin_emp_id'),
+            ]);
+
+            return;
+        }
+
+        $adminName = $admin->firstname ?: 'there';
+        $ccEmails = $this->managerCcEmails($leave, $admin);
+
+        try {
+            $mail = Mail::to($admin->email);
+
+            if ($ccEmails !== []) {
+                $mail->cc($ccEmails);
+            }
+
+            $mail->send(
+                new SickLeaveSubmittedMail(
+                    leave: $leave,
+                    employeeName: $employeeName,
+                    adminName: $adminName,
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Admin leave submit notification failed.', [
+                'leave_id' => $leave->id,
+                'admin_emp_id' => $admin->id,
+                'admin_email' => $admin->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notify admin (To) and designated managers (CC) when pending SL, PTB, EL, or LL is cancelled.
+     */
+    private function notifyAdminOnMedCertLeaveCancel(LeaveInfo $leave, string $cancellationReason): void
+    {
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+
+        $admin = $this->adminEmployee();
+
+        if ($admin === null) {
+            Log::warning('Admin leave cancel: admin email not found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+                'admin_emp_id' => config('leave.admin_emp_id'),
+            ]);
+
+            return;
+        }
+
+        $ccEmails = $this->managerCcEmails($leave, $admin);
+
+        try {
+            $mail = Mail::to($admin->email);
+
+            if ($ccEmails !== []) {
+                $mail->cc($ccEmails);
+            }
+
+            $mail->send(
+                new LeaveCancelledMail(
+                    leave: $leave,
+                    employeeName: $employeeName,
+                    approverName: $admin->firstname ?: 'there',
+                    cancellationReason: $cancellationReason,
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Admin leave cancel notification failed.', [
+                'leave_id' => $leave->id,
+                'admin_emp_id' => $admin->id,
+                'admin_email' => $admin->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function managerCcEmails(LeaveInfo $leave, Employee $admin): array
+    {
+        return $this->recipientService
+            ->designatedManagersForEmployee((int) $leave->emp_id)
+            ->reject(fn (Employee $approver) => (int) $approver->id === (int) $admin->id)
+            ->pluck('email')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function isAdminMedCertLeave(LeaveInfo $leave): bool
+    {
+        return LeaveTypeRules::isAdminApproved((string) $leave->leaveType?->code);
+    }
+
+    /**
      * Employee on leave always; filer only when different (on-behalf).
      *
      * @return Collection<int, Employee>
@@ -460,4 +588,3 @@ class LeaveNotificationService
             ->first();
     }
 }
-

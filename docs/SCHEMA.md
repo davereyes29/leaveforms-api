@@ -310,9 +310,10 @@ VL → SL after return (unexpected sickness path). Admin reviews med cert here.
 | `from_leave_type_id` | bigint | FK → `leave_type.id` |
 | `to_leave_type_id` | bigint | FK → `leave_type.id` |
 | `med_cert_attachment` | varchar | Nullable |
+| `reason` | text | Employee conversion reason (e.g. diagnosis). Required on new requests; nullable on older rows |
 | `reviewed_by_emp_id` | bigint | Nullable; admin |
 | `status` | enum | See below |
-| `remarks` | text | Nullable |
+| `remarks` | text | Nullable; **admin reject note** only (not the employee reason) |
 | `reviewed_at` | datetime | Nullable |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |

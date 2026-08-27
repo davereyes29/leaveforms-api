@@ -32,10 +32,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Admin reviewer (VL → SL conversion, and admin leave requirements later)
+    | Admin reviewer (VL → SL conversion, Sick Leave, PTB, EL, Long Leave)
     |--------------------------------------------------------------------------
     |
-    | employee_list.id of the HR/admin account that reviews conversions.
+    | employee_list.id of the HR/admin account that reviews conversions
+    | and admin-approved leave requests (SL, PTB, EL, LL).
     |
     */
     'admin_emp_id' => env('LEAVE_ADMIN_EMP_ID'),
@@ -185,6 +186,23 @@ return [
     'contractual_entitlement' => [
         'max_per_type' => '15.00',
         'remarks' => 'Contractual leave credits',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Long Leave (LL)
+    |--------------------------------------------------------------------------
+    |
+    | Unpaid. Tenure is complete years from date_hired as of the file date
+    | (Asia/Manila). Cooldown is 10 years after the last confirmed LL end_date.
+    | Duration is inclusive calendar days, bounded by calendar months.
+    |
+    */
+    'long_leave' => [
+        'min_tenure_years' => 5,
+        'cooldown_years' => 10,
+        'min_months' => 1,
+        'max_months' => 3,
     ],
 
 ];

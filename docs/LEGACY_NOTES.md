@@ -26,7 +26,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 
 | Topic | Legacy | Revamp |
 |-------|--------|--------|
-| **Unexpected sickness** | Could file SL directly | File **VL** first → **VL→SL conversion** after return |
+| **Unexpected sickness** | Could file SL directly | File **VL** first → **VL→SL conversion** after return **or** file **SL** directly when a med cert is already available |
 | **HR / admin on original leave** | HR confirmed most leave (`confirmationAccepted.php`, `l_remarks`) | VL confirms when leaders approve; **admin** on `leave_conversion` or `required_approver_type = admin` for other types |
 | **Balance** | `leave_confirmation` (`lc_vl`, `lc_sl`, …) | `leave_balance` (`available`, `reserved`) + ledger |
 | **Consumed days** | Mixed into balance / `l_lwop` bugs | Not on balance row; sum **confirmed** `leave_info` for reports |
@@ -92,12 +92,12 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | Legacy `l_type` | Revamp `leave_type.code` | Notes |
 |-----------------|--------------------------|-------|
 | `vleave` | `VL` | Primary filing; includes unexpected sickness |
-| `sleave` | `SL` | After approved conversion only |
-| `eleave` | `EL` | |
+| `sleave` | `SL` | Direct filing (med cert + admin) **or** after approved VL→SL conversion |
+| `eleave` | `EL` | Direct filing (supporting document + admin). Workdays; full day; no LWOP |
 | `mleave` | `ML` | |
 | `pleave` | `PL` | |
-| `ptbleave` | `PTB` | |
-| `lleave` | `LL` | |
+| `ptbleave` | `PTB` | Direct filing (med cert + admin). Calendar days; full day; no LWOP |
+| `lleave` | `LL` | Unpaid; admin; 1–3 calendar months; 5 years tenure; 10-year cooldown after last confirmed take |
 
 ---
 

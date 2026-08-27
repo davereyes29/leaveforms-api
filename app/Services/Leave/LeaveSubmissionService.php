@@ -10,12 +10,15 @@ use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveApprovalRequirement;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
- * Orchestrates filing a new leave request (VL for now).
+ * Orchestrates filing a new leave request (VL, SL, PTB, EL, or LL).
  *
- * VL does not accept attachments — those belong to other leave types.
+ * VL and LL do not accept attachments. SL and PTB require a medical certificate.
+ * EL requires a supporting document. LL is always unpaid.
  */
 class LeaveSubmissionService
 {
@@ -25,32 +28,39 @@ class LeaveSubmissionService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveOverlapValidator $overlapValidator,
         private readonly LeaveOnBehalfAuthorizationService $onBehalfAuthorization,
+        private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveNotificationService $notificationService,
+        private readonly LongLeavePolicy $longLeavePolicy,
     ) {}
 
     /**
      * @param  array{
      *     emp_id?: ?int,
+     *     code?: string,
      *     start_date: string,
      *     end_date: string,
      *     day_type: string,
-     *     leave_reason: string
+     *     leave_reason: string,
+     *     leave_attachment?: UploadedFile
      * }  $data
      */
-    public function submitVl(Employee $filer, array $data): LeaveInfo
+    public function submit(Employee $filer, array $data): LeaveInfo
     {
         $employeeOnLeave = $this->onBehalfAuthorization->resolveEmployeeOnLeave(
             $filer,
             isset($data['emp_id']) ? (int) $data['emp_id'] : null,
         );
 
-        $vlType = LeaveType::query()->where('code', 'VL')->firstOrFail();
+        $code = strtoupper((string) ($data['code'] ?? 'VL'));
+        $leaveType = LeaveType::query()->where('code', $code)->firstOrFail();
         $dayType = DayType::from($data['day_type']);
+        $attachment = $data['leave_attachment'] ?? null;
 
         $duration = $this->durationService->calculate(
             $data['start_date'],
             $data['end_date'],
             $dayType,
+            $code,
         );
 
         $this->overlapValidator->assertNoOverlap(
@@ -59,15 +69,41 @@ class LeaveSubmissionService
             $data['end_date'],
         );
 
-        $available = $this->balanceService->availableFor($employeeOnLeave->id, $vlType->id);
-        $paidDays = bccomp($duration, $available, 2) <= 0 ? $duration : $available;
-        $lwopDays = bcsub($duration, $paidDays, 2);
+        if (LeaveTypeRules::isUnpaid($code)) {
+            $this->longLeavePolicy->assertEligibleToFile($employeeOnLeave, $data['start_date']);
+            $paidDays = '0.00';
+            $lwopDays = $duration;
+        } else {
+            $available = $this->balanceService->availableFor($employeeOnLeave->id, $leaveType->id);
 
-        $leave = DB::transaction(function () use ($filer, $employeeOnLeave, $data, $vlType, $dayType, $duration, $paidDays, $lwopDays) {
+            if (! LeaveTypeRules::allowsLwop($code) && bccomp($duration, $available, 2) > 0) {
+                throw ValidationException::withMessages([
+                    'start_date' => [
+                        $leaveType->type.' cannot exceed remaining credits (unpaid days are not allowed). Remaining: '.$available.' day(s).',
+                    ],
+                ]);
+            }
+
+            $paidDays = bccomp($duration, $available, 2) <= 0 ? $duration : $available;
+            $lwopDays = bcsub($duration, $paidDays, 2);
+        }
+
+        $leave = DB::transaction(function () use (
+            $filer,
+            $employeeOnLeave,
+            $data,
+            $leaveType,
+            $code,
+            $dayType,
+            $duration,
+            $paidDays,
+            $lwopDays,
+            $attachment,
+        ) {
             $leave = LeaveInfo::query()->create([
                 'emp_id' => $employeeOnLeave->id,
                 'filed_by_emp_id' => $filer->id,
-                'leave_type_id' => $vlType->id,
+                'leave_type_id' => $leaveType->id,
                 'duration' => $duration,
                 'paid_days' => $paidDays,
                 'lwop_days' => $lwopDays,
@@ -79,7 +115,13 @@ class LeaveSubmissionService
                 'status' => LeaveStatus::PendingApproval,
             ]);
 
-            foreach ($this->approvalPolicy->requirementsForFiler($employeeOnLeave->id) as $requirement) {
+            if ($attachment instanceof UploadedFile) {
+                $leave->update([
+                    'leave_attachment' => $this->attachmentService->store($leave, $attachment),
+                ]);
+            }
+
+            foreach ($this->approvalPolicy->requirementsFor($employeeOnLeave->id, $code) as $requirement) {
                 LeaveApprovalRequirement::query()->create([
                     'leave_id' => $leave->id,
                     'display_order' => $requirement['display_order'],
@@ -88,7 +130,7 @@ class LeaveSubmissionService
                 ]);
             }
 
-            $this->balanceService->reservePaidDays($leave);
+            $this->balanceService->reservePaidDays($leave->fresh());
 
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,

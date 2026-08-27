@@ -119,6 +119,16 @@ Determine the filer’s PIC role from `formspic` (no row = regular employee).
 |---------------|----------------|------------------------|
 | 1 | NULL | `president` |
 
+## Required approvals (SL, PTB, EL, and LL)
+
+Regardless of filer PIC role: **one** snapshot row with `required_approver_type = admin`. Admin is the only person who may approve or reject. Designated VL-matrix PICs (table above) are **CC'd** on submit and cancel mail; they are not on the requirement.
+
+**Any employee** — one row:
+
+| display_order | allowed_levels | required_approver_type |
+|---------------|----------------|------------------------|
+| 1 | NULL | `admin` |
+
 ---
 
 ## Who can act on a requirement
@@ -156,7 +166,7 @@ When an approver **approves** a requirement:
 2. Set `leave_approval_requirement.is_satisfied = true`, `satisfied_at = now`.
 3. Check remaining requirements:
    - **All satisfied** → finalize (below)
-   - (VL policy snapshots a single requirement, so one approve always finalizes.)
+   - (VL, SL, PTB, EL, and LL each snapshot a single requirement, so one approve always finalizes.)
 
 ### Finalize (all requirements satisfied)
 
@@ -208,27 +218,70 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 
 ## Leave type workflows
 
-### Vacation Leave (VL) — including unexpected sickness
+### Vacation Leave (VL)
 
-Unexpected sickness is **not** filed as SL.
+Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL → SL conversion** below). If a medical certificate is already available, file **SL** directly.
 
 1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
-2. Snapshot requirements + reserve paid credits (or LWOP path).
+2. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
 3. Approvers act per matrix above.
 4. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
 5. Quarterly absence warnings (7–8 / 9 days per quarter) are informational only — do not block approval.
 
-### Sick Leave (SL) — after conversion only
+### Sick Leave (SL) — direct filing
 
-`SL` as a leave type is used **after** an approved VL → SL conversion. Do **not** file unexpected sickness directly as SL.
+File SL when the employee already has a medical certificate. Overlap still applies: dates occupied by VL (or any other open leave) cannot be filed as a second request.
 
-See **VL → SL conversion** below.
+1. Employee or an allowed PIC files **SL** with a required medical certificate (`leave_attachment`).
+2. Snapshot **one** requirement: `required_approver_type = admin`. Reserve paid **SL** credits (or LWOP path).
+3. Email: **To** admin, **CC** designated VL-matrix approvers (P1–P4 / president). Med cert attached. PICs do not approve.
+4. Admin approves or rejects on the original leave (`POST /leaves/{id}/approve` or `reject`). One admin approval confirms.
+5. Direct-filed SL is never converted (`leave_conversion` is VL-only).
 
-### Other leave types (PTB, maternity, emergency, …)
+If VL for those dates is still `pending_approval`, cancel it first, then file SL. If VL is already `confirmed`, convert it instead.
+
+### PTB Leave (Pulmonary Tuberculosis)
+
+Treat like direct SL for filing and approval, with different duration and credit rules.
+
+1. Employee or an allowed PIC files **PTB** with a required medical certificate (`leave_attachment`). `day_type` must be `full` (`half_am` / `half_pm` → **422**).
+2. Duration is **inclusive calendar days** (weekends and holidays count). Friday–Monday = **4.00**.
+3. **No LWOP.** If duration > remaining PTB credits → **422**. Example: 40 remaining, 50-day request is rejected; file 40 PTB then a **separate VL** for the rest (that VL may be LWOP). Multiple PTB filings are allowed until credits are gone. Zero credits → cannot file (admin can grant via newly-regularized **180** or `POST /admin/balances`).
+4. Snapshot **one** requirement: `required_approver_type = admin`. Reserve paid **PTB** credits (`paid_days = duration`, `lwop_days = 0`).
+5. Email: **To** admin, **CC** designated VL-matrix approvers. Med cert attached. PICs do not approve.
+6. Admin approves or rejects on the original leave. One admin approval confirms.
+7. Team calendar `dates` include weekends and holidays (unlike VL/SL/EL).
+
+### Emergency Leave (EL)
+
+Treat like PTB for filing and approval (attachment + admin + no LWOP + multiple filings), with **workday** duration like VL/SL.
+
+1. Employee or an allowed PIC files **EL** with a required supporting document (`leave_attachment` — not necessarily a medical certificate). `day_type` must be `full` (`half_am` / `half_pm` → **422**).
+2. Duration is **workdays** (weekends and holidays skipped). Typical remaining cap is **5.00**.
+3. **No LWOP.** If duration > remaining EL credits → **422**. Multiple EL filings are allowed until credits are gone (e.g. 2 days next week, 3 the week after). Zero credits → cannot file (admin can grant via newly-regularized **5** or `POST /admin/balances`).
+4. Snapshot **one** requirement: `required_approver_type = admin`. Reserve paid **EL** credits (`paid_days = duration`, `lwop_days = 0`).
+5. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
+6. Admin approves or rejects on the original leave. One admin approval confirms.
+7. Team calendar `dates` are workdays only (same as VL/SL).
+
+### Long Leave (LL)
+
+Unpaid leave arranged offline with admin and superior before filing. No attachment.
+
+1. Employee or an allowed PIC files **LL** as JSON (`day_type=full`, no `leave_attachment`).
+2. Duration is **inclusive calendar days**, bounded by **calendar months**: end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day (e.g. 15 Sep → 14 Oct through 14 Dec).
+3. Always unpaid: `paid_days = 0`, `lwop_days = duration`. **No** credit reserve.
+4. Requires **5 complete years** from `date_hired` as of the file date (Asia/Manila). Missing hire date or under 5 years → **422**.
+5. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years**. Rejected/cancelled do not count. Another `pending_approval` LL also blocks a new file.
+6. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers (no file). PICs do not approve.
+7. Admin approves or rejects on the original leave. One admin approval confirms.
+8. Team calendar `dates` include weekends and holidays (same as PTB).
+
+### Other leave types (maternity, paternity, …)
 
 Use the same requirement snapshot pattern. Include a requirement row with `required_approver_type = admin` where policy requires admin approval on the **original** request.
 
-> **Stakeholder confirmation required:** Exact requirement sets per leave type (EL, ML, PL, PTB, LL) beyond “admin when needed.”
+> **Stakeholder confirmation required:** Exact requirement sets per leave type (ML, PL) beyond “admin when needed.”
 
 ---
 
@@ -237,9 +290,9 @@ Use the same requirement snapshot pattern. Include a requirement row with `requi
 After the employee **returns to work**:
 
 1. Original absence must be **confirmed VL** (`status = confirmed`).
-2. Employee requests conversion + uploads med cert → `leave_conversion` (`status = pending_review`) and `leave_info.status` → `pending_conversion`.
-3. `leave_activity_history` → `conversion_requested`.
-4. **Admin** reviews (`leave_conversion.reviewed_by_emp_id`, `reviewed_at`, `remarks`).
+2. Employee requests conversion + uploads med cert + **conversion reason** → `leave_conversion` (`status = pending_review`) and `leave_info.status` → `pending_conversion`.
+3. `leave_activity_history` → `conversion_requested` (remarks = employee reason).
+4. **Admin** reviews (`leave_conversion.reason` is the employee’s diagnosis; `reviewed_by_emp_id`, `reviewed_at`, `remarks` are the admin decision).
 
 **If approved:**
 
@@ -264,7 +317,7 @@ Admin review lives on **`leave_conversion`**, not on the original VL approval ch
 
 | Status | Meaning |
 |--------|---------|
-| `pending_approval` | Submitted; awaiting the designated approver |
+| `pending_approval` | Submitted; awaiting the designated approver (PIC for VL, admin for SL/PTB/EL/LL) |
 | `confirmed` | Approver accepted; leave finalized |
 | `pending_conversion` | VL → SL conversion requested; awaiting admin review |
 | `rejected` | Approver rejected; leave closed |
@@ -296,11 +349,12 @@ Managers in `formspic` see leave for employees whose **primary group** is in the
 
 ```
 app/Services/Leave/
-  LeaveApprovalPolicy.php      // build requirement rows from filer role
+  LeaveApprovalPolicy.php      // VL matrix or SL admin requirement
   LeaveApprovalService.php     // record approve/reject; check canAct
   LeaveFinalizationService.php // confirm + call LeaveBalanceService
   LeaveCancellationService.php // employee cancel
   LeaveSubmissionService.php   // submit + snapshot requirements + reserve
+  LeaveNotificationService.php // VL To PICs; SL/conversion To admin + CC PICs
 ```
 
 Controllers stay thin: validate input → call service → return JSON.

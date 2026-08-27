@@ -59,11 +59,11 @@ class LeaveController extends Controller
     }
 
     /**
-     * POST /api/leaves — file a VL request (no attachment).
+     * POST /api/leaves — file VL/LL (JSON) or SL/PTB/EL (multipart + required attachment).
      */
     public function store(StoreLeaveRequest $request): JsonResponse
     {
-        $leave = $this->submissionService->submitVl(
+        $leave = $this->submissionService->submit(
             $request->employee(),
             $request->validated(),
         );
@@ -74,14 +74,14 @@ class LeaveController extends Controller
     }
 
     /**
-     * PUT|POST /api/leaves/{leave} — edit a pending VL request (no approvals yet).
+     * PUT|POST /api/leaves/{leave} — edit a pending VL, SL, PTB, EL, or LL request (no approvals yet).
      *
-     * Use PUT or POST with JSON. VL does not accept attachments.
-     * POST + multipart is still allowed for text fields (PHP PUT multipart limitation).
+     * Use PUT or POST with JSON for VL and LL. SL, PTB, and EL may replace the attachment — use POST + multipart
+     * (PHP does not parse files on PUT).
      */
     public function update(UpdateLeaveRequest $request, LeaveInfo $leave): LeaveResource
     {
-        $leave = $this->modificationService->updateVl(
+        $leave = $this->modificationService->update(
             $leave,
             $request->employee(),
             $request->validated(),

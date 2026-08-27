@@ -16,7 +16,38 @@ class LeaveApproverRecipientService
 {
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
+        private readonly LeaveApprovalPolicy $approvalPolicy,
     ) {}
+
+    /**
+     * VL-style designated managers for the person on leave (live formspic).
+     *
+     * Used to CC PICs on SL submit / cancel when the snapshotted requirement is admin only.
+     *
+     * @return Collection<int, Employee>
+     */
+    public function designatedManagersForEmployee(int $empId): Collection
+    {
+        $collected = collect();
+
+        foreach ($this->approvalPolicy->vlRequirementsForFiler($empId) as $row) {
+            $type = $row['required_approver_type'] ?? null;
+
+            if ($type === RequiredApproverType::President) {
+                $collected = $collected->concat($this->presidentEmployee());
+
+                continue;
+            }
+
+            if ($type === RequiredApproverType::Admin) {
+                continue;
+            }
+
+            $collected = $collected->concat($this->managersForLevels($empId, $row['allowed_levels'] ?? []));
+        }
+
+        return $collected->unique('id')->values();
+    }
 
     /**
      * Approvers who can act on the first pending requirement (lowest display_order).
@@ -77,7 +108,20 @@ class LeaveApproverRecipientService
             return collect();
         }
 
-        $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
+        return $this->managersForLevels($leave->emp_id, $levels);
+    }
+
+    /**
+     * @param  list<int>  $levels
+     * @return Collection<int, Employee>
+     */
+    private function managersForLevels(int $empId, array $levels): Collection
+    {
+        if ($levels === []) {
+            return collect();
+        }
+
+        $filerGroup = $this->approverResolver->filerGroupAbbreviation($empId);
 
         if ($filerGroup === null) {
             return collect();

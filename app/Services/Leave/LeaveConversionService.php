@@ -28,12 +28,12 @@ class LeaveConversionService
         private readonly LeaveNotificationService $notificationService,
     ) {}
 
-    public function request(LeaveInfo $leave, Employee $employee, UploadedFile $medCert): LeaveConversion
+    public function request(LeaveInfo $leave, Employee $employee, UploadedFile $medCert, string $reason): LeaveConversion
     {
         $this->assertEmployeeOwnsLeave($leave, $employee);
         $this->assertLeaveIsConvertible($leave);
 
-        $conversion = DB::transaction(function () use ($leave, $employee, $medCert) {
+        $conversion = DB::transaction(function () use ($leave, $employee, $medCert, $reason) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -77,6 +77,7 @@ class LeaveConversionService
                     'from_leave_type_id' => $vlType->id,
                     'to_leave_type_id' => $slType->id,
                     'med_cert_attachment' => $path,
+                    'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
                     'reviewed_by_emp_id' => null,
                     'remarks' => null,
@@ -90,6 +91,7 @@ class LeaveConversionService
                     'from_leave_type_id' => $vlType->id,
                     'to_leave_type_id' => $slType->id,
                     'med_cert_attachment' => $path,
+                    'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
                 ])->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
             }
@@ -100,6 +102,7 @@ class LeaveConversionService
                 'leave_id' => $leave->id,
                 'performed_by_emp_id' => $employee->id,
                 'activity_type' => ActivityType::ConversionRequested,
+                'remarks' => $reason,
             ]);
 
             return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);

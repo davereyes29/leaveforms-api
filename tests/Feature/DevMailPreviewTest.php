@@ -22,15 +22,16 @@ class DevMailPreviewTest extends TestCase
             ->assertSee('Leave approved');
 
         $expected = [
-            'submitted' => 'Leave request pending your approval',
-            'confirmed' => 'Your leave request was approved',
-            'rejected' => 'Your leave request was rejected',
-            'cancelled' => 'Leave request was cancelled',
-            'reminder' => 'Reminder: leave request pending your approval',
-            'reminder-digest' => 'Reminder: pending leave',
-            'conversion-requested' => 'VL → SL conversion pending your review',
-            'conversion-approved' => 'Your VL → SL conversion was approved',
-            'conversion-rejected' => 'Your VL → SL conversion was rejected',
+            'submitted' => 'Leave request awaiting your approval',
+            'sick-leave-submitted' => 'Sick Leave request awaiting your review',
+            'confirmed' => 'Your leave request has been approved',
+            'rejected' => 'Your leave request has been rejected',
+            'cancelled' => 'Leave request cancelled',
+            'reminder' => 'Reminder: Leave request awaiting your approval',
+            'reminder-digest' => 'Reminder: Pending leave requests',
+            'conversion-requested' => 'Leave conversion request awaiting your review',
+            'conversion-approved' => 'Your leave conversion request has been approved',
+            'conversion-rejected' => 'Your leave conversion request has been rejected',
         ];
 
         foreach ($expected as $template => $heading) {

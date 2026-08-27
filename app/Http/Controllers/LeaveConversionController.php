@@ -24,7 +24,7 @@ class LeaveConversionController extends Controller
     ) {}
 
     /**
-     * POST /api/leaves/{leave}/conversion — employee requests VL → SL with med cert.
+     * POST /api/leaves/{leave}/conversion — employee requests VL → SL with med cert and reason.
      */
     public function store(StoreLeaveConversionRequest $request, LeaveInfo $leave): JsonResponse
     {
@@ -32,6 +32,7 @@ class LeaveConversionController extends Controller
             $leave,
             $request->employee(),
             $request->file('med_cert'),
+            $request->validated('reason'),
         );
 
         return LeaveConversionResource::make($conversion)

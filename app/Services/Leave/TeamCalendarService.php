@@ -161,6 +161,19 @@ class TeamCalendarService
         $holidayDates = $this->durationService->holidayDatesBetween($from, $to);
 
         foreach ($leaves as $leave) {
+            $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
+
+            if (LeaveTypeRules::usesCalendarDays($code)) {
+                $leave->setAttribute('calendar_dates', $this->durationService->calendarDatesBetween(
+                    $leave->start_date->toDateString(),
+                    $leave->end_date->toDateString(),
+                    $from,
+                    $to,
+                ));
+
+                continue;
+            }
+
             $leave->setAttribute('calendar_dates', $this->durationService->workdaysBetween(
                 $leave->start_date->toDateString(),
                 $leave->end_date->toDateString(),

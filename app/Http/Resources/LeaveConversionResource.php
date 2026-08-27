@@ -153,6 +153,7 @@ class LeaveConversionResource extends JsonResource
             'med_cert_url' => filled($this->med_cert_attachment)
                 ? url("/api/conversions/{$this->id}/med-cert")
                 : null,
+            'reason' => $this->reason,
             'reviewed_by_emp_id' => $this->reviewed_by_emp_id,
             'reviewed_by' => $this->resource instanceof LeaveConversion
                 ? self::reviewedByFrom($this->resource)

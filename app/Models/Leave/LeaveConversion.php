@@ -15,6 +15,7 @@ class LeaveConversion extends Model
         'from_leave_type_id',
         'to_leave_type_id',
         'med_cert_attachment',
+        'reason',
         'reviewed_by_emp_id',
         'status',
         'remarks',

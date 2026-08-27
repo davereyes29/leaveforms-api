@@ -6,7 +6,7 @@ use App\Enums\Leave\RequiredApproverType;
 use App\Models\Kdtph\Formspic;
 
 /**
- * Builds leave_approval_requirement rows based on the filer's PIC role.
+ * Builds leave_approval_requirement rows based on leave type and filer PIC role.
  *
  * Rules source: docs/APPROVAL_RULES.md
  */
@@ -19,7 +19,26 @@ class LeaveApprovalPolicy
      *     required_approver_type: ?RequiredApproverType
      * }>
      */
-    public function requirementsForFiler(int $empId): array
+    public function requirementsFor(int $empId, string $leaveTypeCode): array
+    {
+        return match (strtoupper($leaveTypeCode)) {
+            'SL', 'PTB', 'EL', 'LL' => [
+                $this->specialRequirement(1, RequiredApproverType::Admin),
+            ],
+            default => $this->vlRequirementsForFiler($empId),
+        };
+    }
+
+    /**
+     * VL manager matrix (also used to CC PICs on SL / PTB / EL / LL / conversion mail).
+     *
+     * @return list<array{
+     *     display_order: int,
+     *     allowed_levels: ?array<int, int>,
+     *     required_approver_type: ?RequiredApproverType
+     * }>
+     */
+    public function vlRequirementsForFiler(int $empId): array
     {
         $picRole = Formspic::query()
             ->where('fldEmployeeNum', $empId)

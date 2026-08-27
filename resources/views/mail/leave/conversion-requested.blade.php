@@ -15,6 +15,7 @@ Hello {{ $adminName }},
     'before' => [
         ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
         ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+        ['label' => 'Conversion reason', 'value' => $conversion->reason],
     ],
 ])
 

@@ -11,6 +11,7 @@ use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveReminderDigestMail;
 use App\Mail\Leave\LeaveReminderMail;
 use App\Mail\Leave\LeaveSubmittedMail;
+use App\Mail\Leave\SickLeaveSubmittedMail;
 use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
@@ -29,6 +30,7 @@ class DevMailPreviewController extends Controller
      */
     private const TEMPLATES = [
         'submitted' => 'Leave submitted (to approver)',
+        'sick-leave-submitted' => 'Sick Leave submitted (to admin)',
         'confirmed' => 'Leave approved',
         'rejected' => 'Leave rejected',
         'cancelled' => 'Leave cancelled',
@@ -67,6 +69,11 @@ class DevMailPreviewController extends Controller
                 $this->sampleLeave(),
                 $employeeName,
                 $approverName,
+            ),
+            'sick-leave-submitted' => new SickLeaveSubmittedMail(
+                $this->sampleSickLeave(),
+                $employeeName,
+                $adminName,
             ),
             'confirmed' => new LeaveConfirmedMail(
                 $this->sampleLeave(),
@@ -171,7 +178,9 @@ class DevMailPreviewController extends Controller
             // Fall through to sample data when the table is missing or empty.
         }
 
-        $conversion = new LeaveConversion;
+        $conversion = new LeaveConversion([
+            'reason' => 'Acute respiratory infection (sample).',
+        ]);
         $conversion->setRelation('fromLeaveType', $this->leaveTypeByCode('VL', 'Vacation Leave'));
         $conversion->setRelation('toLeaveType', $this->leaveTypeByCode('SL', 'Sick Leave'));
 
@@ -187,6 +196,35 @@ class DevMailPreviewController extends Controller
             'leave_reason' => 'Sample vacation for mail preview.',
         ]);
         $leave->setRelation('leaveType', $this->leaveTypeByCode('VL', 'Vacation Leave'));
+
+        return $leave;
+    }
+
+    private function sampleSickLeave(): LeaveInfo
+    {
+        try {
+            if (Schema::hasTable('leave_info')) {
+                $leave = LeaveInfo::query()
+                    ->with('leaveType')
+                    ->whereHas('leaveType', fn ($query) => $query->where('code', 'SL'))
+                    ->latest('id')
+                    ->first();
+
+                if ($leave !== null) {
+                    return $leave;
+                }
+            }
+        } catch (Throwable) {
+            // Fall through to sample data.
+        }
+
+        $leave = new LeaveInfo([
+            'duration' => '1.00',
+            'start_date' => '2026-08-26',
+            'end_date' => '2026-08-26',
+            'leave_reason' => 'Sample sick leave for mail preview.',
+        ]);
+        $leave->setRelation('leaveType', $this->leaveTypeByCode('SL', 'Sick Leave'));
 
         return $leave;
     }

@@ -133,16 +133,17 @@ Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`)
 
 ### Step 1 — Calculate days
 
-From `start_date`, `end_date`, `day_type`:
+From `start_date`, `end_date`, `day_type`, and leave type:
 
-- Count workdays (exclude weekends/holidays per `kdtholiday`).
-- Half-day → `0.5`.
+- **VL / SL / EL:** count workdays (exclude weekends/holidays per `kdtholiday`). VL/SL half-day → `0.5`. EL is full day only.
+- **PTB:** inclusive calendar days (weekends and holidays count). Full day only.
+- **LL:** inclusive calendar days, full day only, **1–3 calendar months** (end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day).
 
-Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section).
+Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section). **PTB and EL never use LWOP:** if duration > remaining credits of that type, submit is **422**. **LL is always unpaid** (`paid_days = 0`, `lwop_days = duration`); no credits are checked or reserved.
 
 ### Step 2 — Reserve (`leave_reserved`)
 
-**When:** Submit with `paid_days > 0` and `status` → `pending_approval`.
+**When:** Submit with `paid_days > 0` and `status` → `pending_approval`. Uses the leave type being filed (VL credits for VL, SL for SL, PTB for PTB, EL for EL). **LL never reserves** (`paid_days` is always 0).
 
 **Effect:**
 
@@ -234,7 +235,7 @@ reason = leave_reservation_released
 
 ## LWOP at file time
 
-**When:** Not enough `available` paid credits for the full request (product path: allow with LWOP notice).
+**When:** Not enough `available` paid credits for the full request (product path: allow with LWOP notice). **Does not apply to PTB or EL** — duration > remaining credits is **422**, not unpaid. Extra days after remaining credits must be a **separate VL** (that VL may be LWOP). **LL is always fully unpaid** by type (not because credits ran out).
 
 **At submit:**
 

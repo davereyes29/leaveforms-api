@@ -9,13 +9,14 @@ use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveInfo;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Edit an open leave request before any approver has acted.
  *
- * VL does not accept attachments — those belong to other leave types.
+ * VL and LL do not accept attachments. SL, PTB, and EL may replace the supporting file.
  */
 class LeaveModificationService
 {
@@ -23,6 +24,8 @@ class LeaveModificationService
         private readonly LeaveDurationService $durationService,
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveOverlapValidator $overlapValidator,
+        private readonly LeaveAttachmentService $attachmentService,
+        private readonly LongLeavePolicy $longLeavePolicy,
     ) {}
 
     /**
@@ -30,21 +33,25 @@ class LeaveModificationService
      *     start_date: string,
      *     end_date: string,
      *     day_type: string,
-     *     leave_reason: string
+     *     leave_reason: string,
+     *     leave_attachment?: UploadedFile
      * }  $data
      */
-    public function updateVl(LeaveInfo $leave, Employee $actor, array $data): LeaveInfo
+    public function update(LeaveInfo $leave, Employee $actor, array $data): LeaveInfo
     {
         $this->assertActorCanModify($leave, $actor);
         $this->assertLeaveIsEditable($leave);
-        $this->assertIsVl($leave);
+        $this->assertIsEditableType($leave);
 
         $dayType = DayType::from($data['day_type']);
+        $code = strtoupper((string) ($leave->leaveType?->code ?? 'VL'));
+        $attachment = $data['leave_attachment'] ?? null;
 
         $duration = $this->durationService->calculate(
             $data['start_date'],
             $data['end_date'],
             $dayType,
+            $code,
         );
 
         $this->overlapValidator->assertNoOverlap(
@@ -54,11 +61,41 @@ class LeaveModificationService
             $leave->id,
         );
 
-        $effectiveAvailable = $this->balanceService->availableForEdit($leave);
-        $paidDays = bccomp($duration, $effectiveAvailable, 2) <= 0 ? $duration : $effectiveAvailable;
-        $lwopDays = bcsub($duration, $paidDays, 2);
+        if (LeaveTypeRules::isUnpaid($code)) {
+            $employeeOnLeave = Employee::query()->findOrFail($leave->emp_id);
+            $this->longLeavePolicy->assertEligibleToFile(
+                $employeeOnLeave,
+                $data['start_date'],
+                $leave->id,
+            );
+            $paidDays = '0.00';
+            $lwopDays = $duration;
+        } else {
+            $effectiveAvailable = $this->balanceService->availableForEdit($leave);
 
-        return DB::transaction(function () use ($leave, $actor, $data, $dayType, $duration, $paidDays, $lwopDays) {
+            if (! LeaveTypeRules::allowsLwop($code) && bccomp($duration, $effectiveAvailable, 2) > 0) {
+                throw ValidationException::withMessages([
+                    'start_date' => [
+                        ($leave->leaveType?->type ?? 'This leave').' cannot exceed remaining credits (unpaid days are not allowed). Remaining: '.$effectiveAvailable.' day(s).',
+                    ],
+                ]);
+            }
+
+            $paidDays = bccomp($duration, $effectiveAvailable, 2) <= 0 ? $duration : $effectiveAvailable;
+            $lwopDays = bcsub($duration, $paidDays, 2);
+        }
+
+        return DB::transaction(function () use (
+            $leave,
+            $actor,
+            $data,
+            $dayType,
+            $code,
+            $duration,
+            $paidDays,
+            $lwopDays,
+            $attachment,
+        ) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -69,7 +106,7 @@ class LeaveModificationService
 
             $this->balanceService->releaseReservation($leave, 'Leave modified');
 
-            $leave->update([
+            $payload = [
                 'duration' => $duration,
                 'paid_days' => $paidDays,
                 'lwop_days' => $lwopDays,
@@ -77,8 +114,17 @@ class LeaveModificationService
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'leave_reason' => $data['leave_reason'],
-                'leave_attachment' => null,
-            ]);
+            ];
+
+            if (! LeaveTypeRules::requiresAttachment($code)) {
+                $payload['leave_attachment'] = null;
+            }
+
+            $leave->update($payload);
+
+            if (LeaveTypeRules::requiresAttachment($code) && $attachment instanceof UploadedFile) {
+                $this->attachmentService->replace($leave, $attachment);
+            }
 
             $this->balanceService->reservePaidDays($leave->fresh());
 
@@ -126,13 +172,15 @@ class LeaveModificationService
         }
     }
 
-    private function assertIsVl(LeaveInfo $leave): void
+    private function assertIsEditableType(LeaveInfo $leave): void
     {
         $leave->loadMissing('leaveType');
 
-        if ($leave->leaveType?->code !== 'VL') {
+        $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
+
+        if (! LeaveTypeRules::isEditable($code)) {
             throw ValidationException::withMessages([
-                'leave' => ['Only vacation leave requests can be edited through this endpoint for now.'],
+                'leave' => ['Only vacation, sick, PTB, emergency, and long leave requests can be edited through this endpoint for now.'],
             ]);
         }
     }

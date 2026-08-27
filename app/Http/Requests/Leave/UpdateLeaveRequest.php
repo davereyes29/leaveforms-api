@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Leave;
 
 use App\Enums\Leave\DayType;
+use App\Models\Leave\LeaveInfo;
+use App\Services\Leave\LeaveTypeRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,12 +22,19 @@ class UpdateLeaveRequest extends FormRequest
      */
     public function rules(): array
     {
+        $code = $this->leaveTypeCode();
+        $fullDayOnly = LeaveTypeRules::requiresFullDay($code);
+
         return [
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'day_type' => ['required', Rule::enum(DayType::class)],
+            'day_type' => $fullDayOnly
+                ? ['required', Rule::in([DayType::Full->value])]
+                : ['required', Rule::enum(DayType::class)],
             'leave_reason' => ['required', 'string', 'max:2000'],
-            ...$this->prohibitedForVlRules(),
+            ...(LeaveTypeRules::requiresAttachment($code)
+                ? $this->optionalAttachmentReplaceRules()
+                : $this->prohibitedForVlRules()),
         ];
     }
 
@@ -34,6 +43,25 @@ class UpdateLeaveRequest extends FormRequest
      */
     public function messages(): array
     {
-        return $this->prohibitedForVlMessages();
+        $code = $this->leaveTypeCode();
+
+        return [
+            'day_type.in' => 'This leave type can only be filed as a full day.',
+            ...$this->prohibitedAttachmentMessages($code),
+            ...$this->requiredAttachmentMessages($code),
+        ];
+    }
+
+    private function leaveTypeCode(): string
+    {
+        $leave = $this->route('leave');
+
+        if ($leave instanceof LeaveInfo) {
+            $leave->loadMissing('leaveType');
+
+            return strtoupper((string) ($leave->leaveType?->code ?? 'VL'));
+        }
+
+        return 'VL';
     }
 }

@@ -21,6 +21,7 @@ class StoreLeaveConversionRequest extends FormRequest
 
         return [
             'med_cert' => ['required', 'file', "mimes:{$mimes}", "max:{$maxKb}"],
+            'reason' => ['required', 'string', 'max:2000'],
         ];
     }
 
@@ -31,6 +32,7 @@ class StoreLeaveConversionRequest extends FormRequest
     {
         return [
             'med_cert.required' => 'A medical certificate attachment is required to request VL → SL conversion.',
+            'reason.required' => 'A conversion reason is required so admin can review the request without opening the medical certificate.',
         ];
     }
 }
