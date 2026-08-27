@@ -130,6 +130,29 @@ class LeaveBalanceService
     }
 
     /**
+     * Admin-typed VL/SL grant for contractual employees.
+     * Available only; reserved unchanged.
+     *
+     * Must be called inside an outer DB::transaction (batch distribution).
+     */
+    public function applyContractualEntitlement(
+        int $empId,
+        int $leaveTypeId,
+        string $amount,
+        ?string $remarks = null,
+    ): LeaveBalance {
+        $balance = $this->lockOrCreateBalance($empId, $leaveTypeId);
+
+        return $this->recordChange(
+            $balance,
+            $amount,
+            '0.00',
+            BalanceTransactionReason::ContractualEntitlement,
+            $remarks,
+        );
+    }
+
+    /**
      * Add or subtract credits — used when balance already exists.
      */
     public function applyManualAdjustment(

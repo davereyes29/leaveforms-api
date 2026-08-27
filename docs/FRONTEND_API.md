@@ -56,7 +56,7 @@ if (res.status === 401) {
 | `day_type` | `full`, `half_am`, `half_pm` |
 | Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
-| `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected` |
+| `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`, `annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted` |
 | `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `designation_list`) |
 
 **VL** does **not** accept `leave_attachment`. Conversion uploads use field name **`med_cert`**.
@@ -280,7 +280,9 @@ Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`
 | `performed_by.name` | Display name — same key as `eligible_approvers[].name` on leave detail (`/me` still uses `full_name`) |
 | `remarks` | Present on reject / cancel; otherwise usually `null` |
 
-**`activity_type` values:** `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`
+**`activity_type` values (this endpoint):** `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`
+
+Credit distributions and manual adjustments are **not** returned here — see **Administrative Log (admin)**.
 
 **Balance Impact examples:**
 
@@ -291,6 +293,122 @@ Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`
 | Cancelled / rejected | `3.0 VL released` |
 | Modified (amount change) | `2.0 VL released; 3.0 VL reserved` |
 | Conversion approved | `3.0 VL restored; 3.0 SL deducted` |
+
+---
+
+### Administrative Log (admin)
+
+Org-wide activity feed for **`LEAVE_ADMIN_EMP_ID` only**. Includes leave-lifecycle events (submit, edit, cancel, reject, confirm, conversion) for the whole org, plus credit grants.
+
+| Method | Path | Query |
+|--------|------|--------|
+| GET | `/admin/activities` | Optional: `?q=` (employee name or number), `?group_id=` (`group_list.id`), `?code=VL\|SL`, `?month=2026-06` (`YYYY-MM`, Asia/Manila), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+
+Non-admin callers get **403**. Same Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by timestamp (`created_at`); default **newest first**. Dropdown for groups: `GET /admin/groups`.
+
+**Scope**
+
+| | |
+|--|--|
+| Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
+| Rows | Entire org, including the admin’s own leaves |
+| `q` / `group_id` | Person on leave, the adjusted employee (manual), or **any recipient** of a batch distribution |
+| `code` | Leave type on the row. Conversion rows also match **from** or **to** (so `?code=VL` still finds conversion activity after the leave becomes SL) |
+| `month` | Calendar month of `timestamp` in **Asia/Manila**. Unknown format → **422** |
+
+Does **not** include `balance_impact` / `ledger`. Open leave detail with `GET /leaves/{id}` when `leave_id` is set.
+
+**Leave row** (same fields as below; `leave_id` set):
+
+```json
+{
+  "id": 12,
+  "leave_id": 41,
+  "timestamp": "2026-06-03T14:20:00+00:00",
+  "activity_type": "leave_confirmed",
+  "activity": "Leave request approved",
+  "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+  "employee": {
+    "id": 807,
+    "employee_number": "807",
+    "name": "Sam Rivera",
+    "group": { "id": 3, "abbreviation": "SYS", "name": "Systems" }
+  },
+  "performed_by": { "id": 12, "name": "Ariane Derigay" },
+  "remarks": null
+}
+```
+
+**Batch credit distribution** — one row **per leave type** granted in that Confirm (not per employee). Annual → typically VL + SL. Newly regularized → VL, SL, PTB, EL (only types actually granted). Contractual → VL and/or SL. Render `employee.employee_number` as **—** when null.
+
+```json
+{
+  "id": 88,
+  "leave_id": null,
+  "timestamp": "2026-01-01T01:00:00+00:00",
+  "activity_type": "annual_credits_distributed",
+  "activity": "Annual leave credits distributed",
+  "leave_type": { "id": 2, "code": "SL", "name": "Sick Leave" },
+  "employee": {
+    "id": null,
+    "employee_number": null,
+    "name": "Multiple Employees",
+    "group": null
+  },
+  "performed_by": { "id": 12, "name": "Ariane Derigay" },
+  "remarks": "Annual entitlement 2026"
+}
+```
+
+**Manual adjustment** — one solo row per `POST /admin/balances`:
+
+```json
+{
+  "id": 89,
+  "leave_id": null,
+  "timestamp": "2026-06-03T08:15:00+00:00",
+  "activity_type": "credits_adjusted",
+  "activity": "Leave credits adjusted",
+  "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+  "employee": {
+    "id": 807,
+    "employee_number": "807",
+    "name": "Sam Rivera",
+    "group": { "id": 3, "abbreviation": "SYS", "name": "Systems" }
+  },
+  "performed_by": { "id": 12, "name": "Ariane Derigay" },
+  "remarks": "Opening balance overstated"
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `activity` | UI label (see `activity_type` below) |
+| `leave_type.name` | For conversion rows: **"Vacation Leave to Sick Leave"** (`id` / `code` stay the **from** type, VL) |
+| `employee.name` | Person on leave, the adjusted employee, or **"Multiple Employees"** for batch grants |
+| `performed_by.name` | Actor (employee, filer, approver, or admin) |
+| `remarks` | Cancel / reject / conversion reject / adjustment reason; batch grants use the ledger remarks string |
+| `leave_id` | `null` on credit rows |
+
+**`activity_type` values**
+
+| Value | `activity` |
+|-------|------------|
+| `submitted` | Leave request submitted |
+| `modified` | Leave request modified |
+| `cancelled` | Leave request cancelled |
+| `rejected` | Leave request rejected |
+| `attachment_added` | Attachment added |
+| `leave_confirmed` | Leave request approved |
+| `conversion_requested` | VL to SL conversion requested |
+| `conversion_approved` | VL to SL conversion approved |
+| `conversion_rejected` | VL to SL conversion rejected |
+| `annual_credits_distributed` | Annual leave credits distributed |
+| `regularization_credits_distributed` | Newly regularized credits distributed |
+| `contractual_credits_distributed` | Contractual leave credits distributed |
+| `credits_adjusted` | Leave credits adjusted |
+
+Credit rows are written at Confirm / adjust time going forward. Existing ledger grants from before this endpoint are **not** backfilled.
 
 ---
 
@@ -664,7 +782,7 @@ Each item is **one employee** with every `leave_type` (stable column set). Missi
 
 `GET /admin/groups` row now includes `dept_id` (`group_list.dept_id`) for the department → group cascade.
 
-**POST** — HR correction of **available** credits. Writes a `manual_adjustment` ledger row. No activity-log row (there is no leave). Non-admin callers get **403**. Success is **200** with **one** employee row in the same shape as a GET item (`{ "data": { "employee", "employment_status", "balances" } }`) so the table can refresh that line.
+**POST** — HR correction of **available** credits. Writes a `manual_adjustment` ledger row and a solo `credits_adjusted` admin-log row. Non-admin callers get **403**. Success is **200** with **one** employee row in the same shape as a GET item (`{ "data": { "employee", "employment_status", "balances" } }`) so the table can refresh that line.
 
 ```json
 {
@@ -760,7 +878,7 @@ Missing `leave_balance` → available `"0.00"`. `vl_after` / `sl_after` are `ava
 
 Example: hired `2023-01-02`, `year=2026` → as of `2026-01-01` that is **2 years** → SL **15**, even if Confirm is clicked in March.
 
-**POST** — writes `annual_entitlement` ledger rows (VL and SL). No activity-log row. All-or-nothing for the `emp_ids` list. Server recomputes grants from tenure; client amounts are ignored (not accepted).
+**POST** — writes `annual_entitlement` ledger rows (VL and SL) and **one summarized admin-log row per leave type granted** (`annual_credits_distributed`, employee **"Multiple Employees"**). All-or-nothing for the `emp_ids` list. Server recomputes grants from tenure; client amounts are ignored (not accepted).
 
 ```json
 {
@@ -859,7 +977,7 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
 
 Select table: `date_hired`, `regularization_date`, `months_of_service`. Review table: `months_prorated`, `vl_grant` / `sl_grant` / `ptb_grant` / `el_grant` (and optional before/after from `*_available` / `*_after`). For `already_granted`, after equals current available.
 
-**POST** — writes `regularization_entitlement` ledger rows (VL, SL, PTB, EL). No activity-log row. All-or-nothing for the `emp_ids` list. Server recomputes grants; client amounts are ignored.
+**POST** — writes `regularization_entitlement` ledger rows (VL, SL, PTB, EL) and **one summarized admin-log row per leave type granted** (`regularization_credits_distributed`). All-or-nothing for the `emp_ids` list. Server recomputes grants; client amounts are ignored.
 
 ```json
 {
@@ -881,6 +999,89 @@ If **any** selected employee already has all four types (`VL`, `SL`, `PTB`, `EL`
   "year": 2026,
   "as_of": "2026-08-26",
   "granted_count": 2
+}
+```
+
+### Contractual entitlements (admin)
+
+Admin-typed VL and/or SL credits for **contractual** employees. **`LEAVE_ADMIN_EMP_ID` only.** Amounts are entered on the assign screen (not formula-driven). Review is mostly client-side; Confirm POSTs the typed amounts.
+
+| Method | Path | Query / body |
+|--------|------|--------|
+| GET | `/admin/contractual-entitlements` | Optional: `?q=` (name or employee number), `?group_id=` (`group_list.id`), `?emp_ids=830,831` (or `emp_ids[]=` — refresh selected rows for review), `?sort=asc\|desc` (default `asc`, by employee number), `?page=1`, `?per_page=15` (1–500) |
+| POST | `/admin/contractual-entitlements` | `{ "employees": [ { "emp_id": 830, "vl_to_add": "10.00", "sl_to_add": "2.00" } ] }` — Confirm button |
+
+Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `meta` pagination. Extra `meta` keys: `as_of` (today, Asia/Manila), `eligible_count`.
+
+**Who appears (GET)**
+
+| | |
+|--|--|
+| Employees | Active **contractuals** only (`designation` in `[9, 49, 51, 53]`) |
+| List | All matching contractuals (no `already_granted` — grants may be repeated) |
+| `group_id` / `q` / `emp_ids` / `sort` | Same rules as other admin distribution lists |
+
+```json
+{
+  "data": [
+    {
+      "employee": {
+        "id": 830,
+        "employee_number": "830",
+        "name": "Kai Morales",
+        "group": { "id": 12, "abbreviation": "PIP", "name": "Piping" },
+        "department": { "id": 2, "abbreviation": "ENG", "name": "Engineering" }
+      },
+      "vl_available": "2.00",
+      "sl_available": "2.00"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "as_of": "2026-08-27",
+    "eligible_count": 2
+  }
+}
+```
+
+Assign screen: show `vl_available` / `sl_available` as Current VL/SL; admin types VL TO ADD / SL TO ADD (either, or both). Review: before = current available, to add = typed, after = before + to add (client-side). Optionally refetch `GET ?emp_ids=` for fresh before values.
+
+**POST** — writes `contractual_entitlement` ledger rows (one per type granted) and **one summarized admin-log row per leave type granted** (`contractual_credits_distributed`). Fixed remarks: `"Contractual leave credits"`. All-or-nothing. May be run again later (no yearly lock).
+
+```json
+{
+  "employees": [
+    { "emp_id": 830, "vl_to_add": "10.00", "sl_to_add": "2.00" },
+    { "emp_id": 831, "vl_to_add": "5.00" }
+  ]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `employees` | Required. 1–500 unique rows. |
+| `emp_id` | Required. Active contractual → else **422**. |
+| `vl_to_add` / `sl_to_add` | Optional each, but **at least one** per row. Positive, max **15**, at most 2 decimal places. Omit the unused type. |
+
+Success **200** (includes before / grant / after after the write):
+
+```json
+{
+  "data": [
+    {
+      "employee": { "...": "..." },
+      "vl_available": "12.00",
+      "sl_available": "4.00",
+      "vl_before": "2.00",
+      "sl_before": "2.00",
+      "vl_grant": "10.00",
+      "sl_grant": "2.00",
+      "vl_after": "12.00",
+      "sl_after": "4.00"
+    }
+  ],
+  "as_of": "2026-08-27",
+  "granted_count": 1
 }
 ```
 
@@ -1112,7 +1313,9 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 12. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
 13. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
 14. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
-15. **Activity Log** — `GET /activities` (+ leave-type filter)
+15. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`
+16. **Activity Log** — `GET /activities` (+ leave-type filter)
+17. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.
 

@@ -5,12 +5,14 @@ namespace App\Services\Leave;
 use App\Enums\Leave\EmploymentStatus;
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\Group;
+use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveType;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -81,7 +83,8 @@ class AdminBalanceListService
     /**
      * Apply a signed available-credit correction for one employee and leave type.
      *
-     * Reserved is unchanged. Writes a manual_adjustment ledger row.
+     * Reserved is unchanged. Writes a manual_adjustment ledger row and a solo
+     * admin-log activity.
      *
      * @throws AuthorizationException
      * @throws ValidationException
@@ -122,22 +125,31 @@ class AdminBalanceListService
         $leaveType = LeaveType::query()->where('code', $code)->firstOrFail();
         $delta = bcadd($availableDelta, '0', 2);
 
-        try {
-            $this->balanceService->applyManualAdjustment(
+        return DB::transaction(function () use ($admin, $employee, $leaveType, $delta, $remarks): Employee {
+            try {
+                $this->balanceService->applyManualAdjustment(
+                    (int) $employee->id,
+                    (int) $leaveType->id,
+                    $delta,
+                    $remarks,
+                );
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'available_delta' => [$exception->getMessage()],
+                ]);
+            }
+
+            LeaveActivityHistory::recordSoloCreditAdjustment(
+                (int) $admin->id,
                 (int) $employee->id,
                 (int) $leaveType->id,
-                $delta,
                 $remarks,
             );
-        } catch (RuntimeException $exception) {
-            throw ValidationException::withMessages([
-                'available_delta' => [$exception->getMessage()],
-            ]);
-        }
 
-        $this->attachBalances(collect([$employee]));
+            $this->attachBalances(collect([$employee]));
 
-        return $employee;
+            return $employee;
+        });
     }
 
     /**

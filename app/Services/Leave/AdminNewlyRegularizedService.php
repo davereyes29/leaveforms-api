@@ -2,9 +2,11 @@
 
 namespace App\Services\Leave;
 
+use App\Enums\Leave\ActivityType;
 use App\Enums\Leave\BalanceTransactionReason;
 use App\Enums\Leave\EmploymentStatus;
 use App\Models\Kdtph\Employee;
+use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveBalanceTransaction;
 use App\Models\Leave\LeaveType;
@@ -115,7 +117,14 @@ class AdminNewlyRegularizedService
 
         $remarks = 'Regularization entitlement '.$year;
 
-        DB::transaction(function () use ($employees, $asOf, $year, $types, $remarks): void {
+        DB::transaction(function () use ($admin, $employees, $asOf, $year, $types, $remarks): void {
+            $recipients = [
+                'vl' => [],
+                'sl' => [],
+                'ptb' => [],
+                'el' => [],
+            ];
+
             foreach ($employees as $employee) {
                 $empId = (int) $employee->id;
 
@@ -142,6 +151,7 @@ class AdminNewlyRegularizedService
                         $grants['vl_grant'],
                         $remarks,
                     );
+                    $recipients['vl'][] = $empId;
                 }
 
                 if (! $done['sl']) {
@@ -151,6 +161,7 @@ class AdminNewlyRegularizedService
                         $grants['sl_grant'],
                         $remarks,
                     );
+                    $recipients['sl'][] = $empId;
                 }
 
                 if (! $done['ptb']) {
@@ -160,6 +171,7 @@ class AdminNewlyRegularizedService
                         $grants['ptb_grant'],
                         $remarks,
                     );
+                    $recipients['ptb'][] = $empId;
                 }
 
                 if (! $done['el']) {
@@ -169,7 +181,18 @@ class AdminNewlyRegularizedService
                         $grants['el_grant'],
                         $remarks,
                     );
+                    $recipients['el'][] = $empId;
                 }
+            }
+
+            foreach (['vl', 'sl', 'ptb', 'el'] as $code) {
+                LeaveActivityHistory::recordBatchCreditDistribution(
+                    (int) $admin->id,
+                    ActivityType::RegularizationCreditsDistributed,
+                    (int) $types[$code]->id,
+                    $recipients[$code],
+                    $remarks,
+                );
             }
         });
 

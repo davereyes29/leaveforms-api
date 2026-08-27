@@ -6,7 +6,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 
 ---
 
-## Tables (9)
+## Tables (10)
 
 | Table | Purpose |
 |-------|---------|
@@ -16,7 +16,8 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `leave_balance_transaction` | Ledger of balance changes |
 | `leave_approval_requirement` | Required approvals snapshotted at submit |
 | `leave_approval_history` | One immutable decision per requirement |
-| `leave_activity_history` | User/system activity audit |
+| `leave_activity_history` | User/system activity audit (leaves + admin credit grants) |
+| `leave_activity_recipient` | Recipients of a summarized credit-distribution activity |
 | `leave_conversion` | VL → SL conversion (med cert) |
 | `leave_admin_reminder` | Admin approval-reminder sends (bulk and per-leave singles) |
 
@@ -131,6 +132,7 @@ leave_reversed
 initial_balance
 annual_entitlement
 regularization_entitlement
+contractual_entitlement
 ```
 
 | Reason | Typical deltas | When |
@@ -138,6 +140,7 @@ regularization_entitlement
 | `initial_balance` | `available` +N | Opening balance (migration or first setup) |
 | `annual_entitlement` | `available` +N | Yearly VL/SL grant (15/15 or 15/18 by tenure) |
 | `regularization_entitlement` | `available` +N | Mid-year newly regularized grant (VL/SL prorated; PTB/EL flat) |
+| `contractual_entitlement` | `available` +N | Admin-typed VL/SL for contractuals (max 15 each) |
 | `monthly_accrual` | `available` +1.25 | Reserved for a future monthly job (not used by admin UI) |
 | `leave_reserved` | available −N, reserved +N | Paid leave filed |
 | `leave_confirmed` | reserved −N | All requirements approved |
@@ -252,9 +255,11 @@ president
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | bigint | PK |
-| `leave_id` | bigint | FK → `leave_info.id` |
+| `leave_id` | bigint | Nullable FK → `leave_info.id`. Null on credit-grant rows |
+| `subject_emp_id` | bigint | Nullable. Set on solo credit adjustments; null = **"Multiple Employees"** batch |
+| `leave_type_id` | bigint | Nullable FK → `leave_type.id`. Set on credit-grant rows (leave rows use `leave_info.leave_type_id`) |
 | `performed_by_emp_id` | bigint | |
-| `activity_type` | enum | See below |
+| `activity_type` | varchar(50) | See below |
 | `remarks` | text | Nullable |
 | `created_at` | datetime | |
 
@@ -270,7 +275,27 @@ leave_confirmed
 conversion_requested
 conversion_approved
 conversion_rejected
+annual_credits_distributed
+regularization_credits_distributed
+contractual_credits_distributed
+credits_adjusted
 ```
+
+Credit-grant types have `leave_id` null. Batch distributions also write `leave_activity_recipient` rows (one per employee who received that leave type in the Confirm). Manual adjust uses `subject_emp_id` and no recipient rows.
+
+---
+
+## `leave_activity_recipient`
+
+Employees covered by a summarized credit-distribution activity. Used so admin log filters (`q`, `group_id`) can still match a batch row.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint | PK |
+| `activity_id` | bigint | FK → `leave_activity_history.id` (cascade delete) |
+| `emp_id` | bigint | Recipient |
+
+**Unique:** `(activity_id, emp_id)`
 
 ---
 
@@ -392,6 +417,15 @@ INDEX (sent_at)
 
 ```
 INDEX (leave_id, created_at)
+INDEX (created_at)
+INDEX (subject_emp_id)
+```
+
+### `leave_activity_recipient`
+
+```
+UNIQUE (activity_id, emp_id)
+INDEX (emp_id)
 ```
 
 ### `leave_type`

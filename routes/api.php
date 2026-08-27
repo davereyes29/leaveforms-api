@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\AdminActivityController;
 use App\Http\Controllers\AdminAnnualEntitlementController;
 use App\Http\Controllers\AdminBalanceController;
+use App\Http\Controllers\AdminContractualEntitlementController;
 use App\Http\Controllers\AdminLeaveController;
 use App\Http\Controllers\AdminNewlyRegularizedController;
 use App\Http\Controllers\AdminReminderController;
@@ -56,6 +58,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
+    Route::get('/admin/activities', [AdminActivityController::class, 'index']);
     Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
     Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);
     Route::get('/admin/balances', [AdminBalanceController::class, 'index']);
@@ -64,6 +67,8 @@ Route::middleware('portal.auth')->group(function () {
     Route::post('/admin/annual-entitlements', [AdminAnnualEntitlementController::class, 'store']);
     Route::get('/admin/newly-regularized', [AdminNewlyRegularizedController::class, 'index']);
     Route::post('/admin/newly-regularized', [AdminNewlyRegularizedController::class, 'store']);
+    Route::get('/admin/contractual-entitlements', [AdminContractualEntitlementController::class, 'index']);
+    Route::post('/admin/contractual-entitlements', [AdminContractualEntitlementController::class, 'store']);
     Route::get('/admin/reminders', [AdminReminderController::class, 'show']);
     Route::post('/admin/reminders', [AdminReminderController::class, 'store']);
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);

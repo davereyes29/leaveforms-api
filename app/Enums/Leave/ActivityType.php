@@ -13,6 +13,10 @@ enum ActivityType: string
     case ConversionRequested = 'conversion_requested';
     case ConversionApproved = 'conversion_approved';
     case ConversionRejected = 'conversion_rejected';
+    case AnnualCreditsDistributed = 'annual_credits_distributed';
+    case RegularizationCreditsDistributed = 'regularization_credits_distributed';
+    case ContractualCreditsDistributed = 'contractual_credits_distributed';
+    case CreditsAdjusted = 'credits_adjusted';
 
     /**
      * Human-readable label for Activity Log UI.
@@ -29,6 +33,20 @@ enum ActivityType: string
             self::ConversionRequested => 'VL to SL conversion requested',
             self::ConversionApproved => 'VL to SL conversion approved',
             self::ConversionRejected => 'VL to SL conversion rejected',
+            self::AnnualCreditsDistributed => 'Annual leave credits distributed',
+            self::RegularizationCreditsDistributed => 'Newly regularized credits distributed',
+            self::ContractualCreditsDistributed => 'Contractual leave credits distributed',
+            self::CreditsAdjusted => 'Leave credits adjusted',
+        };
+    }
+
+    public function isConversion(): bool
+    {
+        return match ($this) {
+            self::ConversionRequested,
+            self::ConversionApproved,
+            self::ConversionRejected => true,
+            default => false,
         };
     }
 }

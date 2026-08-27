@@ -62,7 +62,7 @@ leave_id        = NULL
 | Less than 3 years | +15 | +15 |
 | 3 years or more | +15 | +18 |
 
-Write **one transaction per leave type** (VL row and SL row). `reserved` unchanged. No `leave_activity_history` row. Same employee cannot receive both types twice in the same Manila calendar year (ledger check).
+Write **one transaction per leave type** (VL row and SL row). `reserved` unchanged. Also writes **one summarized** `leave_activity_history` row per type granted (`annual_credits_distributed`, recipients in `leave_activity_recipient`). Same employee cannot receive both types twice in the same Manila calendar year (ledger check).
 
 ```
 available_delta = +15 (or +18 for SL)
@@ -93,7 +93,7 @@ Reserved enum value for a possible future scheduled +1.25/month job. **Not** use
 | PTB | +180 (flat, one-time) |
 | EL | +5 (flat, one-time) |
 
-Write **one transaction per leave type**. `reserved` unchanged. No `leave_activity_history` row. Same employee cannot receive all four types twice in the same Manila calendar year (ledger check).
+Write **one transaction per leave type**. `reserved` unchanged. Also writes **one summarized** `leave_activity_history` row per type granted (`regularization_credits_distributed`). Same employee cannot receive all four types twice in the same Manila calendar year (ledger check).
 
 ```
 available_delta = +N
@@ -104,11 +104,28 @@ leave_id        = NULL
 
 ---
 
+### `contractual_entitlement`
+
+**When:** Admin confirms typed VL/SL via `POST /api/admin/contractual-entitlements`.
+
+**Who:** Active contractual employees only.
+
+**Amount:** Admin-typed positive VL and/or SL, each at most **15.00**. May be granted more than once (no yearly lock). Remarks fixed: `"Contractual leave credits"`. Also writes **one summarized** `leave_activity_history` row per type granted (`contractual_credits_distributed`).
+
+```
+available_delta = +N
+reserved_delta  = 0
+reason          = contractual_entitlement
+leave_id        = NULL
+```
+
+---
+
 ### `manual_adjustment`
 
 **When:** HR corrects a balance via `POST /api/admin/balances`.
 
-Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`). Always record `remarks`. No `leave_activity_history` row.
+Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`). Always record `remarks`. Also writes a solo `leave_activity_history` row (`credits_adjusted`, `subject_emp_id` set).
 
 ---
 
@@ -337,8 +354,10 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Approver reject | `rejected` | `leave_reservation_released` |
 | Employee cancel | `cancelled` | `leave_reservation_released` |
 | Conversion approved | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
-| Admin annual VL/SL grant | — | `annual_entitlement` |
-| Admin newly regularized grant | — | `regularization_entitlement` |
+| Admin annual VL/SL grant | `annual_credits_distributed` (one row per type; summarized) | `annual_entitlement` |
+| Admin newly regularized grant | `regularization_credits_distributed` (one row per type; summarized) | `regularization_entitlement` |
+| Admin contractual VL/SL grant | `contractual_credits_distributed` (one row per type; summarized) | `contractual_entitlement` |
+| Admin manual available correction | `credits_adjusted` (solo employee) | `manual_adjustment` |
 
 Reserved credit release is **only** in the ledger (`leave_reservation_released`), not a separate activity type.
 
@@ -351,6 +370,7 @@ LeaveBalanceService
   applyInitialBalance(empId, leaveTypeId, amount)
   applyAnnualEntitlement(empId, leaveTypeId, amount, remarks)
   applyRegularizationEntitlement(empId, leaveTypeId, amount, remarks)
+  applyContractualEntitlement(empId, leaveTypeId, amount, remarks)
   applyMonthlyAccrual(empId)
   reserve(LeaveInfo $leave)
   confirm(LeaveInfo $leave)

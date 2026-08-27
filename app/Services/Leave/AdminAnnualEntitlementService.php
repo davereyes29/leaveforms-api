@@ -2,9 +2,11 @@
 
 namespace App\Services\Leave;
 
+use App\Enums\Leave\ActivityType;
 use App\Enums\Leave\BalanceTransactionReason;
 use App\Enums\Leave\EmploymentStatus;
 use App\Models\Kdtph\Employee;
+use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveBalanceTransaction;
 use App\Models\Leave\LeaveType;
@@ -110,7 +112,10 @@ class AdminAnnualEntitlementService
 
         $remarks = 'Annual entitlement '.$year;
 
-        DB::transaction(function () use ($employees, $asOf, $year, $vlType, $slType, $remarks): void {
+        DB::transaction(function () use ($admin, $employees, $asOf, $year, $vlType, $slType, $remarks): void {
+            $vlRecipients = [];
+            $slRecipients = [];
+
             foreach ($employees as $employee) {
                 $empId = (int) $employee->id;
                 $this->balanceService->lockOrCreateBalance($empId, (int) $vlType->id);
@@ -134,12 +139,29 @@ class AdminAnnualEntitlementService
 
                 if (! $vlDone) {
                     $this->balanceService->applyAnnualEntitlement($empId, (int) $vlType->id, $vlGrant, $remarks);
+                    $vlRecipients[] = $empId;
                 }
 
                 if (! $slDone) {
                     $this->balanceService->applyAnnualEntitlement($empId, (int) $slType->id, $slGrant, $remarks);
+                    $slRecipients[] = $empId;
                 }
             }
+
+            LeaveActivityHistory::recordBatchCreditDistribution(
+                (int) $admin->id,
+                ActivityType::AnnualCreditsDistributed,
+                (int) $vlType->id,
+                $vlRecipients,
+                $remarks,
+            );
+            LeaveActivityHistory::recordBatchCreditDistribution(
+                (int) $admin->id,
+                ActivityType::AnnualCreditsDistributed,
+                (int) $slType->id,
+                $slRecipients,
+                $remarks,
+            );
         });
 
         $employees = Employee::query()

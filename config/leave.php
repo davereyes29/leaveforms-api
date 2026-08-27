@@ -173,4 +173,18 @@ return [
         'el' => '5.00',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contractual entitlement (admin distribution)
+    |--------------------------------------------------------------------------
+    |
+    | Admin types VL and/or SL amounts per contractual employee (positive,
+    | at most max_per_type). Ledger remarks are a fixed server string.
+    |
+    */
+    'contractual_entitlement' => [
+        'max_per_type' => '15.00',
+        'remarks' => 'Contractual leave credits',
+    ],
+
 ];
