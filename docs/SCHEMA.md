@@ -130,13 +130,15 @@ manual_adjustment
 leave_reversed
 initial_balance
 annual_entitlement
+regularization_entitlement
 ```
 
 | Reason | Typical deltas | When |
 |--------|----------------|------|
 | `initial_balance` | `available` +N | Opening balance (migration or first setup) |
 | `annual_entitlement` | `available` +N | Yearly VL/SL grant (15/15 or 15/18 by tenure) |
-| `monthly_accrual` | `available` +1.25 | Mid-year regularization catch-up |
+| `regularization_entitlement` | `available` +N | Mid-year newly regularized grant (VL/SL prorated; PTB/EL flat) |
+| `monthly_accrual` | `available` +1.25 | Reserved for a future monthly job (not used by admin UI) |
 | `leave_reserved` | available −N, reserved +N | Paid leave filed |
 | `leave_confirmed` | reserved −N | All requirements approved |
 | `leave_reservation_released` | reserved −N, available +N | Reject or employee cancel |

@@ -14,4 +14,5 @@ enum BalanceTransactionReason: string
     case LeaveReversed = 'leave_reversed';
     case InitialBalance = 'initial_balance';
     case AnnualEntitlement = 'annual_entitlement';
+    case RegularizationEntitlement = 'regularization_entitlement';
 }

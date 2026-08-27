@@ -684,6 +684,206 @@ Each item is **one employee** with every `leave_type` (stable column set). Missi
 
 **ML** for a male employee or **PL** for a female employee → **422** on `code` (same `applicable` rule as GET). After 15 available / 3 reserved, `-2` VL → available `13.00`, reserved `3.00`.
 
+### Annual entitlement (admin)
+
+Yearly VL/SL grant for **`LEAVE_ADMIN_EMP_ID` only**. Select eligible regulars, review before/after on the client, then confirm. Amounts are always computed on the server (do not send grants in POST).
+
+Tenure is complete years from `employee_list.date_hired` to **1 January** of `year` (Asia/Manila), even if the office opens on the first Monday.
+
+| Tenure as of 1 Jan | VL | SL |
+|--------------------|----|----|
+| Less than 3 years | +15 | +15 |
+| 3 years or more | +15 | +18 |
+
+| Method | Path | Query / body |
+|--------|------|--------|
+| GET | `/admin/annual-entitlements` | Optional: `?year=2026` (default: current Manila year), `?q=` (name or employee number), `?group_id=` (`group_list.id`), `?emp_ids=8,12` (or `emp_ids[]=8&emp_ids[]=12` — selected employees for the review page), `?sort=asc\|desc` (default `asc`, by employee number), `?page=1`, `?per_page=15` (1–500; send `500` for client-side pagination of the full regular list) |
+| POST | `/admin/annual-entitlements` | `{ "year": 2026, "emp_ids": [8, 12] }` — checked employees only. Confirm button. |
+
+Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `meta` pagination as `GET /admin/balances`. Extra `meta` keys: `year`, `as_of`, `eligible_count`, `granted_count`, `pending_count` (unpaginated totals for the current filters).
+
+**Who appears (GET)**
+
+| | |
+|--|--|
+| Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
+| Employees | Active **regulars** only (same designation mapping as admin balances). Must have `date_hired` on or before `as_of`. |
+| List | **All** matching regulars, including those already granted this year (`already_granted: true`). Disable those checkboxes. |
+| `year` | Optional. Invalid → **422**. |
+| `group_id` | Optional. Effective primary group. Unknown id → **422**. Dropdown: `GET /admin/groups`. |
+| `q` | Optional. Same name / employee-number search as `GET /admin/balances`. |
+| `emp_ids` | Optional. Refetch the checked employees for the review page (fresh available / after). Comma-separated `?emp_ids=8,12` or repeated `emp_ids[]`. Max 500. Still limited to eligible regulars; unknown or ineligible ids are omitted (not 422). Combines with other filters (AND). Invalid → **422**. |
+| `sort` | Optional. `asc` (default) or `desc` by employee number. |
+
+Missing `leave_balance` → available `"0.00"`. `vl_after` / `sl_after` are `available + grant` while pending; for `already_granted` they equal current available (do not add a second time). Review table: before = `vl_available` / `sl_available`, to add = `vl_grant` / `sl_grant`, after = `vl_after` / `sl_after`. Reserved is unchanged.
+
+```json
+{
+  "data": [
+    {
+      "employee": {
+        "id": 8,
+        "employee_number": "8",
+        "name": "Alex Employee",
+        "group": {
+          "id": 3,
+          "abbreviation": "SYS",
+          "name": "Systems"
+        },
+        "department": {
+          "id": 1,
+          "abbreviation": "IT",
+          "name": "Information Technology"
+        }
+      },
+      "date_hired": "2020-01-15",
+      "years_of_service": 5,
+      "vl_available": "12.00",
+      "sl_available": "8.00",
+      "vl_grant": "15.00",
+      "sl_grant": "18.00",
+      "vl_after": "27.00",
+      "sl_after": "26.00",
+      "already_granted": false
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "year": 2026,
+    "as_of": "2026-01-01",
+    "eligible_count": 200,
+    "granted_count": 180,
+    "pending_count": 20
+  }
+}
+```
+
+Example: hired `2023-01-02`, `year=2026` → as of `2026-01-01` that is **2 years** → SL **15**, even if Confirm is clicked in March.
+
+**POST** — writes `annual_entitlement` ledger rows (VL and SL). No activity-log row. All-or-nothing for the `emp_ids` list. Server recomputes grants from tenure; client amounts are ignored (not accepted).
+
+```json
+{
+  "year": 2026,
+  "emp_ids": [8, 12]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `year` | Required. Same year as the GET they reviewed. |
+| `emp_ids` | Required. Unique ids, min 1, max 500. Only the checked people. Unknown / inactive / not regular / no hire date / hired after 1 Jan → **422**. |
+
+If **any** selected employee already has both VL and SL `annual_entitlement` rows in that Manila calendar year → **422** (nothing is written). Partial (only one type) is completed, not duplicated. Success **200**:
+
+```json
+{
+  "data": [ { "...same row shape, already_granted true..." } ],
+  "year": 2026,
+  "as_of": "2026-01-01",
+  "granted_count": 2
+}
+```
+
+### Newly regularized (admin)
+
+One-time mid-year grant for employees who missed the Jan 1 annual VL/SL distribution. **`LEAVE_ADMIN_EMP_ID` only.** Select eligible people, review grants on the client, then confirm. Amounts are always computed on the server (do not send grants in POST).
+
+**As-of** is **today** (Asia/Manila). Regularization date is derived as `date_hired + 6 months` (no DB column). Designation is **ignored** for regular vs probationary (leaders may lag); **contractual** designations are excluded (admin adjusts those manually).
+
+| Method | Path | Query / body |
+|--------|------|--------|
+| GET | `/admin/newly-regularized` | Optional: `?year=2026` (default: current Manila year), `?q=` (name or employee number), `?group_id=` (`group_list.id`), `?emp_ids=8,12` (or `emp_ids[]=` — selected employees for the review page), `?sort=asc\|desc` (default `asc`, by employee number), `?page=1`, `?per_page=15` (1–500; send `500` for client-side pagination) |
+| POST | `/admin/newly-regularized` | `{ "year": 2026, "emp_ids": [8, 12] }` — checked employees only. Confirm button. |
+
+Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `meta` pagination as annual entitlements. Extra `meta` keys: `year`, `as_of`, `eligible_count`, `granted_count`, `pending_count`.
+
+**Who appears (GET)**
+
+| | |
+|--|--|
+| Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
+| Employees | Active, **not contractual**, `date_hired` present, hired **after** 1 January of `year`, tenure **≥ 6 months and &lt; 12 months** as of today, and **no** `annual_entitlement` ledger row in that Manila calendar year |
+| List | **All** matching employees, including those already granted this year (`already_granted: true`). Disable those checkboxes. |
+| `year` | Optional. Used for Dec proration end and ledger idempotency. Invalid → **422**. |
+| `group_id` / `q` / `emp_ids` / `sort` | Same rules as `GET /admin/annual-entitlements`. |
+
+**Grants (server-computed)**
+
+| Type | Amount |
+|------|--------|
+| VL / SL | Inclusive calendar months from regularization month through December of `year` × **1.25** (e.g. July–Dec = 6 → **7.50**) |
+| PTB | Flat **180.00** (one-time) |
+| EL | Flat **5.00** (one-time) |
+
+```json
+{
+  "data": [
+    {
+      "employee": {
+        "id": 808,
+        "employee_number": "808",
+        "name": "Alex Employee",
+        "group": { "id": 3, "abbreviation": "SYS", "name": "Systems" },
+        "department": { "id": 1, "abbreviation": "IT", "name": "Information Technology" }
+      },
+      "date_hired": "2026-01-10",
+      "regularization_date": "2026-07-10",
+      "months_of_service": "7 months, 16 days",
+      "months_prorated": 6,
+      "vl_available": "0.00",
+      "sl_available": "0.00",
+      "ptb_available": "0.00",
+      "el_available": "0.00",
+      "vl_grant": "7.50",
+      "sl_grant": "7.50",
+      "ptb_grant": "180.00",
+      "el_grant": "5.00",
+      "vl_after": "7.50",
+      "sl_after": "7.50",
+      "ptb_after": "180.00",
+      "el_after": "5.00",
+      "already_granted": false
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "year": 2026,
+    "as_of": "2026-08-26",
+    "eligible_count": 12,
+    "granted_count": 3,
+    "pending_count": 9
+  }
+}
+```
+
+Select table: `date_hired`, `regularization_date`, `months_of_service`. Review table: `months_prorated`, `vl_grant` / `sl_grant` / `ptb_grant` / `el_grant` (and optional before/after from `*_available` / `*_after`). For `already_granted`, after equals current available.
+
+**POST** — writes `regularization_entitlement` ledger rows (VL, SL, PTB, EL). No activity-log row. All-or-nothing for the `emp_ids` list. Server recomputes grants; client amounts are ignored.
+
+```json
+{
+  "year": 2026,
+  "emp_ids": [808, 899]
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `year` | Required. Same year as the GET they reviewed. |
+| `emp_ids` | Required. Unique ids, min 1, max 500. Unknown / ineligible → **422**. |
+
+If **any** selected employee already has all four types (`VL`, `SL`, `PTB`, `EL`) with `regularization_entitlement` in that Manila calendar year → **422** (nothing is written). Partial (some types missing) is completed, not duplicated. Success **200**:
+
+```json
+{
+  "data": [ { "...same row shape, already_granted true..." } ],
+  "year": 2026,
+  "as_of": "2026-08-26",
+  "granted_count": 2
+}
+```
+
 ### Approval reminders (admin)
 
 Nudge waiting PICs / president on `pending_approval` leaves. **`LEAVE_ADMIN_EMP_ID` only** (403 otherwise). Does not mail the admin even if they are also a PIC.
@@ -910,7 +1110,9 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 10. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 11. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
 12. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
-13. **Activity Log** — `GET /activities` (+ leave-type filter)
+13. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
+14. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
+15. **Activity Log** — `GET /activities` (+ leave-type filter)
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL, then approvals, then conversion, then activity log.
 

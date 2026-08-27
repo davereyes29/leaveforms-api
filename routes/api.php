@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\AdminAnnualEntitlementController;
 use App\Http\Controllers\AdminBalanceController;
 use App\Http\Controllers\AdminLeaveController;
+use App\Http\Controllers\AdminNewlyRegularizedController;
 use App\Http\Controllers\AdminReminderController;
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\GroupMemberController;
@@ -58,6 +60,10 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);
     Route::get('/admin/balances', [AdminBalanceController::class, 'index']);
     Route::post('/admin/balances', [AdminBalanceController::class, 'store']);
+    Route::get('/admin/annual-entitlements', [AdminAnnualEntitlementController::class, 'index']);
+    Route::post('/admin/annual-entitlements', [AdminAnnualEntitlementController::class, 'store']);
+    Route::get('/admin/newly-regularized', [AdminNewlyRegularizedController::class, 'index']);
+    Route::post('/admin/newly-regularized', [AdminNewlyRegularizedController::class, 'store']);
     Route::get('/admin/reminders', [AdminReminderController::class, 'show']);
     Route::post('/admin/reminders', [AdminReminderController::class, 'store']);
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);

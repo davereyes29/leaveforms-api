@@ -7,14 +7,18 @@
 
 Hello {{ $recipientName }},
 
-Your request to convert your **{{ $leave->leaveType->type }}** to **SICK LEAVE** has been approved by **{{ $adminName }}**.
+Your request to convert your **{{ $leave->leaveType->type }}** to **{{ $conversion->toLeaveType->type }}** has been approved by **{{ $adminName }}**.
 
-Your leave is now recorded as **SICK LEAVE**.
+Your leave is now recorded as **{{ $conversion->toLeaveType->type }}**.
 
 @include('mail.leave._details', [
     'leave' => $leave,
     'heading' => 'Conversion Details',
     'showReason' => false,
+    'before' => [
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+    ],
 ])
 
 @if ($frontendUrl)

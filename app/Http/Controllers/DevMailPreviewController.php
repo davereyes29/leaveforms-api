@@ -60,7 +60,7 @@ class DevMailPreviewController extends Controller
 
         $employeeName = 'Jane Employee';
         $approverName = 'Alex';
-        $adminName = 'Admin';
+        $adminName = "Ma'am Arlene";
 
         return match ($template) {
             'submitted' => new LeaveSubmittedMail(
@@ -101,12 +101,14 @@ class DevMailPreviewController extends Controller
             ),
             'conversion-approved' => new ConversionApprovedMail(
                 $this->sampleLeave(),
+                $this->sampleConversion(),
                 $employeeName,
                 $employeeName,
                 $adminName,
             ),
             'conversion-rejected' => new ConversionRejectedMail(
                 $this->sampleLeave(),
+                $this->sampleConversion(),
                 $employeeName,
                 $employeeName,
                 $adminName,

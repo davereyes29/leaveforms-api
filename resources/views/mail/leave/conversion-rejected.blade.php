@@ -7,9 +7,9 @@
 
 Hello {{ $recipientName }},
 
-Your request to convert your **Vacation Leave** to **SICK LEAVE** has been rejected by **{{ $adminName }}**.
+Your request to convert your **{{ $conversion->fromLeaveType->type }}** to **{{ $conversion->toLeaveType->type }}** has been rejected by **{{ $adminName }}**.
 
-Your leave will remain recorded as **Vacation Leave**.
+Your leave will remain recorded as **{{ $conversion->fromLeaveType->type }}**.
 
 @include('mail.leave._details', [
     'leave' => $leave,
@@ -19,6 +19,10 @@ Your leave will remain recorded as **Vacation Leave**.
     'extra' => filled($remarks) ? [
         ['label' => 'Reason for Rejection', 'value' => $remarks],
     ] : [],
+    'before' => [
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+    ],
 ])
 
 @if ($frontendUrl)

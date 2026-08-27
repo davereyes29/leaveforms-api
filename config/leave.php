@@ -138,4 +138,39 @@ return [
         'contractual_designation_ids' => [9, 49, 51, 53],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Annual VL / SL entitlement (admin distribution)
+    |--------------------------------------------------------------------------
+    |
+    | Tenure is complete years from employee_list.date_hired to 1 January of
+    | the grant year (Asia/Manila). SL is 15 under the threshold, 18 at or over.
+    |
+    */
+    'annual_entitlement' => [
+        'tenure_years' => 3,
+        'vl' => '15.00',
+        'sl_under' => '15.00',
+        'sl_at_or_over' => '18.00',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Newly regularized entitlement (admin distribution)
+    |--------------------------------------------------------------------------
+    |
+    | Mid-year catch-up for employees who missed the Jan 1 annual grant.
+    | Tenure is measured as of today (Asia/Manila). Regularization date is
+    | date_hired + 6 months. VL/SL = remaining inclusive calendar months
+    | through December × rate. PTB/EL are flat one-time grants.
+    |
+    */
+    'regularization_entitlement' => [
+        'min_months' => 6,
+        'max_months' => 12,
+        'monthly_rate' => '1.25',
+        'ptb' => '180.00',
+        'el' => '5.00',
+    ],
+
 ];

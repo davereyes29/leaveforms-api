@@ -329,6 +329,7 @@ class LeaveNotificationService
             Mail::to($employee->email)->send(
                 new ConversionApprovedMail(
                     leave: $leave,
+                    conversion: $conversion,
                     employeeName: $employee->fullName() ?: 'An employee',
                     recipientName: $employee->firstname ?: 'there',
                     adminName: $adminName,
@@ -388,6 +389,7 @@ class LeaveNotificationService
             Mail::to($employee->email)->send(
                 new ConversionRejectedMail(
                     leave: $leave,
+                    conversion: $conversion,
                     employeeName: $employee->fullName() ?: 'An employee',
                     recipientName: $employee->firstname ?: 'there',
                     adminName: $adminName,

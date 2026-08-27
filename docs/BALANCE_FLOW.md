@@ -53,16 +53,16 @@ leave_id        = NULL
 
 ### `annual_entitlement`
 
-**When:** Yearly grant for eligible employees.
+**When:** Admin confirms yearly grant via `POST /api/admin/annual-entitlements` (`emp_ids` that were checked).
 
-**Amount (confirmed):**
+**Amount (confirmed):** tenure is complete years from `date_hired` to **1 January** of the grant year (Asia/Manila).
 
 | Tenure | VL | SL |
 |--------|----|----|
 | Less than 3 years | +15 | +15 |
 | 3 years or more | +15 | +18 |
 
-Write **one transaction per leave type** (VL row and SL row).
+Write **one transaction per leave type** (VL row and SL row). `reserved` unchanged. No `leave_activity_history` row. Same employee cannot receive both types twice in the same Manila calendar year (ledger check).
 
 ```
 available_delta = +15 (or +18 for SL)
@@ -75,14 +75,30 @@ leave_id        = NULL
 
 ### `monthly_accrual`
 
-**When:** Employee becomes regular mid-year and did **not** receive the full `annual_entitlement` for that period.
+Reserved enum value for a possible future scheduled +1.25/month job. **Not** used by the admin newly-regularized screen.
 
-**Amount:** +1.25 VL and +1.25 SL per run (one transaction per leave type).
+---
+
+### `regularization_entitlement`
+
+**When:** Admin confirms mid-year grant via `POST /api/admin/newly-regularized` (`emp_ids` that were checked).
+
+**Who:** Active, non-contractual employees hired **after** 1 January of the grant year, with tenure **≥ 6 months and &lt; 12 months** as of today (Asia/Manila), who have not received `annual_entitlement` that year.
+
+**Amount:**
+
+| Type | Formula |
+|------|---------|
+| VL / SL | Inclusive calendar months from (`date_hired` + 6 months) through December × **1.25** |
+| PTB | +180 (flat, one-time) |
+| EL | +5 (flat, one-time) |
+
+Write **one transaction per leave type**. `reserved` unchanged. No `leave_activity_history` row. Same employee cannot receive all four types twice in the same Manila calendar year (ledger check).
 
 ```
-available_delta = +1.25
+available_delta = +N
 reserved_delta  = 0
-reason          = monthly_accrual
+reason          = regularization_entitlement
 leave_id        = NULL
 ```
 
@@ -321,7 +337,8 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Approver reject | `rejected` | `leave_reservation_released` |
 | Employee cancel | `cancelled` | `leave_reservation_released` |
 | Conversion approved | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
-| Admin available correction | — | `manual_adjustment` |
+| Admin annual VL/SL grant | — | `annual_entitlement` |
+| Admin newly regularized grant | — | `regularization_entitlement` |
 
 Reserved credit release is **only** in the ledger (`leave_reservation_released`), not a separate activity type.
 
@@ -332,7 +349,8 @@ Reserved credit release is **only** in the ledger (`leave_reservation_released`)
 ```
 LeaveBalanceService
   applyInitialBalance(empId, leaveTypeId, amount)
-  applyAnnualEntitlement(empId, tenure)
+  applyAnnualEntitlement(empId, leaveTypeId, amount, remarks)
+  applyRegularizationEntitlement(empId, leaveTypeId, amount, remarks)
   applyMonthlyAccrual(empId)
   reserve(LeaveInfo $leave)
   confirm(LeaveInfo $leave)

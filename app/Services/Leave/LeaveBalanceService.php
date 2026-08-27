@@ -85,6 +85,51 @@ class LeaveBalanceService
     }
 
     /**
+     * Yearly VL or SL grant. Available only; reserved unchanged.
+     *
+     * Must be called inside an outer DB::transaction (batch distribution).
+     */
+    public function applyAnnualEntitlement(
+        int $empId,
+        int $leaveTypeId,
+        string $amount,
+        ?string $remarks = null,
+    ): LeaveBalance {
+        $balance = $this->lockOrCreateBalance($empId, $leaveTypeId);
+
+        return $this->recordChange(
+            $balance,
+            $amount,
+            '0.00',
+            BalanceTransactionReason::AnnualEntitlement,
+            $remarks,
+        );
+    }
+
+    /**
+     * One-time mid-year grant (VL/SL prorated, or flat PTB/EL).
+     * Available only; reserved unchanged.
+     *
+     * Must be called inside an outer DB::transaction (batch distribution).
+     */
+    public function applyRegularizationEntitlement(
+        int $empId,
+        int $leaveTypeId,
+        string $amount,
+        ?string $remarks = null,
+    ): LeaveBalance {
+        $balance = $this->lockOrCreateBalance($empId, $leaveTypeId);
+
+        return $this->recordChange(
+            $balance,
+            $amount,
+            '0.00',
+            BalanceTransactionReason::RegularizationEntitlement,
+            $remarks,
+        );
+    }
+
+    /**
      * Add or subtract credits — used when balance already exists.
      */
     public function applyManualAdjustment(
@@ -246,7 +291,7 @@ class LeaveBalanceService
         return $available !== null ? (string) $available : '0.00';
     }
 
-    private function lockOrCreateBalance(int $empId, int $leaveTypeId): LeaveBalance
+    public function lockOrCreateBalance(int $empId, int $leaveTypeId): LeaveBalance
     {
         $balance = LeaveBalance::query()
             ->where('emp_id', $empId)
