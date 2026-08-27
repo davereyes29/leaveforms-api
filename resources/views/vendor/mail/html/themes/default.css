@@ -265,37 +265,27 @@ img {
     display: inline-block;
     font-size: 14px;
     font-weight: 600;
+    line-height: 40px;
     overflow: hidden;
+    padding: 0 16px;
     text-decoration: none;
 }
 
 .button-blue,
 .button-primary {
     background-color: #009688;
-    border-bottom: 10px solid #009688;
-    border-left: 16px solid #009688;
-    border-right: 16px solid #009688;
-    border-top: 10px solid #009688;
     color: #ffffff;
 }
 
 .button-green,
 .button-success {
     background-color: #198754;
-    border-bottom: 10px solid #198754;
-    border-left: 16px solid #198754;
-    border-right: 16px solid #198754;
-    border-top: 10px solid #198754;
     color: #ffffff;
 }
 
 .button-red,
 .button-error {
     background-color: #dc3545;
-    border-bottom: 10px solid #dc3545;
-    border-left: 16px solid #dc3545;
-    border-right: 16px solid #dc3545;
-    border-top: 10px solid #dc3545;
     color: #ffffff;
 }
 
