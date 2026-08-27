@@ -23,6 +23,7 @@ class LeaveModificationService
         private readonly LeaveDurationService $durationService,
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveOverlapValidator $overlapValidator,
+        private readonly LeaveNotificationService $notificationService,
     ) {}
 
     /**
@@ -58,7 +59,7 @@ class LeaveModificationService
         $paidDays = bccomp($duration, $effectiveAvailable, 2) <= 0 ? $duration : $effectiveAvailable;
         $lwopDays = bcsub($duration, $paidDays, 2);
 
-        return DB::transaction(function () use ($leave, $actor, $data, $dayType, $duration, $paidDays, $lwopDays) {
+        $leave = DB::transaction(function () use ($leave, $actor, $data, $dayType, $duration, $paidDays, $lwopDays) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -95,6 +96,10 @@ class LeaveModificationService
                 'conversion.toLeaveType',
             ]);
         });
+
+        $this->notificationService->notifyApproversOnEdit($leave);
+
+        return $leave;
     }
 
     private function assertActorCanModify(LeaveInfo $leave, Employee $actor): void
