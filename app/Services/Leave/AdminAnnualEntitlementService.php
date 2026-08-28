@@ -10,6 +10,7 @@ use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveBalanceTransaction;
 use App\Models\Leave\LeaveType;
+use App\Services\Kdtph\EmployeeDesignationResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -30,6 +31,7 @@ class AdminAnnualEntitlementService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveBalanceService $balanceService,
+        private readonly EmployeeDesignationResolver $designationResolver,
     ) {}
 
     /**
@@ -243,15 +245,11 @@ class AdminAnnualEntitlementService
      */
     private function eligibleQuery(CarbonImmutable $asOf, ?int $groupId, ?string $q, ?array $empIds = null): Builder
     {
-        $probationary = EmploymentStatus::designationIds('probationary_designation_ids');
-        $contractual = EmploymentStatus::designationIds('contractual_designation_ids');
-        $excluded = array_values(array_unique([...$probationary, ...$contractual]));
-
         $query = Employee::query()
             ->where('emp_status', 1)
             ->whereNotNull('date_hired')
             ->whereDate('date_hired', '<=', $asOf->toDateString())
-            ->whereNotIn('designation', $excluded);
+            ->whereEmploymentStatus(EmploymentStatus::Regular);
 
         if ($empIds !== null) {
             $query->whereIn('id', $empIds);
@@ -388,6 +386,8 @@ class AdminAnnualEntitlementService
             ->get()
             ->keyBy('id');
 
+        $this->designationResolver->hydrate($employees);
+
         $missing = [];
         $ineligible = [];
 
@@ -445,7 +445,7 @@ class AdminAnnualEntitlementService
             return false;
         }
 
-        return EmploymentStatus::fromDesignationId((int) $employee->designation) === EmploymentStatus::Regular;
+        return $employee->employmentStatus() === EmploymentStatus::Regular;
     }
 
     /**

@@ -57,7 +57,7 @@ if (res.status === 401) {
 | Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
 | `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`, `annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted` |
-| `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `designation_list`) |
+| `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `emp_prof.fldDesig` → `designation_list`) |
 
 **VL**, **LL**, **ML**, and **PL** do **not** accept `leave_attachment`. **SL** and **PTB** require **1–5** `leave_attachment` files (medical certificates) on submit. **EL** requires **1–5** `leave_attachment` files (supporting documents). Conversion uploads use field name **`med_cert`** (also 1–5 files). Each file: pdf / jpg / jpeg / png, max **10 MB**.
 
@@ -150,7 +150,7 @@ Example response:
 
 `gender` is `employee_list.gender`: `0` male, `1` female (nullable). Use this to show **ML** (female) vs **PL** (male) when filing for yourself. Any other value: hide both; submit still **422**.
 
-`designation` comes from `kdtphdb_new.designation_list` via `employee_list.designation` (nullable if unset / missing).
+`designation` comes from `kdtphdb.emp_prof.fldDesig` (acronym) matched to `kdtphdb_new.designation_list`. `KDTP` always resolves to id **29** (KDT President). If `fldDesig` is missing or unknown, falls back to `employee_list.designation`. Nullable if unset / missing.
 
 `group` / `group_id` use `employee_list.group_id`, except employees listed in `LEAVE_EMPLOYEE_GROUP_OVERRIDES` (currently `212:16` — treated as Systems for this app).
 
@@ -954,11 +954,11 @@ Non-admin callers get **403**. Same Laravel `data` / `links` / `meta` pagination
 | Employees | Entire org, **active only**, including the admin |
 | `department_id` | Optional. Filters by the employee’s **effective** primary group’s department (`group_list.dept_id`). Unknown id → **422**. Dropdown: `GET /admin/departments`. |
 | `group_id` | Optional. Filters by the employee’s **effective** primary group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`). Unknown id → **422**. Dropdown: `GET /admin/groups` (use `dept_id` to cascade). If both `department_id` and `group_id` are sent, the group must belong to that department → **422** otherwise. |
-| `employment_status` | Optional. Derived from `employee_list.designation` (`designation_list`), **not** `emp_status`. Omit for all three. Invalid value → **422**. |
+| `employment_status` | Optional. Derived from `emp_prof.fldDesig` → `designation_list` (**not** `emp_status`). Falls back to `employee_list.designation` when `fldDesig` is missing or unknown. Omit for all three. Invalid value → **422**. |
 | `q` | Optional. Search bar. Case-insensitive **contains** match on full name (`firstname` + space + `surname`) or employee number (`employee_list.id`, same as `employee.employee_number`). Combines with the other filters (AND). Omit or whitespace-only → no search. Max 100 characters. |
 | `sort` | Optional. `asc` (default) or `desc`. Orders by employee number (`employee_list.id`). Numeric, not string order. Invalid value → **422**. |
 
-`employment_status` mapping (`config/leave.php` → `employment`):
+`employment_status` mapping (`config/leave.php` → `employment`). IDs are resolved from `emp_prof.fldDesig` acronyms (`PDE`=8, `PSE`=20, `PIT-SS`=54, `CDE`=9, `CSAD`=49, `CTE`=51, `CSE`=53):
 
 | Value | `designation_list.id` |
 |-------|------------------------|
@@ -1056,7 +1056,7 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
 | | |
 |--|--|
 | Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
-| Employees | Active **regulars** only (same designation mapping as admin balances). Must have `date_hired` on or before `as_of`. |
+| Employees | Active **regulars** only (same `emp_prof.fldDesig` mapping as admin balances). Must have `date_hired` on or before `as_of`. |
 | List | **All** matching regulars, including those already granted this year (`already_granted: true`). Disable those checkboxes. |
 | `year` | Optional. Invalid → **422**. |
 | `group_id` | Optional. Effective primary group. Unknown id → **422**. Dropdown: `GET /admin/groups`. |
@@ -1138,7 +1138,7 @@ If **any** selected employee already has both VL and SL `annual_entitlement` row
 
 One-time mid-year grant for employees who missed the Jan 1 annual VL/SL distribution. **`LEAVE_ADMIN_EMP_ID` only.** Select eligible people, review grants on the client, then confirm. Amounts are always computed on the server (do not send grants in POST).
 
-**As-of** is **today** (Asia/Manila). Regularization date is derived as `date_hired + 6 months` (no DB column). Designation is **ignored** for regular vs probationary (leaders may lag); **contractual** designations are excluded (admin adjusts those manually).
+**As-of** is **today** (Asia/Manila). Regularization date is derived as `date_hired + 6 months` (no DB column). Designation is **ignored** for regular vs probationary (leaders may lag); **contractual** designations (from `emp_prof.fldDesig`) are excluded (admin adjusts those manually).
 
 | Method | Path | Query / body |
 |--------|------|--------|
@@ -1248,7 +1248,7 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
 
 | | |
 |--|--|
-| Employees | Active **contractuals** only (`designation` in `[9, 49, 51, 53]`) |
+| Employees | Active **contractuals** only (resolved designation in `[9, 49, 51, 53]` from `emp_prof.fldDesig`) |
 | List | All matching contractuals (no `already_granted` — grants may be repeated) |
 | `group_id` / `q` / `emp_ids` / `sort` | Same rules as other admin distribution lists |
 

@@ -23,6 +23,7 @@ class MeController extends Controller
         /** @var Employee $employee */
         $employee = $request->attributes->get('employee');
         $role = $this->approverResolver->contextFor((int) $employee->id);
+        $designation = $employee->resolvedJobDesignation();
 
         return response()->json([
             'id' => $employee->id,
@@ -38,12 +39,12 @@ class MeController extends Controller
                 'abbreviation' => $employee->group->abbreviation,
                 'name' => $employee->group->name,
             ] : null,
-            'designation_id' => $employee->designation,
-            'designation' => $employee->jobDesignation ? [
-                'id' => $employee->jobDesignation->id,
-                'acronym' => $employee->jobDesignation->acronym,
-                'name' => $employee->jobDesignation->name,
-            ] : null,
+            'designation_id' => $designation?->id,
+            'designation' => $designation === null ? null : [
+                'id' => $designation->id,
+                'acronym' => $designation->acronym,
+                'name' => $designation->name,
+            ],
             'date_hired' => $employee->date_hired?->toDateString(),
             'role' => [
                 'approval_level' => $role->approvalLevel,

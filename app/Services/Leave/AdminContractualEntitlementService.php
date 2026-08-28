@@ -8,6 +8,7 @@ use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveType;
+use App\Services\Kdtph\EmployeeDesignationResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -28,6 +29,7 @@ class AdminContractualEntitlementService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveBalanceService $balanceService,
+        private readonly EmployeeDesignationResolver $designationResolver,
     ) {}
 
     /**
@@ -214,11 +216,9 @@ class AdminContractualEntitlementService
      */
     private function eligibleQuery(?int $groupId, ?string $q, ?array $empIds = null): Builder
     {
-        $contractual = EmploymentStatus::designationIds('contractual_designation_ids');
-
         $query = Employee::query()
             ->where('emp_status', 1)
-            ->whereIn('designation', $contractual !== [] ? $contractual : [-1]);
+            ->whereEmploymentStatus(EmploymentStatus::Contractual);
 
         if ($empIds !== null) {
             $query->whereIn('id', $empIds);
@@ -370,6 +370,8 @@ class AdminContractualEntitlementService
             ->get()
             ->keyBy('id');
 
+        $this->designationResolver->hydrate($employees);
+
         $missing = [];
         $ineligible = [];
 
@@ -411,7 +413,7 @@ class AdminContractualEntitlementService
             return false;
         }
 
-        return EmploymentStatus::fromDesignationId((int) $employee->designation) === EmploymentStatus::Contractual;
+        return $employee->employmentStatus() === EmploymentStatus::Contractual;
     }
 
     /**

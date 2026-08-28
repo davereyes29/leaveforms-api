@@ -8,6 +8,7 @@ use App\Models\Kdtph\Group;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveType;
+use App\Services\Kdtph\EmployeeDesignationResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,6 +21,7 @@ use RuntimeException;
  * Org-wide employee leave balances for LEAVE_ADMIN_EMP_ID.
  *
  * Active employees only. Optional department / group / employment-status / name-or-number search.
+ * Employment status uses emp_prof.fldDesig (fallback: employee_list.designation).
  * Department and group use the employee's effective primary group
  * (employee_list.group_id, or LEAVE_EMPLOYEE_GROUP_OVERRIDES).
  * POST adjustments change available only (reserved is left as-is).
@@ -29,6 +31,7 @@ class AdminBalanceListService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveBalanceService $balanceService,
+        private readonly EmployeeDesignationResolver $designationResolver,
     ) {}
 
     /**
@@ -64,7 +67,7 @@ class AdminBalanceListService
         }
 
         if ($employmentStatus !== null) {
-            $this->applyEmploymentStatus($query, $employmentStatus);
+            $query->whereEmploymentStatus($employmentStatus);
         }
 
         $this->applySearch($query, $q);
@@ -183,24 +186,6 @@ class AdminBalanceListService
     /**
      * @param  Builder<Employee>  $query
      */
-    private function applyEmploymentStatus(Builder $query, EmploymentStatus $status): void
-    {
-        $probationary = EmploymentStatus::designationIds('probationary_designation_ids');
-        $contractual = EmploymentStatus::designationIds('contractual_designation_ids');
-
-        match ($status) {
-            EmploymentStatus::Probationary => $query->whereIn('designation', $probationary),
-            EmploymentStatus::Contractual => $query->whereIn('designation', $contractual),
-            EmploymentStatus::Regular => $query->whereNotIn(
-                'designation',
-                array_values(array_unique([...$probationary, ...$contractual])),
-            ),
-        };
-    }
-
-    /**
-     * @param  Builder<Employee>  $query
-     */
     private function applySearch(Builder $query, ?string $q): void
     {
         $term = trim((string) $q);
@@ -227,6 +212,8 @@ class AdminBalanceListService
         if ($employees->isEmpty()) {
             return;
         }
+
+        $this->designationResolver->hydrate($employees);
 
         foreach ($employees as $employee) {
             $this->approverResolver->applyEffectiveGroup($employee);
@@ -259,7 +246,7 @@ class AdminBalanceListService
 
             $employee->setAttribute(
                 'employment_status',
-                EmploymentStatus::fromDesignationId((int) $employee->designation)->value,
+                $employee->employmentStatus()->value,
             );
             $employee->setAttribute('balance_rows', $rows);
         }

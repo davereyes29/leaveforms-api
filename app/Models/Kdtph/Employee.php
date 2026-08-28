@@ -2,13 +2,18 @@
 
 namespace App\Models\Kdtph;
 
+use App\Enums\Leave\EmploymentStatus;
+use App\Services\Kdtph\EmployeeDesignationResolver;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Active employee profile used across the leave revamp.
  *
  * Table: kdtphdb_new.employee_list
+ * Current job title: emp_prof.fldDesig → designation_list (see resolvedJobDesignation()).
  */
 class Employee extends Model
 {
@@ -54,11 +59,61 @@ class Employee extends Model
     }
 
     /**
-     * Named jobDesignation to avoid colliding with the integer FK attribute `designation`.
+     * Legacy profile row. fldDesig is the current job-title acronym.
+     */
+    public function empProf(): HasOne
+    {
+        return $this->hasOne(EmpProf::class, 'fldEmployeeNum', 'id');
+    }
+
+    /**
+     * Stale integer FK on employee_list. Prefer resolvedJobDesignation().
+     * Named jobDesignation to avoid colliding with the integer attribute `designation`.
      */
     public function jobDesignation(): BelongsTo
     {
         return $this->belongsTo(Designation::class, 'designation');
+    }
+
+    /**
+     * Current title: emp_prof.fldDesig → designation_list (KDTP = id 29).
+     * Falls back to employee_list.designation when fldDesig is missing or unknown.
+     */
+    public function resolvedJobDesignation(): ?Designation
+    {
+        return app(EmployeeDesignationResolver::class)->forEmployee($this);
+    }
+
+    public function resolvedDesignationId(): int
+    {
+        return (int) ($this->resolvedJobDesignation()?->id ?? $this->designation);
+    }
+
+    public function employmentStatus(): EmploymentStatus
+    {
+        return EmploymentStatus::fromDesignationId($this->resolvedDesignationId());
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     * @return Builder<Employee>
+     */
+    public function scopeWhereEmploymentStatus(Builder $query, EmploymentStatus $status): Builder
+    {
+        app(EmployeeDesignationResolver::class)->applyStatus($query, $status);
+
+        return $query;
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     * @return Builder<Employee>
+     */
+    public function scopeWhereNotEmploymentStatus(Builder $query, EmploymentStatus $status): Builder
+    {
+        app(EmployeeDesignationResolver::class)->applyNotStatus($query, $status);
+
+        return $query;
     }
 
     public function fullName(): string

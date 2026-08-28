@@ -132,8 +132,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | kdtphdb_new.designation_list has no employment-type column. Map
-    | employee_list.designation to regular / probationary / contractual.
-    | Regular is everyone whose designation is not in the lists below.
+    | emp_prof.fldDesig → designation_list (KDTP always id 29), falling
+    | back to employee_list.designation when fldDesig is missing or unknown.
+    | Regular is everyone whose resolved designation is not in the lists below.
     |
     */
     'employment' => [
