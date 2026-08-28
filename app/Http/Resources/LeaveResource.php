@@ -241,10 +241,12 @@ class LeaveResource extends JsonResource
             'start_date' => $this->start_date->toDateString(),
             'end_date' => $this->end_date->toDateString(),
             'leave_reason' => $this->leave_reason,
-            'has_attachment' => filled($this->leave_attachment),
-            'attachment_url' => filled($this->leave_attachment)
-                ? url("/api/leaves/{$this->id}/attachment")
-                : null,
+            'has_attachment' => $this->relationLoaded('attachments')
+                ? $this->attachments->isNotEmpty()
+                : false,
+            'attachments' => $this->relationLoaded('attachments')
+                ? $this->attachments->map(fn ($attachment) => $attachment->toApiArray())->values()->all()
+                : [],
             'cancellation_reason' => $this->cancellation_reason,
             'confirmed_at' => $this->confirmed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
@@ -298,10 +300,12 @@ class LeaveResource extends JsonResource
                             'name' => $conversion->toLeaveType->type,
                         ]
                         : null,
-                    'has_med_cert' => filled($conversion->med_cert_attachment),
-                    'med_cert_url' => filled($conversion->med_cert_attachment)
-                        ? url("/api/conversions/{$conversion->id}/med-cert")
-                        : null,
+                    'has_med_cert' => $conversion->relationLoaded('attachments')
+                        ? $conversion->attachments->isNotEmpty()
+                        : false,
+                    'med_certs' => $conversion->relationLoaded('attachments')
+                        ? $conversion->attachments->map(fn ($attachment) => $attachment->toApiArray())->values()->all()
+                        : [],
                     'reason' => $conversion->reason,
                     'reviewed_by_emp_id' => $conversion->reviewed_by_emp_id,
                     'reviewed_by' => LeaveConversionResource::reviewedByFrom($conversion),

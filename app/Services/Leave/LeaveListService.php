@@ -21,8 +21,10 @@ class LeaveListService
     public const DETAIL_RELATIONS = [
         'leaveType',
         'approvalRequirements.history',
+        'attachments',
         'conversion.fromLeaveType',
         'conversion.toLeaveType',
+        'conversion.attachments',
     ];
 
     public function __construct(

@@ -175,6 +175,58 @@ class LeaveBalanceService
     }
 
     /**
+     * Grant ML/PL credits when the request is filed (not a yearly entitlement).
+     *
+     * Must be called inside an outer DB::transaction, before reservePaidDays.
+     */
+    public function grantParentalEntitlement(LeaveInfo $leave): void
+    {
+        $amount = (string) $leave->paid_days;
+
+        if (bccomp($amount, '0', 2) <= 0) {
+            return;
+        }
+
+        $balance = $this->lockOrCreateBalance($leave->emp_id, $leave->leave_type_id);
+        $leave->loadMissing('leaveType');
+        $label = $leave->leaveType?->type ?? 'Parental leave';
+
+        $this->recordChange(
+            $balance,
+            $amount,
+            '0.00',
+            BalanceTransactionReason::ParentalEntitlement,
+            $label.' granted on request',
+            $leave->id,
+        );
+    }
+
+    /**
+     * Reverse the on-submit ML/PL grant after reservation release (cancel / reject).
+     *
+     * Must be called inside an outer DB::transaction, after releaseReservation.
+     */
+    public function reverseParentalEntitlement(LeaveInfo $leave, ?string $remarks = null): void
+    {
+        $amount = (string) $leave->paid_days;
+
+        if (bccomp($amount, '0', 2) <= 0) {
+            return;
+        }
+
+        $balance = $this->lockOrCreateBalance($leave->emp_id, $leave->leave_type_id);
+
+        $this->recordChange(
+            $balance,
+            bcsub('0', $amount, 2),
+            '0.00',
+            BalanceTransactionReason::ParentalEntitlementReversed,
+            $remarks,
+            $leave->id,
+        );
+    }
+
+    /**
      * Hold paid credits for a pending leave request.
      *
      * Must be called inside an outer DB::transaction (e.g. from LeaveSubmissionService).
@@ -200,7 +252,7 @@ class LeaveBalanceService
     }
 
     /**
-     * Release reserved paid credits after reject or employee cancel.
+     * Release reserved paid credits after reject, cancel, or edit.
      *
      * Must be called inside an outer DB::transaction.
      */

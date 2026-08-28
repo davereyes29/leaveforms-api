@@ -32,11 +32,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Admin reviewer (VL → SL conversion, Sick Leave, PTB, EL, Long Leave)
+    | Admin reviewer (VL → SL conversion, Sick Leave, PTB, EL, LL, ML, PL)
     |--------------------------------------------------------------------------
     |
     | employee_list.id of the HR/admin account that reviews conversions
-    | and admin-approved leave requests (SL, PTB, EL, LL).
+    | and admin-approved leave requests (SL, PTB, EL, LL, ML, PL).
     |
     */
     'admin_emp_id' => env('LEAVE_ADMIN_EMP_ID'),
@@ -98,7 +98,9 @@ return [
     */
     'attachments' => [
         'disk' => env('LEAVE_ATTACHMENT_DISK', 'local'),
-        'max_kb' => (int) env('LEAVE_ATTACHMENT_MAX_KB', 5120),
+        'max_kb' => (int) env('LEAVE_ATTACHMENT_MAX_KB', 10240),
+        'max_files' => (int) env('LEAVE_ATTACHMENT_MAX_FILES', 5),
+        'min_files' => 1,
         'mimes' => ['pdf', 'jpg', 'jpeg', 'png'],
     ],
 
@@ -203,6 +205,33 @@ return [
         'cooldown_years' => 10,
         'min_months' => 1,
         'max_months' => 3,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maternity / Paternity Leave
+    |--------------------------------------------------------------------------
+    |
+    | Credits are granted when the request is filed (not at annual /
+    | regularization). ML is exactly 105 inclusive calendar days.
+    | PL is exactly 7 workdays, at most 4 confirmed takes per employee.
+    |
+    */
+    'parental_leave' => [
+        'ml_days' => 105,
+        'pl_workdays' => 7,
+        'pl_max_confirmed' => 4,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin reports
+    |--------------------------------------------------------------------------
+    */
+    'reports' => [
+        'monthly_attendance' => [
+            'max_emp_ids' => 200,
+        ],
     ],
 
 ];

@@ -6,12 +6,13 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 
 ---
 
-## Tables (10)
+## Tables (12)
 
 | Table | Purpose |
 |-------|---------|
 | `leave_type` | Leave type lookup (VL, SL, …) |
 | `leave_info` | Leave requests |
+| `leave_info_attachment` | Supporting files for SL / PTB / EL (1–5 per leave) |
 | `leave_balance` | Rolling paid credits (`available`, `reserved`) |
 | `leave_balance_transaction` | Ledger of balance changes |
 | `leave_approval_requirement` | Required approvals snapshotted at submit |
@@ -19,6 +20,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `leave_activity_history` | User/system activity audit (leaves + admin credit grants) |
 | `leave_activity_recipient` | Recipients of a summarized credit-distribution activity |
 | `leave_conversion` | VL → SL conversion (med cert) |
+| `leave_conversion_attachment` | Medical certificates for a conversion (1–5) |
 | `leave_admin_reminder` | Admin approval-reminder sends (bulk and per-leave singles) |
 
 ---
@@ -48,7 +50,6 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `start_date` | date | |
 | `end_date` | date | |
 | `leave_reason` | text | |
-| `leave_attachment` | varchar | Nullable |
 | `status` | enum | See below |
 | `cancellation_reason` | text | Nullable; **required** when `status = cancelled` |
 | `confirmed_at` | datetime | Nullable; set when `status = confirmed` |
@@ -79,6 +80,22 @@ full
 half_am
 half_pm
 ```
+
+---
+
+## `leave_info_attachment`
+
+Supporting files for SL, PTB, and EL. One leave has 1–5 rows. VL / LL / ML / PL have none.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint | PK |
+| `leave_id` | bigint | FK → `leave_info.id` (cascade delete) |
+| `path` | varchar | Storage path |
+| `original_name` | varchar | Client filename |
+| `sort_order` | unsigned tinyint | Display order |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
 
 ---
 
@@ -133,6 +150,8 @@ initial_balance
 annual_entitlement
 regularization_entitlement
 contractual_entitlement
+parental_entitlement
+parental_entitlement_reversed
 ```
 
 | Reason | Typical deltas | When |
@@ -149,6 +168,8 @@ contractual_entitlement
 | `vl_to_sl_deduct` | SL available −N (or reserved/used path per policy) | Conversion approved |
 | `leave_reversed` | Reverse prior confirm | Admin undo |
 | `manual_adjustment` | Per HR edit | Correction |
+| `parental_entitlement` | `available` +N | ML/PL credits granted when the request is filed |
+| `parental_entitlement_reversed` | `available` −N | ML/PL grant reversed on reject or cancel |
 
 Bucket semantics: see `BALANCE_FLOW.md`.
 
@@ -309,7 +330,6 @@ VL → SL after return (unexpected sickness path). Admin reviews med cert here.
 | `leave_id` | bigint | FK → `leave_info.id` |
 | `from_leave_type_id` | bigint | FK → `leave_type.id` |
 | `to_leave_type_id` | bigint | FK → `leave_type.id` |
-| `med_cert_attachment` | varchar | Nullable |
 | `reason` | text | Employee conversion reason (e.g. diagnosis). Required on new requests; nullable on older rows |
 | `reviewed_by_emp_id` | bigint | Nullable; admin |
 | `status` | enum | See below |
@@ -331,6 +351,22 @@ rejected
 **Rejected:** no balance changes; leave stays VL; `leave_info.status` → `confirmed`.
 
 **Requested:** `leave_info.status` → `pending_conversion` while `leave_conversion.status` is `pending_review`.
+
+---
+
+## `leave_conversion_attachment`
+
+Medical certificates for a VL → SL conversion. One conversion has 1–5 rows.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint | PK |
+| `conversion_id` | bigint | FK → `leave_conversion.id` (cascade delete) |
+| `path` | varchar | Storage path |
+| `original_name` | varchar | Client filename |
+| `sort_order` | unsigned tinyint | Display order |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
 
 ---
 
@@ -370,6 +406,18 @@ INDEX (status, start_date)
 INDEX (start_date, end_date)
 INDEX (filed_by_emp_id, created_at)
 INDEX (leave_type_id, status, start_date)
+```
+
+### `leave_info_attachment`
+
+```
+INDEX (leave_id, sort_order)
+```
+
+### `leave_conversion_attachment`
+
+```
+INDEX (conversion_id, sort_order)
 ```
 
 ### `leave_approval_requirement`

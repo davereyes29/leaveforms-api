@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminAnnualEntitlementController;
 use App\Http\Controllers\AdminBalanceController;
 use App\Http\Controllers\AdminContractualEntitlementController;
 use App\Http\Controllers\AdminLeaveController;
+use App\Http\Controllers\AdminMonthlyAttendanceReportController;
 use App\Http\Controllers\AdminNewlyRegularizedController;
 use App\Http\Controllers\AdminReminderController;
 use App\Http\Controllers\DevLoginController;
@@ -47,7 +48,9 @@ Route::middleware('portal.auth')->group(function () {
     // POST is preferred for multipart/form-data (PHP does not parse files on PUT).
     // PUT still works for JSON bodies without a file.
     Route::match(['put', 'post'], '/leaves/{leave}', [LeaveController::class, 'update']);
-    Route::get('/leaves/{leave}/attachment', [LeaveController::class, 'attachment']);
+    Route::post('/leaves/{leave}/attachments', [LeaveController::class, 'storeAttachments']);
+    Route::get('/leaves/{leave}/attachments/{attachment}', [LeaveController::class, 'downloadAttachment']);
+    Route::delete('/leaves/{leave}/attachments/{attachment}', [LeaveController::class, 'destroyAttachment']);
     Route::post('/leaves/{leave}/cancel', [LeaveController::class, 'cancel']);
     Route::post('/leaves/{leave}/conversion', [LeaveConversionController::class, 'store']);
     Route::post('/leaves/{leave}/approve', [LeaveApprovalController::class, 'approve']);
@@ -61,6 +64,8 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/admin/activities', [AdminActivityController::class, 'index']);
     Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
     Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);
+    Route::get('/admin/employees', [AdminLeaveController::class, 'employees']);
+    Route::get('/admin/reports/monthly-attendance', AdminMonthlyAttendanceReportController::class);
     Route::get('/admin/balances', [AdminBalanceController::class, 'index']);
     Route::post('/admin/balances', [AdminBalanceController::class, 'store']);
     Route::get('/admin/annual-entitlements', [AdminAnnualEntitlementController::class, 'index']);
@@ -74,5 +79,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/conversions/pending', [LeaveConversionController::class, 'pending']);
     Route::post('/conversions/{conversion}/approve', [LeaveConversionController::class, 'approve']);
     Route::post('/conversions/{conversion}/reject', [LeaveConversionController::class, 'reject']);
-    Route::get('/conversions/{conversion}/med-cert', [LeaveConversionController::class, 'medCert']);
+    Route::post('/conversions/{conversion}/attachments', [LeaveConversionController::class, 'storeAttachments']);
+    Route::get('/conversions/{conversion}/attachments/{attachment}', [LeaveConversionController::class, 'downloadAttachment']);
+    Route::delete('/conversions/{conversion}/attachments/{attachment}', [LeaveConversionController::class, 'destroyAttachment']);
 });

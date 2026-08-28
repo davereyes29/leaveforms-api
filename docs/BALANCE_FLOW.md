@@ -135,15 +135,16 @@ Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`)
 
 From `start_date`, `end_date`, `day_type`, and leave type:
 
-- **VL / SL / EL:** count workdays (exclude weekends/holidays per `kdtholiday`). VL/SL half-day → `0.5`. EL is full day only.
+- **VL / SL / EL / PL:** count workdays (exclude weekends/holidays per `kdtholiday`). VL/SL half-day → `0.5`. EL is full day only. **PL is exactly 7 workdays.**
 - **PTB:** inclusive calendar days (weekends and holidays count). Full day only.
 - **LL:** inclusive calendar days, full day only, **1–3 calendar months** (end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day).
+- **ML:** inclusive calendar days, full day only, **exactly 105 days** (end = start + 104 days).
 
-Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section). **PTB and EL never use LWOP:** if duration > remaining credits of that type, submit is **422**. **LL is always unpaid** (`paid_days = 0`, `lwop_days = duration`); no credits are checked or reserved.
+Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section). **PTB and EL never use LWOP:** if duration > remaining credits of that type, submit is **422**. **LL is always unpaid** (`paid_days = 0`, `lwop_days = duration`); no credits are checked or reserved. **ML and PL grant credits on submit** (`parental_entitlement` for the full duration) then reserve; they are never LWOP.
 
 ### Step 2 — Reserve (`leave_reserved`)
 
-**When:** Submit with `paid_days > 0` and `status` → `pending_approval`. Uses the leave type being filed (VL credits for VL, SL for SL, PTB for PTB, EL for EL). **LL never reserves** (`paid_days` is always 0).
+**When:** Submit with `paid_days > 0` and `status` → `pending_approval`. Uses the leave type being filed (VL credits for VL, SL for SL, PTB for PTB, EL for EL). **LL never reserves** (`paid_days` is always 0). **ML/PL:** grant first (`parental_entitlement` +duration), then reserve.
 
 **Effect:**
 
@@ -235,7 +236,7 @@ reason = leave_reservation_released
 
 ## LWOP at file time
 
-**When:** Not enough `available` paid credits for the full request (product path: allow with LWOP notice). **Does not apply to PTB or EL** — duration > remaining credits is **422**, not unpaid. Extra days after remaining credits must be a **separate VL** (that VL may be LWOP). **LL is always fully unpaid** by type (not because credits ran out).
+**When:** Not enough `available` paid credits for the full request (product path: allow with LWOP notice). **Does not apply to PTB or EL** — duration > remaining credits is **422**, not unpaid. Extra days after remaining credits must be a **separate VL** (that VL may be LWOP). **LL is always fully unpaid** by type (not because credits ran out). **ML and PL are always fully paid** (grant-on-submit).
 
 **At submit:**
 
@@ -340,6 +341,8 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | `vl_to_sl_deduct` | −N (SL) | 0 | set |
 | `leave_reversed` | +paid_days | 0 | set |
 | `manual_adjustment` | varies | varies | optional |
+| `parental_entitlement` | +duration (ML 105 / PL 7) | 0 | set |
+| `parental_entitlement_reversed` | −duration | 0 | set |
 
 ---
 
@@ -348,12 +351,13 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Event | `leave_activity_history` | `leave_balance_transaction` |
 |-------|--------------------------|-----------------------------|
 | Submit (paid) | `submitted` | `leave_reserved` |
+| Submit (ML/PL) | `submitted` | `parental_entitlement` then `leave_reserved` |
 | Submit (full LWOP) | `submitted` | — |
 | Edit (no approval yet) | `modified` | release + re-reserve if amount changed |
 | Confirm (paid) | `leave_confirmed` | `leave_confirmed` |
 | Confirm (LWOP) | `leave_confirmed` | — |
-| Approver reject | `rejected` | `leave_reservation_released` |
-| Employee cancel | `cancelled` | `leave_reservation_released` |
+| Approver reject | `rejected` | `leave_reservation_released` (then `parental_entitlement_reversed` for ML/PL) |
+| Employee cancel | `cancelled` | `leave_reservation_released` (then `parental_entitlement_reversed` for ML/PL) |
 | Conversion approved | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
 | Admin annual VL/SL grant | `annual_credits_distributed` (one row per type; summarized) | `annual_entitlement` |
 | Admin newly regularized grant | `regularization_credits_distributed` (one row per type; summarized) | `regularization_entitlement` |
@@ -372,6 +376,8 @@ LeaveBalanceService
   applyAnnualEntitlement(empId, leaveTypeId, amount, remarks)
   applyRegularizationEntitlement(empId, leaveTypeId, amount, remarks)
   applyContractualEntitlement(empId, leaveTypeId, amount, remarks)
+  grantParentalEntitlement(LeaveInfo $leave)
+  reverseParentalEntitlement(LeaveInfo $leave, remarks)
   applyMonthlyAccrual(empId)
   reserve(LeaveInfo $leave)
   confirm(LeaveInfo $leave)

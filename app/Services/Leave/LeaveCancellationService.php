@@ -42,6 +42,12 @@ class LeaveCancellationService
 
             $this->balanceService->releaseReservation($leave, $cancellationReason);
 
+            $leave->loadMissing('leaveType');
+
+            if (LeaveTypeRules::grantsCreditsOnSubmit((string) $leave->leaveType?->code)) {
+                $this->balanceService->reverseParentalEntitlement($leave, $cancellationReason);
+            }
+
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
                 'performed_by_emp_id' => $employee->id,
@@ -49,12 +55,7 @@ class LeaveCancellationService
                 'remarks' => $cancellationReason,
             ]);
 
-            return $leave->fresh([
-                'leaveType',
-                'approvalRequirements.history',
-                'conversion.fromLeaveType',
-                'conversion.toLeaveType',
-            ]);
+            return $leave->fresh(LeaveListService::DETAIL_RELATIONS);
         });
 
         $this->notificationService->notifyApproversOnCancel($leave, $cancellationReason);

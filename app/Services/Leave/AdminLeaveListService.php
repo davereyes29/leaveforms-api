@@ -125,6 +125,50 @@ class AdminLeaveListService
     }
 
     /**
+     * Slim org-wide employee list for admin report / filter pickers.
+     * Active employees only. Optional group_id uses the effective primary group.
+     *
+     * @return Collection<int, Employee>
+     *
+     * @throws AuthorizationException
+     */
+    public function employeesForAdmin(Employee $admin, ?int $groupId = null): Collection
+    {
+        if (! $this->approverResolver->contextFor($admin->id)->isAdmin) {
+            throw new AuthorizationException('Only admin can view the employee list.');
+        }
+
+        $query = Employee::query()
+            ->with('group')
+            ->where('emp_status', 1);
+
+        if ($groupId !== null) {
+            $empIds = $this->approverResolver->employeeIdsInEffectiveGroups(
+                [$groupId],
+                activeOnly: true,
+            );
+
+            if ($empIds === []) {
+                return collect();
+            }
+
+            $query->whereIn('id', $empIds);
+        }
+
+        $employees = $query
+            ->orderBy('firstname')
+            ->orderBy('surname')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
+
+        return $employees;
+    }
+
+    /**
      * @param  Collection<int, LeaveInfo>  $leaves
      */
     private function attachEmployees(Collection $leaves): void

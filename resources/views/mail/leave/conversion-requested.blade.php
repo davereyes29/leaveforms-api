@@ -19,7 +19,9 @@ Hello {{ $adminName }},
     ],
 ])
 
-A medical certificate is attached for your review.
+@if ($attachmentSentence)
+{{ $attachmentSentence }}
+@endif
 
 Please review the conversion request and submit your decision.
 

@@ -27,7 +27,7 @@ class PendingConversionService
         }
 
         return LeaveConversion::query()
-            ->with(['leaveInfo.leaveType', 'fromLeaveType', 'toLeaveType'])
+            ->with(['leaveInfo.leaveType', 'fromLeaveType', 'toLeaveType', 'attachments'])
             ->where('status', ConversionStatus::PendingReview)
             ->orderBy('created_at')
             ->get();

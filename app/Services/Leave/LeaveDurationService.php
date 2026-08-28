@@ -23,6 +23,7 @@ class LeaveDurationService
 
         if (LeaveTypeRules::usesCalendarDays($leaveTypeCode)) {
             $this->assertCalendarMonthSpan($startDate, $endDate, $leaveTypeCode);
+            $this->assertExactCalendarDays($startDate, $endDate, $leaveTypeCode);
 
             return $this->calculateCalendarDays($startDate, $endDate);
         }
@@ -44,6 +45,8 @@ class LeaveDurationService
                 'start_date' => ['The selected date range has no workdays.'],
             ]);
         }
+
+        $this->assertExactWorkdays($startDate, $endDate, $leaveTypeCode, $workdays);
 
         return bcadd((string) $workdays, '0', 2);
     }
@@ -80,6 +83,79 @@ class LeaveDurationService
                 ],
             ]);
         }
+    }
+
+    private function assertExactCalendarDays(string $startDate, string $endDate, string $leaveTypeCode): void
+    {
+        $required = LeaveTypeRules::exactCalendarDays($leaveTypeCode);
+
+        if ($required === null) {
+            return;
+        }
+
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $expectedEnd = $start->copy()->addDays($required - 1);
+
+        if (! $end->equalTo($expectedEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => [
+                    'Maternity Leave must be exactly '.$required.' calendar days. For a start date of '
+                    .$start->toDateString().', the end date must be '.$expectedEnd->toDateString().'.',
+                ],
+            ]);
+        }
+    }
+
+    private function assertExactWorkdays(string $startDate, string $endDate, string $leaveTypeCode, int $workdays): void
+    {
+        $required = LeaveTypeRules::exactWorkdays($leaveTypeCode);
+
+        if ($required === null) {
+            return;
+        }
+
+        $start = Carbon::parse($startDate)->startOfDay();
+
+        if (! $this->isWorkday($start)) {
+            throw ValidationException::withMessages([
+                'start_date' => ['Paternity Leave must start on a workday.'],
+            ]);
+        }
+
+        $expectedEnd = $this->nthWorkdayOnOrAfter($start, $required);
+        $end = Carbon::parse($endDate)->startOfDay();
+
+        if ($workdays !== $required || ! $end->equalTo($expectedEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => [
+                    'Paternity Leave must be exactly '.$required.' workdays in one request. For a start date of '
+                    .$start->toDateString().', the end date must be '.$expectedEnd->toDateString().'.',
+                ],
+            ]);
+        }
+    }
+
+    private function nthWorkdayOnOrAfter(Carbon $start, int $n): Carbon
+    {
+        $found = 0;
+        $cursor = $start->copy();
+
+        for ($i = 0; $i < 120; $i++) {
+            if ($this->isWorkday($cursor)) {
+                $found++;
+
+                if ($found === $n) {
+                    return $cursor;
+                }
+            }
+
+            $cursor = $cursor->addDay();
+        }
+
+        throw ValidationException::withMessages([
+            'end_date' => ['Could not find '.$n.' workdays from the selected start date.'],
+        ]);
     }
 
     private function calculateHalfDay(string $startDate, string $endDate): string
@@ -157,7 +233,7 @@ class LeaveDurationService
 
     /**
      * Inclusive calendar dates in [startDate, endDate], clipped to [clipFrom, clipTo].
-     * Weekends and holidays are included (PTB, LL).
+     * Weekends and holidays are included (PTB, LL, ML).
      *
      * @return list<string>
      */

@@ -57,12 +57,7 @@ class LeaveApprovalService
                 $this->finalizationService->finalize($leave, $approver);
             }
 
-            return $leave->fresh([
-                'leaveType',
-                'approvalRequirements.history',
-                'conversion.fromLeaveType',
-                'conversion.toLeaveType',
-            ]);
+            return $leave->fresh(LeaveListService::DETAIL_RELATIONS);
         });
 
         if ($leave->status === LeaveStatus::Confirmed) {
@@ -101,6 +96,12 @@ class LeaveApprovalService
 
             $this->balanceService->releaseReservation($leave, $remarks);
 
+            $leave->loadMissing('leaveType');
+
+            if (LeaveTypeRules::grantsCreditsOnSubmit((string) $leave->leaveType?->code)) {
+                $this->balanceService->reverseParentalEntitlement($leave, $remarks);
+            }
+
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
                 'performed_by_emp_id' => $approver->id,
@@ -108,12 +109,7 @@ class LeaveApprovalService
                 'remarks' => $remarks,
             ]);
 
-            return $leave->fresh([
-                'leaveType',
-                'approvalRequirements.history',
-                'conversion.fromLeaveType',
-                'conversion.toLeaveType',
-            ]);
+            return $leave->fresh(LeaveListService::DETAIL_RELATIONS);
         });
 
         $this->notificationService->notifyEmployeeOnReject($leave, $approver, $remarks);

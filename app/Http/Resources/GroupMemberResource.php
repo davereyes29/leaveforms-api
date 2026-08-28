@@ -18,6 +18,7 @@ class GroupMemberResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->fullName(),
+            'gender' => $this->gender,
         ];
     }
 }

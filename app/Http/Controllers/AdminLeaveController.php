@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Leave\LeaveStatus;
+use App\Http\Requests\Leave\IndexAdminEmployeesRequest;
 use App\Http\Requests\Leave\IndexAdminLeavesRequest;
+use App\Http\Resources\AdminEmployeeRefResource;
 use App\Http\Resources\DepartmentRefResource;
 use App\Http\Resources\GroupRefResource;
 use App\Http\Resources\PendingApprovalResource;
@@ -56,5 +58,22 @@ class AdminLeaveController extends Controller
         $departments = $this->adminLeaveListService->departmentsForAdmin($request->employee());
 
         return DepartmentRefResource::collection($departments);
+    }
+
+    /**
+     * GET /api/admin/employees — slim org-wide employee list for admin pickers.
+     *
+     * Optional query: ?group_id=16
+     */
+    public function employees(IndexAdminEmployeesRequest $request): AnonymousResourceCollection
+    {
+        $groupId = $request->validated('group_id');
+
+        $employees = $this->adminLeaveListService->employeesForAdmin(
+            $request->employee(),
+            $groupId !== null ? (int) $groupId : null,
+        );
+
+        return AdminEmployeeRefResource::collection($employees);
     }
 }

@@ -11,8 +11,8 @@ Hello {{ $adminName }},
 
 @include('mail.leave._details', ['leave' => $leave])
 
-@if ($attachmentLabel)
-A {{ $attachmentLabel }} is attached for your review.
+@if ($attachmentSentence)
+{{ $attachmentSentence }}
 @endif
 
 Please review the leave request and submit your decision.

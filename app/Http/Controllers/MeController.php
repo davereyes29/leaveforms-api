@@ -31,6 +31,7 @@ class MeController extends Controller
             'full_name' => $employee->fullName(),
             'email' => $employee->email,
             'username' => $employee->username,
+            'gender' => $employee->gender,
             'group_id' => $employee->group_id,
             'group' => $employee->group ? [
                 'id' => $employee->group->id,

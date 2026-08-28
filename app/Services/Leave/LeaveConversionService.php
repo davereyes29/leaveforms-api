@@ -11,7 +11,6 @@ use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,16 +23,34 @@ class LeaveConversionService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveApproverResolver $approverResolver,
-        private readonly LeaveListService $listService,
         private readonly LeaveNotificationService $notificationService,
     ) {}
 
-    public function request(LeaveInfo $leave, Employee $employee, UploadedFile $medCert, string $reason): LeaveConversion
+    /**
+     * @param  list<\Illuminate\Http\UploadedFile>  $medCerts
+     */
+    public function request(LeaveInfo $leave, Employee $employee, array $medCerts, string $reason): LeaveConversion
     {
         $this->assertEmployeeOwnsLeave($leave, $employee);
         $this->assertLeaveIsConvertible($leave);
 
-        $conversion = DB::transaction(function () use ($leave, $employee, $medCert, $reason) {
+        $medCerts = LeaveAttachmentService::uploadedFiles($medCerts);
+
+        if ($medCerts === []) {
+            throw ValidationException::withMessages([
+                'med_cert' => ['A medical certificate attachment is required to request VL → SL conversion.'],
+            ]);
+        }
+
+        $maxFiles = (int) config('leave.attachments.max_files', 5);
+
+        if (count($medCerts) > $maxFiles) {
+            throw ValidationException::withMessages([
+                'med_cert' => ["You can attach at most {$maxFiles} files."],
+            ]);
+        }
+
+        $conversion = DB::transaction(function () use ($leave, $employee, $medCerts, $reason) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -66,17 +83,12 @@ class LeaveConversionService
                 ]);
             }
 
-            if ($existing !== null) {
-                $this->attachmentService->delete($existing->med_cert_attachment);
-            }
-
-            $path = $this->attachmentService->storeMedCert($leave, $medCert);
+            $conversionRelations = ['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType', 'attachments'];
 
             if ($existing !== null) {
                 $existing->update([
                     'from_leave_type_id' => $vlType->id,
                     'to_leave_type_id' => $slType->id,
-                    'med_cert_attachment' => $path,
                     'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
                     'reviewed_by_emp_id' => null,
@@ -84,16 +96,18 @@ class LeaveConversionService
                     'reviewed_at' => null,
                 ]);
 
-                $conversion = $existing->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
+                $conversion = $existing->fresh($conversionRelations);
+                $this->attachmentService->replaceConversionAttachments($conversion, $medCerts);
             } else {
                 $conversion = LeaveConversion::query()->create([
                     'leave_id' => $leave->id,
                     'from_leave_type_id' => $vlType->id,
                     'to_leave_type_id' => $slType->id,
-                    'med_cert_attachment' => $path,
                     'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
-                ])->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
+                ])->fresh($conversionRelations);
+
+                $this->attachmentService->storeManyForConversion($conversion, $medCerts);
             }
 
             $leave->update(['status' => LeaveStatus::PendingConversion]);
@@ -105,7 +119,7 @@ class LeaveConversionService
                 'remarks' => $reason,
             ]);
 
-            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
+            return $conversion->fresh($conversionRelations);
         });
 
         $this->notificationService->notifyAdminOnConversionRequest($conversion);
@@ -164,7 +178,7 @@ class LeaveConversionService
                 'activity_type' => ActivityType::ConversionApproved,
             ]);
 
-            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
+            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType', 'attachments']);
         });
 
         $this->notificationService->notifyEmployeeOnConversionApproved($conversion, $admin);
@@ -213,28 +227,12 @@ class LeaveConversionService
                 'remarks' => $remarks,
             ]);
 
-            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType']);
+            return $conversion->fresh(['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType', 'attachments']);
         });
 
         $this->notificationService->notifyEmployeeOnConversionRejected($conversion, $admin, $remarks);
 
         return $conversion;
-    }
-
-    public function canAccessMedCert(LeaveConversion $conversion, Employee $viewer): bool
-    {
-        if ($conversion->med_cert_attachment === null) {
-            return false;
-        }
-
-        $leave = $conversion->leaveInfo;
-
-        if ($leave === null) {
-            return false;
-        }
-
-        // Same viewers as leave detail: employee, PIC-group approvers, past/current approvers, admin.
-        return $this->listService->canView($leave, $viewer);
     }
 
     private function assertEmployeeOwnsLeave(LeaveInfo $leave, Employee $employee): void

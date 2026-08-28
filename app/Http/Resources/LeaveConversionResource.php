@@ -149,10 +149,12 @@ class LeaveConversionResource extends JsonResource
                 'code' => $this->toLeaveType->code,
                 'name' => $this->toLeaveType->type,
             ]),
-            'has_med_cert' => filled($this->med_cert_attachment),
-            'med_cert_url' => filled($this->med_cert_attachment)
-                ? url("/api/conversions/{$this->id}/med-cert")
-                : null,
+            'has_med_cert' => $this->relationLoaded('attachments')
+                ? $this->attachments->isNotEmpty()
+                : false,
+            'med_certs' => $this->relationLoaded('attachments')
+                ? $this->attachments->map(fn ($attachment) => $attachment->toApiArray())->values()->all()
+                : [],
             'reason' => $this->reason,
             'reviewed_by_emp_id' => $this->reviewed_by_emp_id,
             'reviewed_by' => $this->resource instanceof LeaveConversion

@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Orchestrates filing a new leave request (VL, SL, PTB, EL, or LL).
+ * Orchestrates filing a new leave request (VL, SL, PTB, EL, LL, ML, or PL).
  *
- * VL and LL do not accept attachments. SL and PTB require a medical certificate.
- * EL requires a supporting document. LL is always unpaid.
+ * VL, LL, ML, and PL do not accept attachments. SL and PTB require a medical certificate.
+ * EL requires a supporting document. LL is always unpaid. ML/PL credits are granted on submit.
  */
 class LeaveSubmissionService
 {
@@ -31,6 +31,7 @@ class LeaveSubmissionService
         private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
+        private readonly ParentalLeavePolicy $parentalLeavePolicy,
     ) {}
 
     /**
@@ -41,7 +42,7 @@ class LeaveSubmissionService
      *     end_date: string,
      *     day_type: string,
      *     leave_reason: string,
-     *     leave_attachment?: UploadedFile
+     *     leave_attachment?: UploadedFile|list<UploadedFile>
      * }  $data
      */
     public function submit(Employee $filer, array $data): LeaveInfo
@@ -54,7 +55,7 @@ class LeaveSubmissionService
         $code = strtoupper((string) ($data['code'] ?? 'VL'));
         $leaveType = LeaveType::query()->where('code', $code)->firstOrFail();
         $dayType = DayType::from($data['day_type']);
-        $attachment = $data['leave_attachment'] ?? null;
+        $attachments = LeaveAttachmentService::uploadedFiles($data['leave_attachment'] ?? null);
 
         $duration = $this->durationService->calculate(
             $data['start_date'],
@@ -73,6 +74,10 @@ class LeaveSubmissionService
             $this->longLeavePolicy->assertEligibleToFile($employeeOnLeave, $data['start_date']);
             $paidDays = '0.00';
             $lwopDays = $duration;
+        } elseif (LeaveTypeRules::grantsCreditsOnSubmit($code)) {
+            $this->parentalLeavePolicy->assertEligibleToFile($employeeOnLeave, $code);
+            $paidDays = $duration;
+            $lwopDays = '0.00';
         } else {
             $available = $this->balanceService->availableFor($employeeOnLeave->id, $leaveType->id);
 
@@ -98,7 +103,7 @@ class LeaveSubmissionService
             $duration,
             $paidDays,
             $lwopDays,
-            $attachment,
+            $attachments,
         ) {
             $leave = LeaveInfo::query()->create([
                 'emp_id' => $employeeOnLeave->id,
@@ -111,14 +116,11 @@ class LeaveSubmissionService
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'leave_reason' => $data['leave_reason'],
-                'leave_attachment' => null,
                 'status' => LeaveStatus::PendingApproval,
             ]);
 
-            if ($attachment instanceof UploadedFile) {
-                $leave->update([
-                    'leave_attachment' => $this->attachmentService->store($leave, $attachment),
-                ]);
+            if ($attachments !== []) {
+                $this->attachmentService->storeManyForLeave($leave, $attachments);
             }
 
             foreach ($this->approvalPolicy->requirementsFor($employeeOnLeave->id, $code) as $requirement) {
@@ -130,7 +132,13 @@ class LeaveSubmissionService
                 ]);
             }
 
-            $this->balanceService->reservePaidDays($leave->fresh());
+            $fresh = $leave->fresh();
+
+            if (LeaveTypeRules::grantsCreditsOnSubmit($code)) {
+                $this->balanceService->grantParentalEntitlement($fresh);
+            }
+
+            $this->balanceService->reservePaidDays($fresh);
 
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
@@ -138,12 +146,7 @@ class LeaveSubmissionService
                 'activity_type' => ActivityType::Submitted,
             ]);
 
-            return $leave->fresh([
-                'leaveType',
-                'approvalRequirements',
-                'conversion.fromLeaveType',
-                'conversion.toLeaveType',
-            ]);
+            return $leave->fresh(LeaveListService::DETAIL_RELATIONS);
         });
 
         $this->notificationService->notifyApproversOnSubmit($leave);

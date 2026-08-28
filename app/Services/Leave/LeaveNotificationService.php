@@ -286,7 +286,7 @@ class LeaveNotificationService
             return;
         }
 
-        $conversion->loadMissing(['leaveInfo.leaveType', 'leaveInfo.approvalRequirements', 'fromLeaveType', 'toLeaveType']);
+        $conversion->loadMissing(['leaveInfo.leaveType', 'leaveInfo.approvalRequirements', 'fromLeaveType', 'toLeaveType', 'attachments']);
         $leave = $conversion->leaveInfo;
 
         if ($leave === null) {
@@ -467,7 +467,7 @@ class LeaveNotificationService
     }
 
     /**
-     * Notify admin (To) and designated managers (CC) when SL, PTB, EL, or LL is filed.
+     * Notify admin (To) and designated managers (CC) when an admin-approved leave is filed.
      * A supporting file is attached on the mailable when the leave type requires one.
      */
     private function notifyAdminOnMedCertLeaveSubmit(LeaveInfo $leave): void
@@ -515,7 +515,7 @@ class LeaveNotificationService
     }
 
     /**
-     * Notify admin (To) and designated managers (CC) when pending SL, PTB, EL, or LL is cancelled.
+     * Notify admin (To) and designated managers (CC) when pending admin-approved leave is cancelled.
      */
     private function notifyAdminOnMedCertLeaveCancel(LeaveInfo $leave, string $cancellationReason): void
     {

@@ -136,7 +136,11 @@ class DevMailPreviewController extends Controller
     {
         try {
             if (Schema::hasTable('leave_info')) {
-                $leave = LeaveInfo::query()->with('leaveType')->latest('id')->first();
+                $leave = LeaveInfo::query()
+                    ->with('leaveType')
+                    ->with('attachments')
+                    ->latest('id')
+                    ->first();
 
                 if ($leave !== null) {
                     if ($leave->leaveType === null) {
@@ -158,7 +162,7 @@ class DevMailPreviewController extends Controller
         try {
             if (Schema::hasTable('leave_conversion')) {
                 $conversion = LeaveConversion::query()
-                    ->with(['fromLeaveType', 'toLeaveType'])
+                    ->with(['fromLeaveType', 'toLeaveType', 'attachments'])
                     ->latest('id')
                     ->first();
 
@@ -183,6 +187,7 @@ class DevMailPreviewController extends Controller
         ]);
         $conversion->setRelation('fromLeaveType', $this->leaveTypeByCode('VL', 'Vacation Leave'));
         $conversion->setRelation('toLeaveType', $this->leaveTypeByCode('SL', 'Sick Leave'));
+        $conversion->setRelation('attachments', collect());
 
         return $conversion;
     }
@@ -196,6 +201,7 @@ class DevMailPreviewController extends Controller
             'leave_reason' => 'Sample vacation for mail preview.',
         ]);
         $leave->setRelation('leaveType', $this->leaveTypeByCode('VL', 'Vacation Leave'));
+        $leave->setRelation('attachments', collect());
 
         return $leave;
     }
@@ -205,7 +211,7 @@ class DevMailPreviewController extends Controller
         try {
             if (Schema::hasTable('leave_info')) {
                 $leave = LeaveInfo::query()
-                    ->with('leaveType')
+                    ->with(['leaveType', 'attachments'])
                     ->whereHas('leaveType', fn ($query) => $query->where('code', 'SL'))
                     ->latest('id')
                     ->first();
@@ -225,6 +231,7 @@ class DevMailPreviewController extends Controller
             'leave_reason' => 'Sample sick leave for mail preview.',
         ]);
         $leave->setRelation('leaveType', $this->leaveTypeByCode('SL', 'Sick Leave'));
+        $leave->setRelation('attachments', collect());
 
         return $leave;
     }

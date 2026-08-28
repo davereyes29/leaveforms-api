@@ -16,4 +16,6 @@ enum BalanceTransactionReason: string
     case AnnualEntitlement = 'annual_entitlement';
     case RegularizationEntitlement = 'regularization_entitlement';
     case ContractualEntitlement = 'contractual_entitlement';
+    case ParentalEntitlement = 'parental_entitlement';
+    case ParentalEntitlementReversed = 'parental_entitlement_reversed';
 }

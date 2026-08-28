@@ -10,11 +10,10 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
 
 class ConversionRequestedMail extends Mailable
 {
-    use EmbedsLeaveMailIcons, Queueable, SerializesModels;
+    use AttachesStoredDiskFiles, EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
@@ -35,7 +34,14 @@ class ConversionRequestedMail extends Mailable
     public function content(): Content
     {
         $this->leave->loadMissing('leaveType');
-        $this->conversion->loadMissing(['fromLeaveType', 'toLeaveType']);
+        $this->conversion->loadMissing(['fromLeaveType', 'toLeaveType', 'attachments']);
+
+        $count = $this->conversion->attachments->count();
+        $attachmentSentence = match (true) {
+            $count === 1 => 'A medical certificate is attached for your review.',
+            $count > 1 => $count.' medical certificates are attached for your review.',
+            default => null,
+        };
 
         return new Content(
             markdown: 'mail.leave.conversion-requested',
@@ -45,6 +51,7 @@ class ConversionRequestedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
                 'frontendUrl' => config('leave.frontend_url'),
+                'attachmentSentence' => $attachmentSentence,
             ],
         );
     }
@@ -54,23 +61,8 @@ class ConversionRequestedMail extends Mailable
      */
     public function attachments(): array
     {
-        $path = $this->conversion->med_cert_attachment;
+        $this->conversion->loadMissing('attachments');
 
-        if ($path === null || $path === '') {
-            return [];
-        }
-
-        $disk = (string) config('leave.attachments.disk', 'local');
-
-        if (! Storage::disk($disk)->exists($path)) {
-            return [];
-        }
-
-        $extension = pathinfo($path, PATHINFO_EXTENSION);
-        $as = 'medical-certificate'.($extension !== '' ? '.'.$extension : '');
-
-        return [
-            Attachment::fromStorageDisk($disk, $path)->as($as),
-        ];
+        return $this->attachmentsFromStoredFiles($this->conversion->attachments);
     }
 }

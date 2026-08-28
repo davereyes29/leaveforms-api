@@ -3,17 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Leave\RejectLeaveConversionRequest;
+use App\Http\Requests\Leave\StoreConversionAttachmentsRequest;
 use App\Http\Requests\Leave\StoreLeaveConversionRequest;
 use App\Http\Resources\LeaveConversionResource;
 use App\Models\Leave\LeaveConversion;
+use App\Models\Leave\LeaveConversionAttachment;
 use App\Models\Leave\LeaveInfo;
+use App\Services\Leave\LeaveAttachmentService;
 use App\Services\Leave\LeaveConversionService;
 use App\Services\Leave\PendingConversionService;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveConversionController extends Controller
@@ -21,17 +22,18 @@ class LeaveConversionController extends Controller
     public function __construct(
         private readonly LeaveConversionService $conversionService,
         private readonly PendingConversionService $pendingConversionService,
+        private readonly LeaveAttachmentService $attachmentService,
     ) {}
 
     /**
-     * POST /api/leaves/{leave}/conversion — employee requests VL → SL with med cert and reason.
+     * POST /api/leaves/{leave}/conversion — employee requests VL → SL with med certs and reason.
      */
     public function store(StoreLeaveConversionRequest $request, LeaveInfo $leave): JsonResponse
     {
         $conversion = $this->conversionService->request(
             $leave,
             $request->employee(),
-            $request->file('med_cert'),
+            $request->uploadedMedCerts(),
             $request->validated('reason'),
         );
 
@@ -75,21 +77,50 @@ class LeaveConversionController extends Controller
     }
 
     /**
-     * GET /api/conversions/{conversion}/med-cert
+     * POST /api/conversions/{conversion}/attachments — add med certs while pending review.
      */
-    public function medCert(Request $request, LeaveConversion $conversion): StreamedResponse
-    {
-        if (! $this->conversionService->canAccessMedCert($conversion, $request->employee())) {
-            throw new AuthorizationException('You are not allowed to access this medical certificate.');
-        }
+    public function storeAttachments(
+        StoreConversionAttachmentsRequest $request,
+        LeaveConversion $conversion,
+    ): LeaveConversionResource {
+        $conversion = $this->attachmentService->addToConversion(
+            $conversion,
+            $request->employee(),
+            $request->uploadedMedCerts(),
+        );
 
-        $path = $conversion->med_cert_attachment;
-        $disk = config('leave.attachments.disk', 'local');
+        return LeaveConversionResource::make($conversion);
+    }
 
-        if ($path === null || ! Storage::disk($disk)->exists($path)) {
-            abort(404, 'Medical certificate not found.');
-        }
+    /**
+     * DELETE /api/conversions/{conversion}/attachments/{attachment}
+     */
+    public function destroyAttachment(
+        Request $request,
+        LeaveConversion $conversion,
+        LeaveConversionAttachment $attachment,
+    ): LeaveConversionResource {
+        $conversion = $this->attachmentService->removeFromConversion(
+            $conversion,
+            $attachment,
+            $request->employee(),
+        );
 
-        return Storage::disk($disk)->download($path, basename($path));
+        return LeaveConversionResource::make($conversion);
+    }
+
+    /**
+     * GET /api/conversions/{conversion}/attachments/{attachment}
+     */
+    public function downloadAttachment(
+        Request $request,
+        LeaveConversion $conversion,
+        LeaveConversionAttachment $attachment,
+    ): StreamedResponse {
+        return $this->attachmentService->downloadConversionAttachment(
+            $conversion,
+            $attachment,
+            $request->employee(),
+        );
     }
 }

@@ -32,9 +32,7 @@ class UpdateLeaveRequest extends FormRequest
                 ? ['required', Rule::in([DayType::Full->value])]
                 : ['required', Rule::enum(DayType::class)],
             'leave_reason' => ['required', 'string', 'max:2000'],
-            ...(LeaveTypeRules::requiresAttachment($code)
-                ? $this->optionalAttachmentReplaceRules()
-                : $this->prohibitedForVlRules()),
+            ...$this->prohibitedForVlRules(),
         ];
     }
 
@@ -47,8 +45,7 @@ class UpdateLeaveRequest extends FormRequest
 
         return [
             'day_type.in' => 'This leave type can only be filed as a full day.',
-            ...$this->prohibitedAttachmentMessages($code),
-            ...$this->requiredAttachmentMessages($code),
+            ...$this->prohibitedOnUpdateMessages($code),
         ];
     }
 

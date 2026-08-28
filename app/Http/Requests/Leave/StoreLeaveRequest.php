@@ -18,6 +18,8 @@ class StoreLeaveRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->wrapUploadedFileArray('leave_attachment');
+
         $code = $this->input('code');
 
         if ($code === null || $code === '') {
@@ -60,7 +62,7 @@ class StoreLeaveRequest extends FormRequest
         $code = (string) $this->input('code', 'VL');
 
         return [
-            'code.in' => 'Only Vacation Leave, Sick Leave, PTB Leave, Emergency Leave, and Long Leave can be filed for now.',
+            'code.in' => 'Unsupported leave type.',
             'day_type.in' => 'This leave type can only be filed as a full day.',
             ...$this->prohibitedAttachmentMessages($code),
             ...$this->requiredAttachmentMessages($code),

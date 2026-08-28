@@ -5,21 +5,22 @@ namespace App\Http\Controllers;
 use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\CancelLeaveRequest;
 use App\Http\Requests\Leave\IndexLeaveRequest;
+use App\Http\Requests\Leave\StoreLeaveAttachmentsRequest;
 use App\Http\Requests\Leave\StoreLeaveRequest;
 use App\Http\Requests\Leave\UpdateLeaveRequest;
 use App\Http\Resources\LeaveResource;
 use App\Http\Resources\LeaveSummaryResource;
 use App\Models\Leave\LeaveInfo;
+use App\Models\Leave\LeaveInfoAttachment;
 use App\Services\Leave\LeaveAttachmentService;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveListService;
 use App\Services\Leave\LeaveModificationService;
+use App\Services\Leave\LeaveNotificationService;
 use App\Services\Leave\LeaveSubmissionService;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveController extends Controller
@@ -30,6 +31,7 @@ class LeaveController extends Controller
         private readonly LeaveCancellationService $cancellationService,
         private readonly LeaveModificationService $modificationService,
         private readonly LeaveAttachmentService $attachmentService,
+        private readonly LeaveNotificationService $notificationService,
     ) {}
 
     /**
@@ -59,7 +61,7 @@ class LeaveController extends Controller
     }
 
     /**
-     * POST /api/leaves — file VL/LL (JSON) or SL/PTB/EL (multipart + required attachment).
+     * POST /api/leaves — file VL/LL/ML/PL (JSON) or SL/PTB/EL (multipart + required attachments).
      */
     public function store(StoreLeaveRequest $request): JsonResponse
     {
@@ -74,10 +76,10 @@ class LeaveController extends Controller
     }
 
     /**
-     * PUT|POST /api/leaves/{leave} — edit a pending VL, SL, PTB, EL, or LL request (no approvals yet).
+     * PUT|POST /api/leaves/{leave} — edit a pending leave request (no approvals yet).
      *
-     * Use PUT or POST with JSON for VL and LL. SL, PTB, and EL may replace the attachment — use POST + multipart
-     * (PHP does not parse files on PUT).
+     * JSON (or form fields) for dates/reason. SL, PTB, and EL files are added or removed
+     * through /leaves/{id}/attachments.
      */
     public function update(UpdateLeaveRequest $request, LeaveInfo $leave): LeaveResource
     {
@@ -105,23 +107,52 @@ class LeaveController extends Controller
     }
 
     /**
-     * GET /api/leaves/{leave}/attachment — download the attached file.
+     * POST /api/leaves/{leave}/attachments — add files to a pending SL, PTB, or EL.
      */
-    public function attachment(Request $request, LeaveInfo $leave): StreamedResponse
+    public function storeAttachments(StoreLeaveAttachmentsRequest $request, LeaveInfo $leave): LeaveResource
     {
-        if (! $this->attachmentService->canAccess($leave, $request->employee())) {
-            throw new AuthorizationException('You are not allowed to access this attachment.');
-        }
+        $leave = $this->attachmentService->addToLeave(
+            $leave,
+            $request->employee(),
+            $request->uploadedAttachments(),
+        );
 
-        $path = $leave->leave_attachment;
+        $this->notificationService->notifyApproversOnEdit($leave);
 
-        if ($path === null || ! Storage::disk($this->attachmentService->disk())->exists($path)) {
-            abort(404, 'Attachment not found.');
-        }
+        return LeaveResource::make($leave);
+    }
 
-        return Storage::disk($this->attachmentService->disk())->download(
-            $path,
-            basename($path),
+    /**
+     * DELETE /api/leaves/{leave}/attachments/{attachment} — remove one file (at least one must remain).
+     */
+    public function destroyAttachment(
+        Request $request,
+        LeaveInfo $leave,
+        LeaveInfoAttachment $attachment,
+    ): LeaveResource {
+        $leave = $this->attachmentService->removeFromLeave(
+            $leave,
+            $attachment,
+            $request->employee(),
+        );
+
+        $this->notificationService->notifyApproversOnEdit($leave);
+
+        return LeaveResource::make($leave);
+    }
+
+    /**
+     * GET /api/leaves/{leave}/attachments/{attachment} — download one attached file.
+     */
+    public function downloadAttachment(
+        Request $request,
+        LeaveInfo $leave,
+        LeaveInfoAttachment $attachment,
+    ): StreamedResponse {
+        return $this->attachmentService->downloadLeaveAttachment(
+            $leave,
+            $attachment,
+            $request->employee(),
         );
     }
 }

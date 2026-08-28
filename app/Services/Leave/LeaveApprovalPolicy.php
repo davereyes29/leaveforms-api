@@ -22,7 +22,7 @@ class LeaveApprovalPolicy
     public function requirementsFor(int $empId, string $leaveTypeCode): array
     {
         return match (strtoupper($leaveTypeCode)) {
-            'SL', 'PTB', 'EL', 'LL' => [
+            'SL', 'PTB', 'EL', 'LL', 'ML', 'PL' => [
                 $this->specialRequirement(1, RequiredApproverType::Admin),
             ],
             default => $this->vlRequirementsForFiler($empId),
@@ -30,7 +30,7 @@ class LeaveApprovalPolicy
     }
 
     /**
-     * VL manager matrix (also used to CC PICs on SL / PTB / EL / LL / conversion mail).
+     * VL manager matrix (also used to CC PICs on admin-approved leave / conversion mail).
      *
      * @return list<array{
      *     display_order: int,

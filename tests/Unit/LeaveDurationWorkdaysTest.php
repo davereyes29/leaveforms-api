@@ -57,4 +57,29 @@ class LeaveDurationWorkdaysTest extends TestCase
 
         $this->assertSame([], $dates);
     }
+
+    public function test_calendar_dates_include_weekends(): void
+    {
+        $service = new LeaveDurationService;
+
+        $dates = $service->calendarDatesBetween(
+            '2026-09-01',
+            '2026-09-07',
+            '2026-09-01',
+            '2026-09-07',
+        );
+
+        $this->assertSame(
+            [
+                '2026-09-01',
+                '2026-09-02',
+                '2026-09-03',
+                '2026-09-04',
+                '2026-09-05',
+                '2026-09-06',
+                '2026-09-07',
+            ],
+            $dates,
+        );
+    }
 }

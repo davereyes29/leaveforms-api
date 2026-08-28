@@ -10,11 +10,10 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
 
 class SickLeaveSubmittedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use AttachesStoredDiskFiles, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
@@ -34,7 +33,7 @@ class SickLeaveSubmittedMail extends Mailable
 
     public function content(): Content
     {
-        $this->leave->loadMissing('leaveType');
+        $this->leave->loadMissing(['leaveType', 'attachments']);
 
         return new Content(
             markdown: 'mail.leave.sick-leave-submitted',
@@ -43,7 +42,7 @@ class SickLeaveSubmittedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
                 'frontendUrl' => config('leave.frontend_url'),
-                'attachmentLabel' => $this->attachmentLabel(),
+                'attachmentSentence' => $this->attachmentSentence(),
             ],
         );
     }
@@ -53,42 +52,36 @@ class SickLeaveSubmittedMail extends Mailable
      */
     public function attachments(): array
     {
-        $this->leave->loadMissing('leaveType');
+        $this->leave->loadMissing('attachments');
 
-        $path = $this->leave->leave_attachment;
-
-        if ($path === null || $path === '') {
-            return [];
-        }
-
-        $disk = (string) config('leave.attachments.disk', 'local');
-
-        if (! Storage::disk($disk)->exists($path)) {
-            return [];
-        }
-
-        $extension = pathinfo($path, PATHINFO_EXTENSION);
-        $basename = LeaveTypeRules::requiresMedCert((string) $this->leave->leaveType?->code)
-            ? 'medical-certificate'
-            : 'supporting-document';
-        $as = $basename.($extension !== '' ? '.'.$extension : '');
-
-        return [
-            Attachment::fromStorageDisk($disk, $path)->as($as),
-        ];
+        return $this->attachmentsFromStoredFiles($this->leave->attachments);
     }
 
-    private function attachmentLabel(): ?string
+    private function attachmentSentence(): ?string
     {
-        $this->leave->loadMissing('leaveType');
+        $this->leave->loadMissing(['leaveType', 'attachments']);
         $code = (string) $this->leave->leaveType?->code;
 
         if (! LeaveTypeRules::requiresAttachment($code)) {
             return null;
         }
 
-        return LeaveTypeRules::requiresMedCert($code)
-            ? 'medical certificate'
-            : 'supporting document';
+        $count = $this->leave->attachments->count();
+
+        if ($count < 1) {
+            return null;
+        }
+
+        $isMedCert = LeaveTypeRules::requiresMedCert($code);
+
+        if ($count === 1) {
+            return $isMedCert
+                ? 'A medical certificate is attached for your review.'
+                : 'A supporting document is attached for your review.';
+        }
+
+        return $isMedCert
+            ? $count.' medical certificates are attached for your review.'
+            : $count.' supporting documents are attached for your review.';
     }
 }

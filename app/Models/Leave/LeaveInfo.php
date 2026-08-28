@@ -24,7 +24,6 @@ class LeaveInfo extends Model
         'start_date',
         'end_date',
         'leave_reason',
-        'leave_attachment',
         'status',
         'cancellation_reason',
         'confirmed_at',
@@ -76,5 +75,12 @@ class LeaveInfo extends Model
     public function conversion(): HasOne
     {
         return $this->hasOne(LeaveConversion::class, 'leave_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(LeaveInfoAttachment::class, 'leave_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 }
