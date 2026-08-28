@@ -7,7 +7,7 @@
 
 Hello {{ $approverName }},
 
-**{{ $employeeName }}** cancelled their **{{ $leave->leaveType->type }}** request.
+**{{ $employeeName }}** cancelled their **{{ $leave->leaveType->mailLabel() }}** request.
 
 @include('mail.leave._details', [
     'leave' => $leave,

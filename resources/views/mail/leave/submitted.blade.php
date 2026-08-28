@@ -7,7 +7,7 @@
 
 Hello {{ $approverName }},
 
-**{{ $employeeName }}** submitted a **{{ $leave->leaveType->type }}** request that is awaiting your approval.
+**{{ $employeeName }}** submitted a **{{ $leave->leaveType->mailLabel() }}** request that is awaiting your approval.
 
 @include('mail.leave._details', ['leave' => $leave])
 

@@ -25,4 +25,15 @@ class LeaveType extends Model
     {
         return $this->hasMany(LeaveBalance::class);
     }
+
+    /**
+     * Human-readable leave type name for email copy.
+     */
+    public function mailLabel(): string
+    {
+        return match (strtoupper((string) $this->code)) {
+            'PTB' => 'PTB Leave',
+            default => (string) $this->type,
+        };
+    }
 }

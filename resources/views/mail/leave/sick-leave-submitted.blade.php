@@ -1,19 +1,17 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => $leave->leaveType->type.' request awaiting your approval',
+    'title' => $leave->leaveType->mailLabel().' request awaiting your approval',
     'icon' => 'pending-conversion.png',
     'circle' => '#fff3e8',
 ])
 
 Hello {{ $adminName }},
 
-**{{ $employeeName }}** submitted a **{{ $leave->leaveType->type }}** request that is awaiting your approval.
+**{{ $employeeName }}** submitted a **{{ $leave->leaveType->mailLabel() }}** request that is awaiting your approval.
 
 @include('mail.leave._details', ['leave' => $leave])
 
-@if ($attachmentSentence)
-{{ $attachmentSentence }}
-@endif
+Supporting documentation is attached for your review.
 
 Please review the leave request and submit your decision.
 

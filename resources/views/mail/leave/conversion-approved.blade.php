@@ -7,17 +7,17 @@
 
 Hello {{ $recipientName }},
 
-Your request to convert your **{{ $leave->leaveType->type }}** to **{{ $conversion->toLeaveType->type }}** has been approved by **{{ $adminName }}**.
+Your request to convert your **{{ $leave->leaveType->mailLabel() }}** to **{{ $conversion->toLeaveType->mailLabel() }}** has been approved by **{{ $adminName }}**.
 
-Your leave is now recorded as **{{ $conversion->toLeaveType->type }}**.
+Your leave is now recorded as **{{ $conversion->toLeaveType->mailLabel() }}**.
 
 @include('mail.leave._details', [
     'leave' => $leave,
     'heading' => 'Conversion Details',
     'showReason' => false,
     'before' => [
-        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
-        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->mailLabel()],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->mailLabel()],
     ],
 ])
 

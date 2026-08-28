@@ -7,7 +7,7 @@
 
 Hello {{ $approverName }},
 
-This is a reminder that **{{ $employeeName }}'s {{ $leave->leaveType->type }}** request is still awaiting your approval.
+This is a reminder that **{{ $employeeName }}'s {{ $leave->leaveType->mailLabel() }}** request is still awaiting your approval.
 
 @include('mail.leave._details', ['leave' => $leave])
 

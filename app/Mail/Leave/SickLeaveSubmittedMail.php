@@ -3,7 +3,6 @@
 namespace App\Mail\Leave;
 
 use App\Models\Leave\LeaveInfo;
-use App\Services\Leave\LeaveTypeRules;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
@@ -13,18 +12,20 @@ use Illuminate\Queue\SerializesModels;
 
 class SickLeaveSubmittedMail extends Mailable
 {
-    use AttachesStoredDiskFiles, Queueable, SerializesModels;
+    use AttachesStoredDiskFiles, EmbedsLeaveMailIcons, Queueable, SerializesModels;
 
     public function __construct(
         public LeaveInfo $leave,
         public string $employeeName,
         public string $adminName,
-    ) {}
+    ) {
+        $this->embedLeaveMailIcons('pending-conversion.png');
+    }
 
     public function envelope(): Envelope
     {
         $this->leave->loadMissing('leaveType');
-        $leaveTypeName = $this->leave->leaveType?->type ?? 'Leave';
+        $leaveTypeName = $this->leave->leaveType?->mailLabel() ?? 'Leave';
 
         return new Envelope(
             subject: $leaveTypeName.' request awaiting your approval',
@@ -33,7 +34,7 @@ class SickLeaveSubmittedMail extends Mailable
 
     public function content(): Content
     {
-        $this->leave->loadMissing(['leaveType', 'attachments']);
+        $this->leave->loadMissing('leaveType');
 
         return new Content(
             markdown: 'mail.leave.sick-leave-submitted',
@@ -42,7 +43,6 @@ class SickLeaveSubmittedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
                 'frontendUrl' => config('leave.frontend_url'),
-                'attachmentSentence' => $this->attachmentSentence(),
             ],
         );
     }
@@ -55,33 +55,5 @@ class SickLeaveSubmittedMail extends Mailable
         $this->leave->loadMissing('attachments');
 
         return $this->attachmentsFromStoredFiles($this->leave->attachments);
-    }
-
-    private function attachmentSentence(): ?string
-    {
-        $this->leave->loadMissing(['leaveType', 'attachments']);
-        $code = (string) $this->leave->leaveType?->code;
-
-        if (! LeaveTypeRules::requiresAttachment($code)) {
-            return null;
-        }
-
-        $count = $this->leave->attachments->count();
-
-        if ($count < 1) {
-            return null;
-        }
-
-        $isMedCert = LeaveTypeRules::requiresMedCert($code);
-
-        if ($count === 1) {
-            return $isMedCert
-                ? 'A medical certificate is attached for your review.'
-                : 'A supporting document is attached for your review.';
-        }
-
-        return $isMedCert
-            ? $count.' medical certificates are attached for your review.'
-            : $count.' supporting documents are attached for your review.';
     }
 }

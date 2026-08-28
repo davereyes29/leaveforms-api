@@ -7,9 +7,9 @@
 
 Hello {{ $recipientName }},
 
-Your request to convert your **{{ $conversion->fromLeaveType->type }}** to **{{ $conversion->toLeaveType->type }}** has been rejected by **{{ $adminName }}**.
+Your request to convert your **{{ $conversion->fromLeaveType->mailLabel() }}** to **{{ $conversion->toLeaveType->mailLabel() }}** has been rejected by **{{ $adminName }}**.
 
-Your leave will remain recorded as **{{ $conversion->fromLeaveType->type }}**.
+Your leave will remain recorded as **{{ $conversion->fromLeaveType->mailLabel() }}**.
 
 @include('mail.leave._details', [
     'leave' => $leave,
@@ -20,8 +20,8 @@ Your leave will remain recorded as **{{ $conversion->fromLeaveType->type }}**.
         ['label' => 'Reason for Rejection', 'value' => $remarks],
     ] : [],
     'before' => [
-        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
-        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->mailLabel()],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->mailLabel()],
     ],
 ])
 
