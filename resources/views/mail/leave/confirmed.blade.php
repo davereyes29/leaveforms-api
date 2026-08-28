@@ -7,7 +7,7 @@
 
 Hello {{ $recipientName }},
 
-Your **{{ $leave->leaveType->type }}** request has been approved by **{{ $approverName }}**.
+Your **{{ $leave->leaveType->mailLabel() }}** request has been approved by **{{ $approverName }}**.
 
 @include('mail.leave._details', ['leave' => $leave])
 

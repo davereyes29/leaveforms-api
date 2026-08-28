@@ -7,14 +7,14 @@
 
 Hello {{ $adminName }},
 
-**{{ $employeeName }}** submitted a request to convert their approved **{{ $conversion->fromLeaveType->type }}** to **{{ $conversion->toLeaveType->type }}**.
+**{{ $employeeName }}** submitted a request to convert their approved **{{ $conversion->fromLeaveType->mailLabel() }}** to **{{ $conversion->toLeaveType->mailLabel() }}**.
 
 @include('mail.leave._details', [
     'leave' => $leave,
     'heading' => 'Conversion details',
     'before' => [
-        ['label' => 'From', 'value' => $conversion->fromLeaveType->type],
-        ['label' => 'To', 'value' => $conversion->toLeaveType->type],
+        ['label' => 'From', 'value' => $conversion->fromLeaveType->mailLabel()],
+        ['label' => 'To', 'value' => $conversion->toLeaveType->mailLabel()],
         ['label' => 'Conversion reason', 'value' => $conversion->reason],
     ],
 ])
