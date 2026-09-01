@@ -89,6 +89,12 @@ class LeaveNotificationService
 
         $leave->loadMissing(['leaveType', 'approvalRequirements']);
 
+        if ($this->isAdminMedCertLeave($leave)) {
+            $this->notifyAdminOnMedCertLeaveEdit($leave);
+
+            return;
+        }
+
         $employeeOnLeave = Employee::query()->find($leave->emp_id);
         $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
 
@@ -506,6 +512,52 @@ class LeaveNotificationService
             );
         } catch (\Throwable $exception) {
             Log::error('Admin leave submit notification failed.', [
+                'leave_id' => $leave->id,
+                'admin_emp_id' => $admin->id,
+                'admin_email' => $admin->email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notify admin (To) and designated managers (CC) when pending admin-approved leave is edited.
+     */
+    private function notifyAdminOnMedCertLeaveEdit(LeaveInfo $leave): void
+    {
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+
+        $admin = $this->adminEmployee();
+
+        if ($admin === null) {
+            Log::warning('Admin leave edit: admin email not found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+                'admin_emp_id' => config('leave.admin_emp_id'),
+            ]);
+
+            return;
+        }
+
+        $ccEmails = $this->managerCcEmails($leave, $admin);
+
+        try {
+            $mail = Mail::to($admin->email);
+
+            if ($ccEmails !== []) {
+                $mail->cc($ccEmails);
+            }
+
+            $mail->send(
+                new LeaveEditedMail(
+                    leave: $leave,
+                    employeeName: $employeeName,
+                    approverName: $admin->firstname ?: 'there',
+                ),
+            );
+        } catch (\Throwable $exception) {
+            Log::error('Admin leave edit notification failed.', [
                 'leave_id' => $leave->id,
                 'admin_emp_id' => $admin->id,
                 'admin_email' => $admin->email,
