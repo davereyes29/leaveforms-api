@@ -8,7 +8,6 @@ use App\Services\Leave\LeaveApproverResolver;
 
 /**
  * Resolves the portal userID cookie to an active employee.
- *
  */
 class PortalEmployeeResolver
 {
@@ -31,7 +30,7 @@ class PortalEmployeeResolver
         }
 
         $employee = Employee::query()
-            ->with(['group', 'jobDesignation'])
+            ->with(['group', 'empProf'])
             ->find($login->getEmployeeId());
 
         if ($employee === null || ! $employee->isActive()) {

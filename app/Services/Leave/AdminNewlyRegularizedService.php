@@ -10,6 +10,7 @@ use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalance;
 use App\Models\Leave\LeaveBalanceTransaction;
 use App\Models\Leave\LeaveType;
+use App\Services\Kdtph\EmployeeDesignationResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -35,6 +36,7 @@ class AdminNewlyRegularizedService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveBalanceService $balanceService,
+        private readonly EmployeeDesignationResolver $designationResolver,
     ) {}
 
     /**
@@ -287,7 +289,6 @@ class AdminNewlyRegularizedService
         ?string $q,
         ?array $empIds = null,
     ): Builder {
-        $contractual = EmploymentStatus::designationIds('contractual_designation_ids');
         $minMonths = (int) config('leave.regularization_entitlement.min_months', 6);
         $maxMonths = (int) config('leave.regularization_entitlement.max_months', 12);
 
@@ -302,11 +303,8 @@ class AdminNewlyRegularizedService
             ->whereNotNull('date_hired')
             ->whereDate('date_hired', '>', $yearStart)
             ->whereDate('date_hired', '<=', $latestHireForMin)
-            ->whereDate('date_hired', '>', $earliestHireExclusive);
-
-        if ($contractual !== []) {
-            $query->whereNotIn('designation', $contractual);
-        }
+            ->whereDate('date_hired', '>', $earliestHireExclusive)
+            ->whereNotEmploymentStatus(EmploymentStatus::Contractual);
 
         $annualRecipients = $this->annualEntitlementEmpIds($year);
 
@@ -474,6 +472,8 @@ class AdminNewlyRegularizedService
             ->get()
             ->keyBy('id');
 
+        $this->designationResolver->hydrate($employees);
+
         $missing = [];
         $ineligible = [];
         $annualRecipients = array_fill_keys($this->annualEntitlementEmpIds($year), true);
@@ -536,7 +536,7 @@ class AdminNewlyRegularizedService
             return false;
         }
 
-        if (EmploymentStatus::fromDesignationId((int) $employee->designation) === EmploymentStatus::Contractual) {
+        if ($employee->employmentStatus() === EmploymentStatus::Contractual) {
             return false;
         }
 

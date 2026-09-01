@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Kdtph\Employee;
+use App\Services\Kdtph\EmployeeDesignationResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(EmployeeDesignationResolver::class);
     }
 
     /**
