@@ -211,15 +211,12 @@ return [
     | Long Leave (LL)
     |--------------------------------------------------------------------------
     |
-    | Unpaid. Tenure is complete years from date_hired as of the file date
-    | (Asia/Manila). Cooldown is 10 years after the last confirmed LL end_date.
-    | Duration is inclusive calendar days, bounded by calendar months.
-    | Requires 1–5 supporting documents on submit.
+    | Unpaid. Duration is inclusive calendar days, bounded by calendar months.
+    | Requires 1–5 supporting documents on submit. Dates cannot overlap other
+    | active leave. Another pending LL also blocks a new file.
     |
     */
     'long_leave' => [
-        'min_tenure_years' => 5,
-        'cooldown_years' => 10,
         'min_months' => 1,
         'max_months' => 3,
     ],

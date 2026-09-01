@@ -276,11 +276,10 @@ Unpaid leave arranged offline with admin and superior before filing.
 1. Employee or an allowed PIC files **LL** as multipart (`day_type=full`, 1–5 `leave_attachment[]` — supporting documents).
 2. Duration is **inclusive calendar days**, bounded by **calendar months**: end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day (e.g. 15 Sep → 14 Oct through 14 Dec).
 3. Always unpaid: `paid_days = 0`, `lwop_days = duration`. **No** credit reserve.
-4. Requires **5 complete years** from `date_hired` as of the file date (Asia/Manila). Missing hire date or under 5 years → **422**.
-5. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years**. Rejected/cancelled do not count. Another `pending_approval` LL also blocks a new file.
-6. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
-7. Admin approves or rejects on the original leave. One admin approval confirms.
-8. Team calendar `dates` include weekends and holidays (same as PTB).
+4. Dates cannot overlap other active leave (same overlap rules as every leave type). Another `pending_approval` LL also blocks a new file. Confirmed LLs do not impose a cooldown.
+5. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
+6. Admin approves or rejects on the original leave. One admin approval confirms.
+7. Team calendar `dates` include weekends and holidays (same as PTB).
 
 ### Maternity Leave (ML)
 

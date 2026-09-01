@@ -80,7 +80,7 @@ class LeaveSubmissionService
         );
 
         if (LeaveTypeRules::isUnpaid($code)) {
-            $this->longLeavePolicy->assertEligibleToFile($employeeOnLeave, $data['start_date']);
+            $this->longLeavePolicy->assertEligibleToFile((int) $employeeOnLeave->id);
             $paidDays = '0.00';
             $lwopDays = $duration;
         } elseif (LeaveTypeRules::grantsCreditsOnSubmit($code)) {

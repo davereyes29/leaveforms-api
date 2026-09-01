@@ -97,7 +97,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | `mleave` | `ML` | Paid; admin; exactly 105 calendar days; grant on submit; female only; unlimited confirmed |
 | `pleave` | `PL` | Paid; admin; exactly 7 workdays; grant on submit; male only; max 4 confirmed; Paternity Notification Form (1–5 files) |
 | `ptbleave` | `PTB` | Direct filing (med cert + admin). Calendar days; full day; no LWOP |
-| `lleave` | `LL` | Unpaid; admin; 1–3 calendar months; 5 years tenure; 10-year cooldown after last confirmed take; supporting document (1–5 files) |
+| `lleave` | `LL` | Unpaid; admin; 1–3 calendar months; no overlapping dates; one pending LL at a time; supporting document (1–5 files) |
 
 ---
 

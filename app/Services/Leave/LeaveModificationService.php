@@ -69,12 +69,7 @@ class LeaveModificationService
         );
 
         if (LeaveTypeRules::isUnpaid($code)) {
-            $employeeOnLeave = Employee::query()->findOrFail($leave->emp_id);
-            $this->longLeavePolicy->assertEligibleToFile(
-                $employeeOnLeave,
-                $data['start_date'],
-                $leave->id,
-            );
+            $this->longLeavePolicy->assertEligibleToFile((int) $leave->emp_id, $leave->id);
             $paidDays = '0.00';
             $lwopDays = $duration;
         } elseif (LeaveTypeRules::grantsCreditsOnSubmit($code)) {

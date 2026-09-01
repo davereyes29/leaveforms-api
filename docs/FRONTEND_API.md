@@ -523,7 +523,7 @@ leave_attachment[]  (file)
 
 Example: 2 workdays next week + 3 workdays the week after = two separate EL requests. If remaining is 3, a 4-workday EL is **422**; file 3 EL then a separate VL for the rest (VL may be LWOP).
 
-**Long Leave** — `multipart/form-data`. `code` must be `LL`. **`leave_attachment[]`** (supporting documents) is **required** (1–5 files). `day_type` must be `full`. Always unpaid (`paid_days=0`, `lwop_days=duration`); no credits are reserved. Duration is **inclusive calendar days**, bounded by **calendar months**: end date must be ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day. Requires **5 complete years** of service from `date_hired` as of the file date. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years** (rejected/cancelled do not count). Another pending LL also blocks a new file.
+**Long Leave** — `multipart/form-data`. `code` must be `LL`. **`leave_attachment[]`** (supporting documents) is **required** (1–5 files). `day_type` must be `full`. Always unpaid (`paid_days=0`, `lwop_days=duration`); no credits are reserved. Duration is **inclusive calendar days**, bounded by **calendar months**: end date must be ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day. Dates cannot overlap other active leave. Another pending LL also blocks a new file. Confirmed LLs do not impose a cooldown.
 
 ```
 emp_id            42                  (optional)
@@ -1548,7 +1548,7 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 3. **File SL** — `POST /leaves` multipart with `code=SL` and required `leave_attachment[]` (1–5 med certs). Admin approves; PICs are CC'd. Overlap with an existing VL on those dates → **422** (convert confirmed VL, or cancel pending VL first)
 4. **File PTB** — `POST /leaves` multipart with `code=PTB`, `day_type=full`, required med cert. Calendar days (weekends/holidays count). Duration > remaining PTB credits → **422** (no unpaid PTB). Admin approves.
 5. **File EL** — `POST /leaves` multipart with `code=EL`, `day_type=full`, required supporting document. Workdays only. Duration > remaining EL credits → **422** (no unpaid EL; typical grant is 5). Admin approves.
-6. **File LL** — `POST /leaves` multipart with `code=LL`, `day_type=full`, required supporting document (`leave_attachment[]`, 1–5). 1–3 calendar months, always unpaid. Requires 5 years tenure. Next filing 10 years after last confirmed LL `end_date`. Admin approves.
+6. **File LL** — `POST /leaves` multipart with `code=LL`, `day_type=full`, required supporting document (`leave_attachment[]`, 1–5). 1–3 calendar months, always unpaid. No overlapping dates; another pending LL blocks a new file. Admin approves.
 7. **File ML** — `POST /leaves` JSON with `code=ML`, `day_type=full`, no attachment. Female only. Pick start; end = 105th calendar day. Admin approves (paid ML, not LWOP).
 8. **File PL** — `POST /leaves` multipart with `code=PL`, `day_type=full`, required Paternity Notification Form (`leave_attachment[]`, 1–5). Male only. Pick start; end = 7th workday. Max 4 confirmed takes. Admin approves.
 9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. On-behalf: only the PIC who filed (hide edit for the member). SL/PTB/EL/LL/PL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
