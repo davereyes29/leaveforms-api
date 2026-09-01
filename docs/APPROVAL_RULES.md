@@ -60,6 +60,8 @@ When `POST /api/leaves` includes `emp_id` different from the logged-in user, `Le
 
 Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit.
 
+**VL 3+ workday notice** does not apply to this path. Only the original filer may edit the pending request afterward.
+
 ---
 
 ## Requirement snapshot (`leave_approval_requirement`)
@@ -214,6 +216,8 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 | **No** requirement satisfied yet | Yes — edit dates/details. If `paid_days` changes, release and re-reserve (`BALANCE_FLOW.md`). Activity: `modified`. |
 | **At least one** requirement satisfied | No — employee must **cancel** and **submit a new** request. |
 
+**Who may edit:** self-filed leave → the employee. On-behalf (File Leave for Members) → **only the original filer** (`filed_by_emp_id`). The member cannot change dates, reason, or attachments. Cancel stays with the employee on leave.
+
 ---
 
 ## Leave type workflows
@@ -223,10 +227,11 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL → SL conversion** below). If a medical certificate is already available, file **SL** directly.
 
 1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
-2. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
-3. Approvers act per matrix above.
-4. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
-5. Quarterly absence warnings (7–8 / 9 days per quarter) are informational only — do not block approval.
+2. **Advance notice (self-file only):** VL of **3.00 or more workdays** must have `start_date` ≥ today + **1 calendar month** (Asia/Manila, `addMonthsNoOverflow`). Shorter VL is not gated. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day start is 1 Oct.
+3. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
+4. Approvers act per matrix above.
+5. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
+6. Quarterly absence warnings (7–8 / 9 days per quarter) are informational only — do not block approval.
 
 ### Sick Leave (SL) — direct filing
 
@@ -258,7 +263,7 @@ Treat like PTB for filing and approval (attachment + admin + no LWOP + multiple 
 
 1. Employee or an allowed PIC files **EL** with 1–5 supporting documents (`leave_attachment[]` — not necessarily a medical certificate). `day_type` must be `full` (`half_am` / `half_pm` → **422**).
 2. Duration is **workdays** (weekends and holidays skipped). Typical remaining cap is **5.00**.
-3. **No LWOP.** If duration > remaining EL credits → **422**. Multiple EL filings are allowed until credits are gone (e.g. 2 days next week, 3 the week after). Zero credits → cannot file (admin can grant via newly-regularized **5** or `POST /admin/balances`).
+3. **No LWOP.** If duration > remaining EL credits → **422**. Multiple EL filings are allowed until credits are gone (e.g. 2 days next week, 3 the week after). Zero credits → cannot file (admin can grant via `POST /admin/balances`; EL is given at hiring, not on the newly-regularized screen).
 4. Snapshot **one** requirement: `required_approver_type = admin`. Reserve paid **EL** credits (`paid_days = duration`, `lwop_days = 0`).
 5. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
 6. Admin approves or rejects on the original leave. One admin approval confirms.
@@ -266,14 +271,14 @@ Treat like PTB for filing and approval (attachment + admin + no LWOP + multiple 
 
 ### Long Leave (LL)
 
-Unpaid leave arranged offline with admin and superior before filing. No attachment.
+Unpaid leave arranged offline with admin and superior before filing.
 
-1. Employee or an allowed PIC files **LL** as JSON (`day_type=full`, no `leave_attachment`).
+1. Employee or an allowed PIC files **LL** as multipart (`day_type=full`, 1–5 `leave_attachment[]` — supporting documents).
 2. Duration is **inclusive calendar days**, bounded by **calendar months**: end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day (e.g. 15 Sep → 14 Oct through 14 Dec).
 3. Always unpaid: `paid_days = 0`, `lwop_days = duration`. **No** credit reserve.
 4. Requires **5 complete years** from `date_hired` as of the file date (Asia/Manila). Missing hire date or under 5 years → **422**.
 5. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years**. Rejected/cancelled do not count. Another `pending_approval` LL also blocks a new file.
-6. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers (no file). PICs do not approve.
+6. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
 7. Admin approves or rejects on the original leave. One admin approval confirms.
 8. Team calendar `dates` include weekends and holidays (same as PTB).
 
@@ -294,11 +299,11 @@ Credits are granted when the request is filed. No attachment (forms are handled 
 
 Same grant-on-submit pattern as ML, with a fixed workday length and a lifetime cap.
 
-1. Male employee or an allowed PIC files **PL** as JSON (`day_type=full`, no `leave_attachment`). Female → **422**.
+1. Male employee or an allowed PIC files **PL** as multipart (`day_type=full`, 1–5 `leave_attachment[]` — Paternity Notification Form). Female → **422**.
 2. Duration is **exactly 7 workdays** in one request. Start must be a workday. End must be the 7th workday. Cannot file 1–2 days.
 3. On submit: grant **7** PL then reserve. Reject/cancel reverses the grant.
 4. At most **4 confirmed** PL lifetime (stand-in for first 4 deliveries). Rejected/cancelled do not count. Another pending PL blocks a new file.
-5. Snapshot **one** admin requirement. Email: **To** admin, **CC** PICs (no file).
+5. Snapshot **one** admin requirement. Email: **To** admin, **CC** PICs. Paternity Notification Form attached.
 6. Team calendar `dates` are workdays only (same as VL/SL/EL).
 
 ---

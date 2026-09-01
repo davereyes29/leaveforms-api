@@ -3,6 +3,7 @@
 namespace App\Mail\Leave;
 
 use App\Models\Leave\LeaveInfo;
+use App\Services\Leave\LeaveTypeRules;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
@@ -43,6 +44,7 @@ class SickLeaveSubmittedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
                 'frontendUrl' => config('leave.frontend_url'),
+                'attachmentNote' => $this->attachmentNote(),
             ],
         );
     }
@@ -55,5 +57,23 @@ class SickLeaveSubmittedMail extends Mailable
         $this->leave->loadMissing('attachments');
 
         return $this->attachmentsFromStoredFiles($this->leave->attachments);
+    }
+
+    private function attachmentNote(): ?string
+    {
+        $this->leave->loadMissing(['leaveType', 'attachments']);
+
+        $label = LeaveTypeRules::attachmentLabel((string) $this->leave->leaveType?->code);
+        $count = $this->leave->attachments->count();
+
+        if ($label === null) {
+            return null;
+        }
+
+        if ($count <= 1) {
+            return 'The '.$label['singular'].' is attached for your review.';
+        }
+
+        return $count.' '.$label['plural'].' are attached for your review.';
     }
 }

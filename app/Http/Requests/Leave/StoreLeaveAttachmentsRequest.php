@@ -42,7 +42,9 @@ class StoreLeaveAttachmentsRequest extends FormRequest
             $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
         }
 
-        return $this->fileArrayMessages('leave_attachment', LeaveTypeRules::requiresMedCert($code));
+        $label = LeaveTypeRules::attachmentLabel($code);
+
+        return $label === null ? [] : $this->fileArrayMessages('leave_attachment', $label);
     }
 
     /**

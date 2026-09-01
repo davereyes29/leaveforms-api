@@ -107,7 +107,7 @@ class LeaveBalanceService
     }
 
     /**
-     * One-time mid-year grant (VL/SL prorated, or flat PTB/EL).
+     * One-time mid-year grant (VL/SL prorated, or flat PTB).
      * Available only; reserved unchanged.
      *
      * Must be called inside an outer DB::transaction (batch distribution).

@@ -17,12 +17,34 @@ final class LeaveTypeRules
 
     public static function requiresAttachment(string $code): bool
     {
-        return in_array(strtoupper($code), ['SL', 'PTB', 'EL'], true);
+        return in_array(strtoupper($code), ['SL', 'PTB', 'EL', 'LL', 'PL'], true);
     }
 
     public static function requiresMedCert(string $code): bool
     {
         return in_array(strtoupper($code), ['SL', 'PTB'], true);
+    }
+
+    /**
+     * @return array{singular: string, plural: string}|null
+     */
+    public static function attachmentLabel(string $code): ?array
+    {
+        return match (strtoupper($code)) {
+            'SL', 'PTB' => [
+                'singular' => 'medical certificate',
+                'plural' => 'medical certificates',
+            ],
+            'EL', 'LL' => [
+                'singular' => 'supporting document',
+                'plural' => 'supporting documents',
+            ],
+            'PL' => [
+                'singular' => 'Paternity Notification Form',
+                'plural' => 'Paternity Notification Forms',
+            ],
+            default => null,
+        };
     }
 
     public static function isAdminApproved(string $code): bool

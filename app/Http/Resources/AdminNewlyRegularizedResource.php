@@ -27,15 +27,12 @@ class AdminNewlyRegularizedResource extends JsonResource
             'vl_available' => $this->vl_available,
             'sl_available' => $this->sl_available,
             'ptb_available' => $this->ptb_available,
-            'el_available' => $this->el_available,
             'vl_grant' => $this->vl_grant,
             'sl_grant' => $this->sl_grant,
             'ptb_grant' => $this->ptb_grant,
-            'el_grant' => $this->el_grant,
             'vl_after' => $this->vl_after,
             'sl_after' => $this->sl_after,
             'ptb_after' => $this->ptb_after,
-            'el_after' => $this->el_after,
             'already_granted' => (bool) $this->already_granted,
         ];
     }

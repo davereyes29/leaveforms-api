@@ -411,16 +411,19 @@ class LeaveAttachmentService
         $leave->loadMissing('leaveType');
         $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
 
-        return LeaveTypeRules::requiresMedCert($code) ? 'medical certificate' : 'supporting document';
+        return LeaveTypeRules::attachmentLabel($code)['singular'] ?? 'supporting document';
     }
 
     private function assertActorCanModifyLeave(LeaveInfo $leave, Employee $actor): void
     {
-        $isEmployeeOnLeave = (int) $leave->emp_id === (int) $actor->id;
-        $isFiler = (int) $leave->filed_by_emp_id === (int) $actor->id;
+        if (! LeaveActorAuthorization::mayModify($leave, $actor)) {
+            $isOnBehalf = (int) $leave->filed_by_emp_id !== (int) $leave->emp_id;
 
-        if (! $isEmployeeOnLeave && ! $isFiler) {
-            throw new AuthorizationException('You are not allowed to modify this leave request.');
+            throw new AuthorizationException(
+                $isOnBehalf
+                    ? 'Only the person who filed this leave can modify it.'
+                    : 'You are not allowed to modify this leave request.',
+            );
         }
     }
 

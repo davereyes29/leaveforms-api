@@ -8,8 +8,8 @@ use Illuminate\Http\UploadedFile;
 /**
  * Shared attachment validation.
  *
- * VL, LL, ML, and PL do not allow attachments — use prohibitedForVlRules().
- * SL, PTB, and EL require 1–5 files on submit — use requiredAttachmentRules().
+ * VL and ML do not allow attachments — use prohibitedForVlRules().
+ * SL, PTB, EL, LL, and PL require 1–5 files on submit — use requiredAttachmentRules().
  * Edits add/remove files through dedicated endpoints, not the leave update body.
  */
 trait LeaveAttachmentRequestRules
@@ -51,7 +51,7 @@ trait LeaveAttachmentRequestRules
     }
 
     /**
-     * Block attachment fields on VL / LL / ML / PL endpoints, and on leave update
+     * Block attachment fields on VL / ML endpoints, and on leave update
      * (files are added or removed through dedicated attachment routes).
      *
      * @return array<string, mixed>
@@ -74,7 +74,7 @@ trait LeaveAttachmentRequestRules
     protected function prohibitedForVlMessages(): array
     {
         return [
-            'leave_attachment.prohibited' => 'Vacation Leave does not accept attachments. Attachments are only used for other leave types (SL, EL, PTB).',
+            'leave_attachment.prohibited' => 'Vacation Leave does not accept attachments. Attachments are only used for other leave types (SL, EL, PTB, LL, PL).',
             'remove_attachment.prohibited' => 'Vacation Leave does not use attachments.',
         ];
     }
@@ -84,16 +84,10 @@ trait LeaveAttachmentRequestRules
      */
     protected function prohibitedAttachmentMessages(string $code): array
     {
-        if (in_array(strtoupper($code), ['LL', 'ML', 'PL'], true)) {
-            $label = match (strtoupper($code)) {
-                'ML' => 'Maternity Leave',
-                'PL' => 'Paternity Leave',
-                default => 'Long Leave',
-            };
-
+        if (strtoupper($code) === 'ML') {
             return [
-                'leave_attachment.prohibited' => $label.' does not accept attachments.',
-                'remove_attachment.prohibited' => $label.' does not use attachments.',
+                'leave_attachment.prohibited' => 'Maternity Leave does not accept attachments.',
+                'remove_attachment.prohibited' => 'Maternity Leave does not use attachments.',
             ];
         }
 
@@ -121,25 +115,31 @@ trait LeaveAttachmentRequestRules
     protected function requiredAttachmentMessages(string $code, string $field = 'leave_attachment'): array
     {
         if ($field === 'med_cert') {
-            return $this->fileArrayMessages($field, true);
+            return $this->fileArrayMessages($field, [
+                'singular' => 'medical certificate',
+                'plural' => 'medical certificates',
+            ]);
         }
 
-        if (! LeaveTypeRules::requiresAttachment($code)) {
+        $label = LeaveTypeRules::attachmentLabel($code);
+
+        if ($label === null) {
             return [];
         }
 
-        return $this->fileArrayMessages($field, LeaveTypeRules::requiresMedCert($code));
+        return $this->fileArrayMessages($field, $label);
     }
 
     /**
+     * @param  array{singular: string, plural: string}  $label
      * @return array<string, string>
      */
-    protected function fileArrayMessages(string $field, bool $isMedCert): array
+    protected function fileArrayMessages(string $field, array $label): array
     {
         $maxFiles = $this->maxAttachmentFiles();
         $maxMb = (int) ceil($this->maxAttachmentKb() / 1024);
-        $singular = $isMedCert ? 'medical certificate' : 'supporting document';
-        $plural = $isMedCert ? 'medical certificates' : 'supporting documents';
+        $singular = $label['singular'];
+        $plural = $label['plural'];
 
         return [
             "{$field}.required" => 'A '.$singular.' is required to file this request.',

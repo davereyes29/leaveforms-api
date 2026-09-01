@@ -61,7 +61,7 @@ class LeaveController extends Controller
     }
 
     /**
-     * POST /api/leaves — file VL/LL/ML/PL (JSON) or SL/PTB/EL (multipart + required attachments).
+     * POST /api/leaves — file VL/ML (JSON) or SL/PTB/EL/LL/PL (multipart + required attachments).
      */
     public function store(StoreLeaveRequest $request): JsonResponse
     {
@@ -78,7 +78,7 @@ class LeaveController extends Controller
     /**
      * PUT|POST /api/leaves/{leave} — edit a pending leave request (no approvals yet).
      *
-     * JSON (or form fields) for dates/reason. SL, PTB, and EL files are added or removed
+     * JSON (or form fields) for dates/reason. SL, PTB, EL, LL, and PL files are added or removed
      * through /leaves/{id}/attachments.
      */
     public function update(UpdateLeaveRequest $request, LeaveInfo $leave): LeaveResource
@@ -107,7 +107,7 @@ class LeaveController extends Controller
     }
 
     /**
-     * POST /api/leaves/{leave}/attachments — add files to a pending SL, PTB, or EL.
+     * POST /api/leaves/{leave}/attachments — add files to a pending SL, PTB, EL, LL, or PL.
      */
     public function storeAttachments(StoreLeaveAttachmentsRequest $request, LeaveInfo $leave): LeaveResource
     {

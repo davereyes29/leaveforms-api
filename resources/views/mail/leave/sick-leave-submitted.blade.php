@@ -11,7 +11,9 @@ Hello {{ $adminName }},
 
 @include('mail.leave._details', ['leave' => $leave])
 
-Supporting documentation is attached for your review.
+@if ($attachmentNote)
+{{ $attachmentNote }}
+@endif
 
 Please review the leave request and submit your decision.
 

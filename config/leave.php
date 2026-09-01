@@ -166,7 +166,8 @@ return [
     | Mid-year catch-up for employees who missed the Jan 1 annual grant.
     | Tenure is measured as of today (Asia/Manila). Regularization date is
     | date_hired + 6 months. VL/SL = remaining inclusive calendar months
-    | through December × rate. PTB/EL are flat one-time grants.
+    | through December × rate. PTB is a flat one-time grant. EL is granted
+    | at hiring via POST /admin/balances, not on this screen.
     |
     */
     'regularization_entitlement' => [
@@ -174,7 +175,6 @@ return [
         'max_months' => 12,
         'monthly_rate' => '1.25',
         'ptb' => '180.00',
-        'el' => '5.00',
     ],
 
     /*
@@ -193,12 +193,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vacation Leave (VL) advance notice
+    |--------------------------------------------------------------------------
+    |
+    | Self-filed VL of this many workdays or more must start at least
+    | notice_months calendar months from today (Asia/Manila). File Leave for
+    | Members (on-behalf) skips this gate.
+    |
+    */
+    'vacation_leave' => [
+        'min_days_requiring_notice' => '3.00',
+        'notice_months' => 1,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Long Leave (LL)
     |--------------------------------------------------------------------------
     |
     | Unpaid. Tenure is complete years from date_hired as of the file date
     | (Asia/Manila). Cooldown is 10 years after the last confirmed LL end_date.
     | Duration is inclusive calendar days, bounded by calendar months.
+    | Requires 1–5 supporting documents on submit.
     |
     */
     'long_leave' => [
@@ -215,7 +231,8 @@ return [
     |
     | Credits are granted when the request is filed (not at annual /
     | regularization). ML is exactly 105 inclusive calendar days.
-    | PL is exactly 7 workdays, at most 4 confirmed takes per employee.
+    | PL is exactly 7 workdays, at most 4 confirmed takes per employee,
+    | and requires 1–5 Paternity Notification Form files.
     |
     */
     'parental_leave' => [

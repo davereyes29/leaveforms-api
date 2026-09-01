@@ -17,8 +17,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * Orchestrates filing a new leave request (VL, SL, PTB, EL, LL, ML, or PL).
  *
- * VL, LL, ML, and PL do not accept attachments. SL and PTB require a medical certificate.
- * EL requires a supporting document. LL is always unpaid. ML/PL credits are granted on submit.
+ * VL and ML do not accept attachments. SL and PTB require a medical certificate.
+ * EL and LL require a supporting document. PL requires a Paternity Notification Form.
+ * LL is always unpaid. ML/PL credits are granted on submit.
  */
 class LeaveSubmissionService
 {
@@ -32,6 +33,7 @@ class LeaveSubmissionService
         private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
+        private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
     ) {}
 
     /**
@@ -68,6 +70,13 @@ class LeaveSubmissionService
             $employeeOnLeave->id,
             $data['start_date'],
             $data['end_date'],
+        );
+
+        $this->vacationLeaveNoticePolicy->assertAdvanceNotice(
+            $code,
+            $duration,
+            $data['start_date'],
+            (int) $filer->id !== (int) $employeeOnLeave->id,
         );
 
         if (LeaveTypeRules::isUnpaid($code)) {

@@ -33,14 +33,33 @@ class LeaveTypeRulesTest extends TestCase
         $this->assertNull(LeaveTypeRules::exactWorkdays('ML'));
     }
 
-    public function test_parental_leave_is_admin_approved_full_day_and_has_no_attachment(): void
+    public function test_parental_leave_is_admin_approved_full_day(): void
     {
         foreach (['ML', 'PL'] as $code) {
             $this->assertTrue(LeaveTypeRules::isAdminApproved($code));
             $this->assertTrue(LeaveTypeRules::requiresFullDay($code));
-            $this->assertFalse(LeaveTypeRules::requiresAttachment($code));
             $this->assertFalse(LeaveTypeRules::allowsLwop($code));
             $this->assertFalse(LeaveTypeRules::isUnpaid($code));
         }
+
+        $this->assertFalse(LeaveTypeRules::requiresAttachment('ML'));
+        $this->assertTrue(LeaveTypeRules::requiresAttachment('PL'));
+        $this->assertTrue(LeaveTypeRules::requiresAttachment('LL'));
+        $this->assertSame(
+            [
+                'singular' => 'supporting document',
+                'plural' => 'supporting documents',
+            ],
+            LeaveTypeRules::attachmentLabel('LL'),
+        );
+        $this->assertSame(
+            [
+                'singular' => 'Paternity Notification Form',
+                'plural' => 'Paternity Notification Forms',
+            ],
+            LeaveTypeRules::attachmentLabel('PL'),
+        );
+        $this->assertNull(LeaveTypeRules::attachmentLabel('ML'));
+        $this->assertNull(LeaveTypeRules::attachmentLabel('VL'));
     }
 }

@@ -27,11 +27,11 @@ use RuntimeException;
  * ≥ 6 months and < 12 months as of today (Asia/Manila), and no annual
  * entitlement for that year. Regularization date = date_hired + 6 months.
  * VL/SL = inclusive months from regularization month through December × rate.
- * PTB/EL are flat one-time grants.
+ * PTB is a flat one-time grant. EL is granted at hiring (manual adjust), not here.
  */
 class AdminNewlyRegularizedService
 {
-    private const GRANT_CODES = ['VL', 'SL', 'PTB', 'EL'];
+    private const GRANT_CODES = ['VL', 'SL', 'PTB'];
 
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
@@ -97,7 +97,7 @@ class AdminNewlyRegularizedService
     }
 
     /**
-     * Grant VL/SL/PTB/EL regularization entitlement. All-or-nothing.
+     * Grant VL/SL/PTB regularization entitlement. All-or-nothing.
      *
      * @param  list<int>  $empIds
      * @return array{employees: Collection<int, Employee>, year: int, as_of: string, granted_count: int}
@@ -124,7 +124,6 @@ class AdminNewlyRegularizedService
                 'vl' => [],
                 'sl' => [],
                 'ptb' => [],
-                'el' => [],
             ];
 
             foreach ($employees as $employee) {
@@ -136,7 +135,7 @@ class AdminNewlyRegularizedService
 
                 $done = $this->grantedTypesForEmp($empId, $year, $types);
 
-                if ($done['vl'] && $done['sl'] && $done['ptb'] && $done['el']) {
+                if ($done['vl'] && $done['sl'] && $done['ptb']) {
                     throw ValidationException::withMessages([
                         'emp_ids' => [
                             'Regularization entitlement for '.$year.' was already granted to employee '.$empId.'.',
@@ -175,19 +174,9 @@ class AdminNewlyRegularizedService
                     );
                     $recipients['ptb'][] = $empId;
                 }
-
-                if (! $done['el']) {
-                    $this->balanceService->applyRegularizationEntitlement(
-                        $empId,
-                        (int) $types['el']->id,
-                        $grants['el_grant'],
-                        $remarks,
-                    );
-                    $recipients['el'][] = $empId;
-                }
             }
 
-            foreach (['vl', 'sl', 'ptb', 'el'] as $code) {
+            foreach (['vl', 'sl', 'ptb'] as $code) {
                 LeaveActivityHistory::recordBatchCreditDistribution(
                     (int) $admin->id,
                     ActivityType::RegularizationCreditsDistributed,
@@ -255,7 +244,7 @@ class AdminNewlyRegularizedService
     }
 
     /**
-     * @return array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}
+     * @return array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}
      */
     private function grantTypes(): array
     {
@@ -264,7 +253,7 @@ class AdminNewlyRegularizedService
             ->get()
             ->keyBy(fn (LeaveType $type): string => strtolower((string) $type->code));
 
-        foreach (['vl', 'sl', 'ptb', 'el'] as $key) {
+        foreach (['vl', 'sl', 'ptb'] as $key) {
             if (! $types->has($key)) {
                 throw new RuntimeException(strtoupper($key).' leave type must exist.');
             }
@@ -274,7 +263,6 @@ class AdminNewlyRegularizedService
             'vl' => $types->get('vl'),
             'sl' => $types->get('sl'),
             'ptb' => $types->get('ptb'),
-            'el' => $types->get('el'),
         ];
     }
 
@@ -374,7 +362,7 @@ class AdminNewlyRegularizedService
 
     /**
      * @param  list<int>  $empIds
-     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}  $types
+     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}  $types
      * @return list<int>
      */
     private function fullyGrantedEmpIds(array $empIds, int $year, array $types): array
@@ -387,7 +375,7 @@ class AdminNewlyRegularizedService
         $fullyGranted = [];
 
         foreach ($byEmp as $empId => $done) {
-            if ($done['vl'] && $done['sl'] && $done['ptb'] && $done['el']) {
+            if ($done['vl'] && $done['sl'] && $done['ptb']) {
                 $fullyGranted[] = (int) $empId;
             }
         }
@@ -397,8 +385,8 @@ class AdminNewlyRegularizedService
 
     /**
      * @param  list<int>  $empIds
-     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}  $types
-     * @return array<int, array{vl: bool, sl: bool, ptb: bool, el: bool}>
+     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}  $types
+     * @return array<int, array{vl: bool, sl: bool, ptb: bool}>
      */
     private function grantedTypesByEmp(array $empIds, int $year, array $types): array
     {
@@ -411,7 +399,6 @@ class AdminNewlyRegularizedService
             'vl' => (int) $types['vl']->id,
             'sl' => (int) $types['sl']->id,
             'ptb' => (int) $types['ptb']->id,
-            'el' => (int) $types['el']->id,
         ];
 
         $rows = LeaveBalanceTransaction::query()
@@ -425,7 +412,7 @@ class AdminNewlyRegularizedService
         $byEmp = [];
 
         foreach ($empIds as $empId) {
-            $byEmp[$empId] = ['vl' => false, 'sl' => false, 'ptb' => false, 'el' => false];
+            $byEmp[$empId] = ['vl' => false, 'sl' => false, 'ptb' => false];
         }
 
         $idToKey = array_flip($typeIds);
@@ -443,19 +430,19 @@ class AdminNewlyRegularizedService
     }
 
     /**
-     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}  $types
-     * @return array{vl: bool, sl: bool, ptb: bool, el: bool}
+     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}  $types
+     * @return array{vl: bool, sl: bool, ptb: bool}
      */
     private function grantedTypesForEmp(int $empId, int $year, array $types): array
     {
         $map = $this->grantedTypesByEmp([$empId], $year, $types);
 
-        return $map[$empId] ?? ['vl' => false, 'sl' => false, 'ptb' => false, 'el' => false];
+        return $map[$empId] ?? ['vl' => false, 'sl' => false, 'ptb' => false];
     }
 
     /**
      * @param  list<int>  $empIds
-     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}  $types
+     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}  $types
      * @return Collection<int, Employee>
      *
      * @throws ValidationException
@@ -566,7 +553,7 @@ class AdminNewlyRegularizedService
 
     /**
      * @param  Collection<int, Employee>  $employees
-     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType, el: LeaveType}  $types
+     * @param  array{vl: LeaveType, sl: LeaveType, ptb: LeaveType}  $types
      * @param  list<int>  $fullyGrantedEmpIds
      */
     private function attachEntitlements(
@@ -589,7 +576,6 @@ class AdminNewlyRegularizedService
             'vl' => (int) $types['vl']->id,
             'sl' => (int) $types['sl']->id,
             'ptb' => (int) $types['ptb']->id,
-            'el' => (int) $types['el']->id,
         ];
 
         $balancesByEmp = LeaveBalance::query()
@@ -608,7 +594,6 @@ class AdminNewlyRegularizedService
             $vlAvailable = $this->decimalString($byType->get($typeIds['vl'])?->available);
             $slAvailable = $this->decimalString($byType->get($typeIds['sl'])?->available);
             $ptbAvailable = $this->decimalString($byType->get($typeIds['ptb'])?->available);
-            $elAvailable = $this->decimalString($byType->get($typeIds['el'])?->available);
 
             $employee->setAttribute('regularization_date', $grants['regularization_date']);
             $employee->setAttribute('months_of_service', $grants['months_of_service']);
@@ -616,11 +601,9 @@ class AdminNewlyRegularizedService
             $employee->setAttribute('vl_available', $vlAvailable);
             $employee->setAttribute('sl_available', $slAvailable);
             $employee->setAttribute('ptb_available', $ptbAvailable);
-            $employee->setAttribute('el_available', $elAvailable);
             $employee->setAttribute('vl_grant', $grants['vl_grant']);
             $employee->setAttribute('sl_grant', $grants['sl_grant']);
             $employee->setAttribute('ptb_grant', $grants['ptb_grant']);
-            $employee->setAttribute('el_grant', $grants['el_grant']);
             $employee->setAttribute(
                 'vl_after',
                 $alreadyGranted ? $vlAvailable : bcadd($vlAvailable, $grants['vl_grant'], 2),
@@ -633,10 +616,6 @@ class AdminNewlyRegularizedService
                 'ptb_after',
                 $alreadyGranted ? $ptbAvailable : bcadd($ptbAvailable, $grants['ptb_grant'], 2),
             );
-            $employee->setAttribute(
-                'el_after',
-                $alreadyGranted ? $elAvailable : bcadd($elAvailable, $grants['el_grant'], 2),
-            );
             $employee->setAttribute('already_granted', $alreadyGranted);
         }
     }
@@ -648,8 +627,7 @@ class AdminNewlyRegularizedService
      *     months_prorated: int,
      *     vl_grant: string,
      *     sl_grant: string,
-     *     ptb_grant: string,
-     *     el_grant: string
+     *     ptb_grant: string
      * }
      */
     private function computeGrants(Employee $employee, CarbonImmutable $asOf, int $year): array
@@ -667,7 +645,6 @@ class AdminNewlyRegularizedService
             'vl_grant' => $vlSlGrant,
             'sl_grant' => $vlSlGrant,
             'ptb_grant' => bcadd((string) config('leave.regularization_entitlement.ptb', '180.00'), '0', 2),
-            'el_grant' => bcadd((string) config('leave.regularization_entitlement.el', '5.00'), '0', 2),
         ];
     }
 

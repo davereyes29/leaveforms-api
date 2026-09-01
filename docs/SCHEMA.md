@@ -12,7 +12,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 |-------|---------|
 | `leave_type` | Leave type lookup (VL, SL, …) |
 | `leave_info` | Leave requests |
-| `leave_info_attachment` | Supporting files for SL / PTB / EL (1–5 per leave) |
+| `leave_info_attachment` | Supporting files for SL / PTB / EL / LL / PL (1–5 per leave) |
 | `leave_balance` | Rolling paid credits (`available`, `reserved`) |
 | `leave_balance_transaction` | Ledger of balance changes |
 | `leave_approval_requirement` | Required approvals snapshotted at submit |
@@ -85,7 +85,7 @@ half_pm
 
 ## `leave_info_attachment`
 
-Supporting files for SL, PTB, and EL. One leave has 1–5 rows. VL / LL / ML / PL have none.
+Supporting files for SL, PTB, EL, LL, and PL. One leave has 1–5 rows. VL / ML have none.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -158,7 +158,7 @@ parental_entitlement_reversed
 |--------|----------------|------|
 | `initial_balance` | `available` +N | Opening balance (migration or first setup) |
 | `annual_entitlement` | `available` +N | Yearly VL/SL grant (15/15 or 15/18 by tenure) |
-| `regularization_entitlement` | `available` +N | Mid-year newly regularized grant (VL/SL prorated; PTB/EL flat) |
+| `regularization_entitlement` | `available` +N | Mid-year newly regularized grant (VL/SL prorated; PTB flat) |
 | `contractual_entitlement` | `available` +N | Admin-typed VL/SL for contractuals (max 15 each) |
 | `monthly_accrual` | `available` +1.25 | Reserved for a future monthly job (not used by admin UI) |
 | `leave_reserved` | available −N, reserved +N | Paid leave filed |

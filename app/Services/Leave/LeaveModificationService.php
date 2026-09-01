@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Edit an open leave request before any approver has acted.
  *
- * VL, LL, ML, and PL do not accept attachments. SL, PTB, and EL files are
+ * VL and ML do not accept attachments. SL, PTB, EL, LL, and PL files are
  * added or removed through dedicated attachment endpoints.
  */
 class LeaveModificationService
@@ -27,6 +27,7 @@ class LeaveModificationService
         private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
+        private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
     ) {}
 
     /**
@@ -58,6 +59,13 @@ class LeaveModificationService
             $data['start_date'],
             $data['end_date'],
             $leave->id,
+        );
+
+        $this->vacationLeaveNoticePolicy->assertAdvanceNotice(
+            $code,
+            $duration,
+            $data['start_date'],
+            (int) $leave->filed_by_emp_id !== (int) $leave->emp_id,
         );
 
         if (LeaveTypeRules::isUnpaid($code)) {
@@ -136,11 +144,14 @@ class LeaveModificationService
 
     private function assertActorCanModify(LeaveInfo $leave, Employee $actor): void
     {
-        $isEmployeeOnLeave = (int) $leave->emp_id === (int) $actor->id;
-        $isFiler = (int) $leave->filed_by_emp_id === (int) $actor->id;
+        if (! LeaveActorAuthorization::mayModify($leave, $actor)) {
+            $isOnBehalf = (int) $leave->filed_by_emp_id !== (int) $leave->emp_id;
 
-        if (! $isEmployeeOnLeave && ! $isFiler) {
-            throw new AuthorizationException('You are not allowed to modify this leave request.');
+            throw new AuthorizationException(
+                $isOnBehalf
+                    ? 'Only the person who filed this leave can modify it.'
+                    : 'You are not allowed to modify this leave request.',
+            );
         }
     }
 

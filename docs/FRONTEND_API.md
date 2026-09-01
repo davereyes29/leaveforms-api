@@ -59,7 +59,7 @@ if (res.status === 401) {
 | `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`, `annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted` |
 | `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `emp_prof.fldDesig` → `designation_list`) |
 
-**VL**, **LL**, **ML**, and **PL** do **not** accept `leave_attachment`. **SL** and **PTB** require **1–5** `leave_attachment` files (medical certificates) on submit. **EL** requires **1–5** `leave_attachment` files (supporting documents). Conversion uploads use field name **`med_cert`** (also 1–5 files). Each file: pdf / jpg / jpeg / png, max **10 MB**.
+**VL** and **ML** do **not** accept `leave_attachment`. **SL** and **PTB** require **1–5** `leave_attachment` files (medical certificates) on submit. **EL** and **LL** require **1–5** `leave_attachment` files (supporting documents). **PL** requires **1–5** `leave_attachment` files (Paternity Notification Form). Conversion uploads use field name **`med_cert`** (also 1–5 files). Each file: pdf / jpg / jpeg / png, max **10 MB**.
 
 ---
 
@@ -176,6 +176,8 @@ Example response:
 The viewer must be a PIC (P1–P4) whose `formspic.fldGroups` includes this group’s abbreviation. Otherwise **403**. Unknown group id → **404**.
 
 The list is the same people `POST /leaves` would accept for on-behalf (`LeaveOnBehalfAuthorizationService`): active employees (`emp_status = 1`) in that group, excluding the viewer, filtered by the on-behalf role matrix. Not paginated. Sorted by `id` (same as `emp_id`).
+
+**VL advance notice:** File Leave for Members **does not** apply the 3-workday / 1-calendar-month start-date gate (self-file does). Do not show the “Filing not allowed” banner on this screen for that rule.
 
 ```json
 {
@@ -343,7 +345,7 @@ Does **not** include `balance_impact` / `ledger`. Open leave detail with `GET /l
 }
 ```
 
-**Batch credit distribution** — one row **per leave type** granted in that Confirm (not per employee). Annual → typically VL + SL. Newly regularized → VL, SL, PTB, EL (only types actually granted). Contractual → VL and/or SL. Render `employee.employee_number` as **—** when null.
+**Batch credit distribution** — one row **per leave type** granted in that Confirm (not per employee). Annual → typically VL + SL. Newly regularized → VL, SL, PTB (only types actually granted). Contractual → VL and/or SL. Render `employee.employee_number` as **—** when null.
 
 ```json
 {
@@ -458,17 +460,19 @@ Full detail: `docs/API_HOLIDAYS.md`.
 | Method | Path | Body / notes |
 |--------|------|----------------|
 | GET | `/leaves` | Query: `status`, `page`, `per_page` (1–50, default 15) — **slim** list rows; same `data` / `links` / `meta` envelope as `/activities` |
-| POST | `/leaves` | File VL/LL/ML/PL (JSON) or SL/PTB/EL (multipart + required `leave_attachment[]`, 1–5 files) — **201**, returns **detail** shape |
+| POST | `/leaves` | File VL/ML (JSON) or SL/PTB/EL/LL/PL (multipart + required `leave_attachment[]`, 1–5 files) — **201**, returns **detail** shape |
 | GET | `/leaves/{id}` | Full leave detail (approvals + conversion) |
 | PUT or POST | `/leaves/{id}` | Edit pending leave dates/reason (JSON). Files are **not** accepted here |
-| POST | `/leaves/{id}/attachments` | Add 1+ files to pending SL/PTB/EL (multipart `leave_attachment[]`). Total after add ≤ 5 |
-| GET | `/leaves/{id}/attachments/{attachmentId}` | Download one file (required for SL/PTB/EL; VL/LL/ML/PL have none) |
-| DELETE | `/leaves/{id}/attachments/{attachmentId}` | Remove one file from pending SL/PTB/EL. Cannot drop below 1 |
+| POST | `/leaves/{id}/attachments` | Add 1+ files to pending SL/PTB/EL/LL/PL (multipart `leave_attachment[]`). Total after add ≤ 5 |
+| GET | `/leaves/{id}/attachments/{attachmentId}` | Download one file (required for SL/PTB/EL/LL/PL; VL/ML have none) |
+| DELETE | `/leaves/{id}/attachments/{attachmentId}` | Remove one file from pending SL/PTB/EL/LL/PL. Cannot drop below 1 |
 | POST | `/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required |
 
 #### POST `/leaves` body
 
 **Vacation Leave** — JSON (or form fields). Omit `code` or send `"VL"`. No file.
+
+Self-filed VL of **3.00 or more workdays** must start at least **1 calendar month** from today (Asia/Manila). Example: filed **1 Sep 2026** → earliest 3-day start is **1 Oct 2026**; **7–9 Sep** → **422** on `start_date`. Shorter VL (1–2 workdays or half-day) is not gated. **File Leave for Members** (on-behalf `emp_id`) skips this — any PIC already allowed to file for that member. The same gate runs on edit.
 
 ```json
 {
@@ -505,7 +509,7 @@ leave_reason      PTB treatment
 leave_attachment[]  (file)
 ```
 
-**Emergency Leave** — `multipart/form-data`. `code` must be `EL`. `leave_attachment[]` (supporting documents) is **required** (1–5 files). `day_type` must be `full`. Duration is **workdays** (weekends/holidays skipped). No LWOP: duration **> remaining EL credits** → **422**. Multiple EL filings are allowed until credits are gone. Zero credits → cannot file (admin can grant via newly-regularized **5** or `POST /admin/balances`). Typical remaining cap is **5.00**.
+**Emergency Leave** — `multipart/form-data`. `code` must be `EL`. `leave_attachment[]` (supporting documents) is **required** (1–5 files). `day_type` must be `full`. Duration is **workdays** (weekends/holidays skipped). No LWOP: duration **> remaining EL credits** → **422**. Multiple EL filings are allowed until credits are gone. Zero credits → cannot file (admin can grant via `POST /admin/balances`; EL is given at hiring, not on the newly-regularized screen). Typical remaining cap is **5.00**.
 
 ```
 emp_id            42
@@ -519,17 +523,16 @@ leave_attachment[]  (file)
 
 Example: 2 workdays next week + 3 workdays the week after = two separate EL requests. If remaining is 3, a 4-workday EL is **422**; file 3 EL then a separate VL for the rest (VL may be LWOP).
 
-**Long Leave** — JSON (or form fields). `code` must be `LL`. **No** attachment. `day_type` must be `full`. Always unpaid (`paid_days=0`, `lwop_days=duration`); no credits are reserved. Duration is **inclusive calendar days**, bounded by **calendar months**: end date must be ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day. Requires **5 complete years** of service from `date_hired` as of the file date. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years** (rejected/cancelled do not count). Another pending LL also blocks a new file.
+**Long Leave** — `multipart/form-data`. `code` must be `LL`. **`leave_attachment[]`** (supporting documents) is **required** (1–5 files). `day_type` must be `full`. Always unpaid (`paid_days=0`, `lwop_days=duration`); no credits are reserved. Duration is **inclusive calendar days**, bounded by **calendar months**: end date must be ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day. Requires **5 complete years** of service from `date_hired` as of the file date. Next LL only if `start_date` ≥ last **confirmed** LL `end_date` + **10 years** (rejected/cancelled do not count). Another pending LL also blocks a new file.
 
-```json
-{
-  "emp_id": 42,
-  "code": "LL",
-  "start_date": "2026-09-15",
-  "end_date": "2026-12-14",
-  "day_type": "full",
-  "leave_reason": "Personal long leave"
-}
+```
+emp_id            42                  (optional)
+code              LL
+start_date        2026-09-15
+end_date          2026-12-14
+day_type          full
+leave_reason      Personal long leave
+leave_attachment[]  (file: pdf, jpg, jpeg, png; max 10 MB each; 1–5 files)
 ```
 
 Example: start **15 Sep 2026** → earliest end **14 Oct 2026**, latest end **14 Dec 2026**.
@@ -549,17 +552,16 @@ Example: start **15 Sep 2026** → earliest end **14 Oct 2026**, latest end **14
 
 Example: start **1 Sep 2026** → end **14 Dec 2026**.
 
-**Paternity Leave** — JSON. `code` must be `PL`. **No** attachment. Male employees only (`gender = 0`; female → **422**). Hide PL unless the person on leave has `gender: 0` from `GET /me` (self) or `GET /groups/{group}/members` (on-behalf). `day_type` must be `full`. **Exactly 7 workdays** in one request (cannot file 1–2 days). Start must be a workday. FE: pick **start**; set `end_date` to the 7th workday (`GET /holidays` for non-working days). On submit the API grants 7 PL then reserves them. Reject/cancel reverses the grant. At most **4 confirmed** PL lifetime (rejected/cancelled do not count). Another pending PL blocks a new file.
+**Paternity Leave** — `multipart/form-data`. `code` must be `PL`. **`leave_attachment[]`** (Paternity Notification Form) is **required** (1–5 files). Male employees only (`gender = 0`; female → **422**). Hide PL unless the person on leave has `gender: 0` from `GET /me` (self) or `GET /groups/{group}/members` (on-behalf). `day_type` must be `full`. **Exactly 7 workdays** in one request (cannot file 1–2 days). Start must be a workday. FE: pick **start**; set `end_date` to the 7th workday (`GET /holidays` for non-working days). On submit the API grants 7 PL then reserves them. Reject/cancel reverses the grant. At most **4 confirmed** PL lifetime (rejected/cancelled do not count). Another pending PL blocks a new file.
 
-```json
-{
-  "emp_id": 42,
-  "code": "PL",
-  "start_date": "2026-08-17",
-  "end_date": "2026-08-25",
-  "day_type": "full",
-  "leave_reason": "Paternity leave"
-}
+```
+emp_id            42                  (optional)
+code              PL
+start_date        2026-08-17
+end_date          2026-08-25
+day_type          full
+leave_reason      Paternity leave
+leave_attachment[]  (file: pdf, jpg, jpeg, png; max 10 MB each; 1–5 files)
 ```
 
 Example: start Monday **17 Aug 2026** with no holidays that week → end **25 Aug 2026** (7 workdays).
@@ -568,10 +570,10 @@ Example: start Monday **17 Aug 2026** with no holidays that week → end **25 Au
 |-------|--------|
 | `emp_id` | Optional. Omit → self. Different from logged-in user → on-behalf (PIC rules). Use `id` from `GET /groups/{group}/members`. |
 | `code` | Optional. `VL` (default), `SL`, `PTB`, `EL`, `LL`, `ML`, or `PL` (case-insensitive). Other types → **422**. |
-| `start_date` / `end_date` | Required dates; end ≥ start. Overlap with another open leave for the same employee → **422** (`start_date`: "You already have leave filed for these dates.") |
+| `start_date` / `end_date` | Required dates; end ≥ start. Overlap with another open leave for the same employee → **422** (`start_date`: "You already have leave filed for these dates.") Self-filed VL of 3+ workdays with start sooner than 1 calendar month → **422** on `start_date` (on-behalf skips this). |
 | `day_type` | `full` \| `half_am` \| `half_pm`. **PTB, EL, LL, ML, and PL: `full` only** |
 | `leave_reason` | Required string |
-| `leave_attachment` | **Prohibited** on VL, LL, ML, and PL. **Required** on SL and PTB (med certs) and EL (supporting documents): array of 1–5 files, **10 MB** each. Repeat the field as `leave_attachment[]`. |
+| `leave_attachment` | **Prohibited** on VL and ML. **Required** on SL and PTB (med certs), EL and LL (supporting documents), and PL (Paternity Notification Form): array of 1–5 files, **10 MB** each. Repeat the field as `leave_attachment[]`. |
 
 ```js
 const form = new FormData();
@@ -721,8 +723,8 @@ When status is `pending_conversion` (or after a conversion exists), `conversion`
 
 Store / update / cancel / approve / reject also return this **detail** shape.
 
-**Edit rules:** only while status is `pending_approval` and no approval history yet. VL, LL, ML, and PL prohibit files. SL, PTB, and EL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months. ML stays exactly 105 calendar days. PL stays exactly 7 workdays.  
-**Cancel:** open requests (pending / partially approved); reason required. Pending VL that should have been SL: cancel, then file SL with the med cert. Confirmed VL: convert instead (cannot cancel, cannot file overlapping SL).
+**Edit rules:** only while status is `pending_approval` and no approval history yet. **Self-file:** the employee may edit. **On-behalf:** only the original filer (`filed_by_emp_id`) — the member gets **403** (`Only the person who filed this leave can modify it.`). Hide edit for the member when `filed_by.id` ≠ `employee.id`. VL and ML prohibit files. SL, PTB, EL, LL, and PL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). Self-filed VL still cannot be edited to 3+ workdays inside the 1-calendar-month window. PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months (always unpaid). ML stays exactly 105 calendar days. PL stays exactly 7 workdays.  
+**Cancel:** open requests (pending / partially approved); reason required. Only the **employee on leave** may cancel (including on-behalf). Pending VL that should have been SL: cancel, then file SL with the med cert. Confirmed VL: convert instead (cannot cancel, cannot file overlapping SL).
 
 ---
 
@@ -1163,7 +1165,8 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
 |------|--------|
 | VL / SL | Inclusive calendar months from regularization month through December of `year` × **1.25** (e.g. July–Dec = 6 → **7.50**) |
 | PTB | Flat **180.00** (one-time) |
-| EL | Flat **5.00** (one-time) |
+
+EL is **not** granted here (hire-time via `POST /admin/balances`).
 
 ```json
 {
@@ -1183,15 +1186,12 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
       "vl_available": "0.00",
       "sl_available": "0.00",
       "ptb_available": "0.00",
-      "el_available": "0.00",
       "vl_grant": "7.50",
       "sl_grant": "7.50",
       "ptb_grant": "180.00",
-      "el_grant": "5.00",
       "vl_after": "7.50",
       "sl_after": "7.50",
       "ptb_after": "180.00",
-      "el_after": "5.00",
       "already_granted": false
     }
   ],
@@ -1206,9 +1206,9 @@ Non-admin callers get **403**. GET uses the same Laravel `data` / `links` / `met
 }
 ```
 
-Select table: `date_hired`, `regularization_date`, `months_of_service`. Review table: `months_prorated`, `vl_grant` / `sl_grant` / `ptb_grant` / `el_grant` (and optional before/after from `*_available` / `*_after`). For `already_granted`, after equals current available.
+Select table: `date_hired`, `regularization_date`, `months_of_service`. Review table: `months_prorated`, `vl_grant` / `sl_grant` / `ptb_grant` (and optional before/after from `*_available` / `*_after`). For `already_granted`, after equals current available.
 
-**POST** — writes `regularization_entitlement` ledger rows (VL, SL, PTB, EL) and **one summarized admin-log row per leave type granted** (`regularization_credits_distributed`). All-or-nothing for the `emp_ids` list. Server recomputes grants; client amounts are ignored.
+**POST** — writes `regularization_entitlement` ledger rows (VL, SL, PTB) and **one summarized admin-log row per leave type granted** (`regularization_credits_distributed`). All-or-nothing for the `emp_ids` list. Server recomputes grants; client amounts are ignored.
 
 ```json
 {
@@ -1222,7 +1222,7 @@ Select table: `date_hired`, `regularization_date`, `months_of_service`. Review t
 | `year` | Required. Same year as the GET they reviewed. |
 | `emp_ids` | Required. Unique ids, min 1, max 500. Unknown / ineligible → **422**. |
 
-If **any** selected employee already has all four types (`VL`, `SL`, `PTB`, `EL`) with `regularization_entitlement` in that Manila calendar year → **422** (nothing is written). Partial (some types missing) is completed, not duplicated. Success **200**:
+If **any** selected employee already has all three types (`VL`, `SL`, `PTB`) with `regularization_entitlement` in that Manila calendar year → **422** (nothing is written). Partial (some types missing) is completed, not duplicated. Success **200**:
 
 ```json
 {
@@ -1544,14 +1544,14 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 ## Suggested UI screens
 
 1. **My leaves** — `GET /leaves` (+ status filter) → open detail with `GET /leaves/{id}`
-2. **File VL** — `POST /leaves` JSON (load `GET /holidays` for picker non-working days). On-behalf: `GET /me` `pic_groups` → `GET /groups/{id}/members` → `GET /balances?emp_id=` then `emp_id` on submit
+2. **File VL** — `POST /leaves` JSON (load `GET /holidays` for picker non-working days). Self-file: block 3+ workday VL whose start is inside 1 calendar month. On-behalf: `GET /me` `pic_groups` → `GET /groups/{id}/members` → `GET /balances?emp_id=` then `emp_id` on submit; **do not** apply the 3-day / 1-month banner on File Leave for Members.
 3. **File SL** — `POST /leaves` multipart with `code=SL` and required `leave_attachment[]` (1–5 med certs). Admin approves; PICs are CC'd. Overlap with an existing VL on those dates → **422** (convert confirmed VL, or cancel pending VL first)
 4. **File PTB** — `POST /leaves` multipart with `code=PTB`, `day_type=full`, required med cert. Calendar days (weekends/holidays count). Duration > remaining PTB credits → **422** (no unpaid PTB). Admin approves.
 5. **File EL** — `POST /leaves` multipart with `code=EL`, `day_type=full`, required supporting document. Workdays only. Duration > remaining EL credits → **422** (no unpaid EL; typical grant is 5). Admin approves.
-6. **File LL** — `POST /leaves` JSON with `code=LL`, `day_type=full`, no attachment. 1–3 calendar months, always unpaid. Requires 5 years tenure. Next filing 10 years after last confirmed LL `end_date`. Admin approves.
+6. **File LL** — `POST /leaves` multipart with `code=LL`, `day_type=full`, required supporting document (`leave_attachment[]`, 1–5). 1–3 calendar months, always unpaid. Requires 5 years tenure. Next filing 10 years after last confirmed LL `end_date`. Admin approves.
 7. **File ML** — `POST /leaves` JSON with `code=ML`, `day_type=full`, no attachment. Female only. Pick start; end = 105th calendar day. Admin approves (paid ML, not LWOP).
-8. **File PL** — `POST /leaves` JSON with `code=PL`, `day_type=full`, no attachment. Male only. Pick start; end = 7th workday. Max 4 confirmed takes. Admin approves.
-9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. SL/PTB/EL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
+8. **File PL** — `POST /leaves` multipart with `code=PL`, `day_type=full`, required Paternity Notification Form (`leave_attachment[]`, 1–5). Male only. Pick start; end = 7th workday. Max 4 confirmed takes. Admin approves.
+9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. On-behalf: only the PIC who filed (hide edit for the member). SL/PTB/EL/LL/PL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
 10. **Cancel** — reason form → cancel endpoint
 11. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 12. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)

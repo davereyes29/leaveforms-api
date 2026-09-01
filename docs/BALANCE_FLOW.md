@@ -91,9 +91,10 @@ Reserved enum value for a possible future scheduled +1.25/month job. **Not** use
 |------|---------|
 | VL / SL | Inclusive calendar months from (`date_hired` + 6 months) through December × **1.25** |
 | PTB | +180 (flat, one-time) |
-| EL | +5 (flat, one-time) |
 
-Write **one transaction per leave type**. `reserved` unchanged. Also writes **one summarized** `leave_activity_history` row per type granted (`regularization_credits_distributed`). Same employee cannot receive all four types twice in the same Manila calendar year (ledger check).
+EL is **not** part of this grant (hire-time via `POST /admin/balances`).
+
+Write **one transaction per leave type**. `reserved` unchanged. Also writes **one summarized** `leave_activity_history` row per type granted (`regularization_credits_distributed`). Same employee cannot receive all three types twice in the same Manila calendar year (ledger check).
 
 ```
 available_delta = +N
