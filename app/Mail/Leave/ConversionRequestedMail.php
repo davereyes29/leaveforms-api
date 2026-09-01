@@ -34,14 +34,7 @@ class ConversionRequestedMail extends Mailable
     public function content(): Content
     {
         $this->leave->loadMissing('leaveType');
-        $this->conversion->loadMissing(['fromLeaveType', 'toLeaveType', 'attachments']);
-
-        $count = $this->conversion->attachments->count();
-        $attachmentSentence = match (true) {
-            $count === 1 => 'A medical certificate is attached for your review.',
-            $count > 1 => $count.' medical certificates are attached for your review.',
-            default => null,
-        };
+        $this->conversion->loadMissing(['fromLeaveType', 'toLeaveType']);
 
         return new Content(
             markdown: 'mail.leave.conversion-requested',
@@ -51,7 +44,6 @@ class ConversionRequestedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
                 'frontendUrl' => config('leave.frontend_url'),
-                'attachmentSentence' => $attachmentSentence,
             ],
         );
     }

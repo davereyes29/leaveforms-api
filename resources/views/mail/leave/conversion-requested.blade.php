@@ -19,9 +19,7 @@ Hello {{ $adminName }},
     ],
 ])
 
-@if ($attachmentSentence)
-{{ $attachmentSentence }}
-@endif
+Supporting documentation is attached for your review.
 
 Please review the conversion request and submit your decision.
 
