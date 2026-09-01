@@ -34,9 +34,16 @@
             ? 'day'
             : 'days';
 
+        $durationText = $durationValue.' '.$durationUnit;
+        $period = $leave->day_type?->periodLabel();
+
+        if ($period !== null) {
+            $durationText .= ' ('.$period.')';
+        }
+
         $rows[] = [
             'label' => 'Duration',
-            'value' => $durationValue.' '.$durationUnit,
+            'value' => $durationText,
         ];
     }
     if ($showReason) {
