@@ -32,7 +32,10 @@ class StoreConversionAttachmentsRequest extends FormRequest
      */
     public function messages(): array
     {
-        return $this->fileArrayMessages('med_cert', true);
+        return $this->fileArrayMessages('med_cert', [
+            'singular' => 'medical certificate',
+            'plural' => 'medical certificates',
+        ]);
     }
 
     /**

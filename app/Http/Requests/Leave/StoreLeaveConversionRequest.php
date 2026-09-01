@@ -39,7 +39,10 @@ class StoreLeaveConversionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            ...$this->fileArrayMessages('med_cert', true),
+            ...$this->fileArrayMessages('med_cert', [
+                'singular' => 'medical certificate',
+                'plural' => 'medical certificates',
+            ]),
             'med_cert.required' => 'A medical certificate attachment is required to request VL → SL conversion.',
             'reason.required' => 'A conversion reason is required so admin can review the request without opening the medical certificate.',
         ];
