@@ -35,6 +35,7 @@ class VacationLeaveNoticePolicyTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('start_date', $e->errors());
             $this->assertStringContainsString('3 or more consecutive days', $e->errors()['start_date'][0]);
+            $this->assertStringContainsString('Ask your approver to file this request', $e->errors()['start_date'][0]);
 
             throw $e;
         }

@@ -36,7 +36,7 @@ class VacationLeaveNoticePolicy
         if ($start->lt($minStart)) {
             throw ValidationException::withMessages([
                 'start_date' => [
-                    'Leave requests of 3 or more consecutive days must be filed at least 1 month before the leave start date. Please choose a start date at least 1 month from today, or shorten the leave duration.',
+                    'Leave requests of 3 or more consecutive days must be filed at least 1 month before the leave start date. Ask your approver to file this request for you, or choose a start date at least 1 month from today, or shorten the leave duration.',
                 ],
             ]);
         }
