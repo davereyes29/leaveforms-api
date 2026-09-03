@@ -34,7 +34,7 @@ class MonthlyAttendanceReportService
     ) {}
 
     /**
-     * @param  list<int>  $empIds
+     * @param  list<int>  $empIds  Empty means every active employee (optional group filter).
      * @return array<string, mixed>
      *
      * @throws AuthorizationException
@@ -55,8 +55,11 @@ class MonthlyAttendanceReportService
         [$start, $end] = $this->matrix->period($month, $cutOff);
 
         $employees = $this->employeesForReport($empIds, $groupId);
+        $resolvedEmpIds = $employees
+            ->map(fn (Employee $employee): int => (int) $employee->id)
+            ->all();
         $group = $groupId !== null ? Group::query()->find($groupId) : null;
-        $leaves = $this->leavesForPeriod($empIds, $start, $end);
+        $leaves = $this->leavesForPeriod($resolvedEmpIds, $start, $end);
 
         $holidayFrom = $start;
         $holidayTo = $end;
@@ -114,6 +117,10 @@ class MonthlyAttendanceReportService
      */
     private function employeesForReport(array $empIds, ?int $groupId): Collection
     {
+        if ($empIds === []) {
+            return $this->allActiveEmployees($groupId);
+        }
+
         $employees = Employee::query()
             ->with('group')
             ->whereIn('id', $empIds)
@@ -139,8 +146,50 @@ class MonthlyAttendanceReportService
             }
         }
 
+        return $this->sortByEmployeeNumber($employees);
+    }
+
+    /**
+     * Same population as GET /admin/employees: active only, optional effective group.
+     *
+     * @return Collection<int, Employee>
+     */
+    private function allActiveEmployees(?int $groupId): Collection
+    {
+        $query = Employee::query()
+            ->with('group')
+            ->where('emp_status', 1);
+
+        if ($groupId !== null) {
+            $empIds = $this->approverResolver->employeeIdsInEffectiveGroups(
+                [$groupId],
+                activeOnly: true,
+            );
+
+            if ($empIds === []) {
+                return collect();
+            }
+
+            $query->whereIn('id', $empIds);
+        }
+
+        $employees = $query->get();
+
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
+
+        return $this->sortByEmployeeNumber($employees);
+    }
+
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @return Collection<int, Employee>
+     */
+    private function sortByEmployeeNumber(Collection $employees): Collection
+    {
         return $employees
-            ->sortBy(fn (Employee $employee): string => mb_strtolower($employee->fullName()), SORT_NATURAL)
+            ->sortBy(fn (Employee $employee): int => (int) $employee->id)
             ->values();
     }
 
@@ -150,6 +199,10 @@ class MonthlyAttendanceReportService
      */
     private function leavesForPeriod(array $empIds, string $start, string $end): Collection
     {
+        if ($empIds === []) {
+            return collect();
+        }
+
         return LeaveInfo::query()
             ->with(['leaveType'])
             ->whereIn('emp_id', $empIds)

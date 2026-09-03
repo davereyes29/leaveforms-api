@@ -16,17 +16,18 @@ class AdminMonthlyAttendanceReportController extends Controller
     /**
      * GET /api/admin/reports/monthly-attendance — confirmed leave matrix (admin only).
      *
-     * Query: month=YYYY-MM, cut_off=monthly|first_half|second_half, emp_ids[]=, optional group_id
+     * Query: month=YYYY-MM, cut_off=monthly|first_half|second_half, optional emp_ids[]=, optional group_id
      */
     public function __invoke(IndexMonthlyAttendanceReportRequest $request): MonthlyAttendanceReportResource
     {
         $groupId = $request->validated('group_id');
+        $empIds = $request->validated('emp_ids');
 
         $report = $this->reportService->forAdmin(
             $request->employee(),
             $request->validated('month'),
             $request->enum('cut_off', MonthlyAttendanceCutOff::class),
-            array_map('intval', $request->validated('emp_ids')),
+            is_array($empIds) ? array_map('intval', $empIds) : [],
             $groupId !== null ? (int) $groupId : null,
         );
 

@@ -896,13 +896,13 @@ Excel / print file generation is out of scope (frontend). No pagination.
 
 | Method | Path | Query |
 |--------|------|--------|
-| GET | `/admin/reports/monthly-attendance` | `month` (`YYYY-MM`, required), `cut_off` (`monthly` \| `first_half` \| `second_half`, required), `emp_ids[]` (required, one or more employee ids, max **200**), optional `group_id` (`group_list.id`) |
+| GET | `/admin/reports/monthly-attendance` | `month` (`YYYY-MM`, required), `cut_off` (`monthly` \| `first_half` \| `second_half`, required), optional `emp_ids[]` (one or more employee ids; omit for every active employee), optional `group_id` (`group_list.id`) |
 
-Group filter dropdown: `GET /admin/groups`. Employee multi-select: `GET /admin/employees?group_id=`.
+Group filter dropdown: `GET /admin/groups`. Employee multi-select: `GET /admin/employees?group_id=`. **Select all:** omit `emp_ids` (still send `group_id` when the Group filter is set). There is no employee-count cap.
 
-Non-admin callers get **403**. **422** when `month` / `cut_off` is missing or invalid, `emp_ids` is empty / unknown / over the cap, `group_id` is unknown, or `group_id` is sent and any selected employee’s **effective** group does not match.
+Non-admin callers get **403**. **422** when `month` / `cut_off` is missing or invalid, `emp_ids` is sent empty / unknown, `group_id` is unknown, or `group_id` is sent **with** `emp_ids` and any selected employee’s **effective** group does not match.
 
-`emp_ids` query: `emp_ids[]=15&emp_ids[]=22` (also accepts `emp_ids=15,22`). Duplicates are ignored.
+`emp_ids` query: `emp_ids[]=15&emp_ids[]=22` (also accepts `emp_ids=15,22`). Duplicates are ignored. Prefer omitting `emp_ids` for the whole org / group rather than listing every id (GET URL length).
 
 **Cut-off windows** (every calendar day is a column, including Saturdays, Sundays, and holidays):
 
@@ -923,7 +923,7 @@ Expand each leave the same way duration and `/team/calendar` do, then clip to th
 | EL (including `converted_to_el`), PTB, ML, PL, or any other paid type | `others` |
 | Any LWOP (including LL) | `lwop` |
 
-`day_type` `full` → `amount` `"1.00"`, `half` `null`. `half_am` / `half_pm` → `"0.50"` with matching `half`. At most one cell per employee per date. Same-category AM+PM collapse to `"1.00"`. If categories differ, **LWOP wins**. Cells are **sparse** (only days with leave); fill blanks from `dates[]`. Include every requested employee even with zero leave (`cells: []`, zero totals). Sort `rows` by `employee.name` ascending. `totals` / `grand_totals` sum **cell amounts** (decimal strings). Do not send a preformatted display string — render `"1.00"` as `1` and `"0.50"` + `half` as `0.5 (AM)` / `0.5 (PM)`.
+`day_type` `full` → `amount` `"1.00"`, `half` `null`. `half_am` / `half_pm` → `"0.50"` with matching `half`. At most one cell per employee per date. Same-category AM+PM collapse to `"1.00"`. If categories differ, **LWOP wins**. Cells are **sparse** (only days with leave); fill blanks from `dates[]`. Include every requested employee even with zero leave (`cells: []`, zero totals). Sort `rows` by employee number (`employee.id` / `employee.employee_number`) ascending, numeric (lowest first). `totals` / `grand_totals` sum **cell amounts** (decimal strings). Do not send a preformatted display string — render `"1.00"` as `1` and `"0.50"` + `half` as `0.5 (AM)` / `0.5 (PM)`.
 
 `dates[].is_non_working` is `true` for weekends or holidays from the same `kdtholiday` source as leave duration (`GET /holidays` `is_non_working: true`).
 
@@ -1627,7 +1627,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 21. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`
 22. **Activity Log** — `GET /activities` (+ leave-type filter). Includes the viewer's credit grants (`annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`); `leave_id` is null on those rows
 23. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
-24. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=&emp_ids[]=` (do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
+24. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=` (omit `emp_ids` for all active employees, or pass `emp_ids[]=` for a subset). Do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL / SL / PTB / EL / LL / ML / PL, then approvals, then conversion, then activity log.
 

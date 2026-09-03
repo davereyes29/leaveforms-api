@@ -56,12 +56,10 @@ class IndexMonthlyAttendanceReportRequest extends FormRequest
      */
     public function rules(): array
     {
-        $maxEmpIds = (int) config('leave.reports.monthly_attendance.max_emp_ids', 200);
-
         return [
             'month' => ['required', 'date_format:Y-m'],
             'cut_off' => ['required', Rule::enum(MonthlyAttendanceCutOff::class)],
-            'emp_ids' => ['required', 'array', 'min:1', 'max:'.$maxEmpIds],
+            'emp_ids' => ['sometimes', 'array', 'min:1'],
             'emp_ids.*' => [
                 'required',
                 'integer',
