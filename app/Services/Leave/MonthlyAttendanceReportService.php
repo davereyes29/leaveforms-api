@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Admin Monthly Attendance Report — confirmed leave days, not balances.
  *
- * Statuses: confirmed, converted_to_sl.
+ * Statuses: confirmed, converted_to_sl, converted_to_el.
  * pending_approval / pending_conversion / rejected / cancelled are omitted.
  */
 class MonthlyAttendanceReportService
@@ -24,6 +24,7 @@ class MonthlyAttendanceReportService
     public const STATUSES = [
         LeaveStatus::Confirmed,
         LeaveStatus::ConvertedToSl,
+        LeaveStatus::ConvertedToEl,
     ];
 
     public function __construct(

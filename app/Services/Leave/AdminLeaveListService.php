@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
  *
  * No PIC / formspic scoping. Includes the admin's own leaves.
  * Optional group_id filters by the person-on-leave's effective primary group.
- * Default statuses: pending_approval, pending_conversion, confirmed, converted_to_sl.
+ * Default statuses: pending_approval, pending_conversion, confirmed, converted_to_sl, converted_to_el.
  * rejected and cancelled are omitted.
  */
 class AdminLeaveListService
@@ -27,6 +27,7 @@ class AdminLeaveListService
         LeaveStatus::PendingConversion,
         LeaveStatus::Confirmed,
         LeaveStatus::ConvertedToSl,
+        LeaveStatus::ConvertedToEl,
     ];
 
     public function __construct(

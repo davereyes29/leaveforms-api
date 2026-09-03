@@ -13,7 +13,7 @@ use Illuminate\Support\Collection;
  * All leave requests for employees in the approver's formspic PIC groups.
  *
  * Unlike PendingApprovalService (actionable inbox), this is a team history view.
- * Default statuses: confirmed, rejected, pending_conversion, converted_to_sl.
+ * Default statuses: confirmed, rejected, pending_conversion, converted_to_sl, converted_to_el.
  * pending_approval stays on GET /approvals/pending; admin review on GET /conversions/pending.
  * The viewer's own leaves are excluded (use GET /leaves).
  */
@@ -25,6 +25,7 @@ class ApproverLeaveListService
         LeaveStatus::Rejected,
         LeaveStatus::PendingConversion,
         LeaveStatus::ConvertedToSl,
+        LeaveStatus::ConvertedToEl,
     ];
 
     public function __construct(

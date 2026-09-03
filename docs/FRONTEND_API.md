@@ -54,12 +54,12 @@ if (res.status === 401) {
 | Field | Values |
 |-------|--------|
 | `day_type` | `full`, `half_am`, `half_pm` |
-| Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl` |
+| Leave `status` | `pending_approval`, `confirmed`, `pending_conversion`, `rejected`, `cancelled`, `converted_to_sl`, `converted_to_el` |
 | Conversion `status` | `pending_review`, `approved`, `rejected` |
 | `activity_type` | `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`, `annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted` |
 | `employment_status` | `regular`, `probationary`, `contractual` (admin balances only; derived from `emp_prof.fldDesig` → `designation_list`) |
 
-**VL** and **ML** do **not** accept `leave_attachment`. **SL** and **PTB** require **1–5** `leave_attachment` files (medical certificates) on submit. **EL** and **LL** require **1–5** `leave_attachment` files (supporting documents). **PL** requires **1–5** `leave_attachment` files (Paternity Notification Form). Conversion uploads use field name **`med_cert`** (also 1–5 files). Each file: pdf / jpg / jpeg / png, max **10 MB**.
+**VL** and **ML** do **not** accept `leave_attachment`. **SL** and **PTB** require **1–5** `leave_attachment` files (medical certificates) on submit. **EL** and **LL** require **1–5** `leave_attachment` files (supporting documents). **PL** requires **1–5** `leave_attachment` files (Paternity Notification Form). Conversion to **SL** uses field name **`med_cert[]`**. Conversion to **EL** uses **`leave_attachment[]`**. Each file: pdf / jpg / jpeg / png, max **10 MB**.
 
 ---
 
@@ -296,7 +296,8 @@ Credit distributions and manual adjustments are **not** returned here — see **
 |-------|--------------------------|
 | Submitted (paid) | `3.0 VL reserved` |
 | Approved / confirmed | `3.0 VL confirmed` |
-| Cancelled / rejected | `3.0 VL released` |
+| Cancelled (pending) / rejected | `3.0 VL released` |
+| Cancelled (admin, confirmed) | `3.0 VL restored` |
 | Modified (amount change) | `2.0 VL released; 3.0 VL reserved` |
 | Conversion approved | `3.0 VL restored; 3.0 SL deducted` |
 
@@ -319,7 +320,7 @@ Non-admin callers get **403**. Same Laravel `data` / `links` / `meta` pagination
 | Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
 | Rows | Entire org, including the admin’s own leaves |
 | `q` / `group_id` | Person on leave, the adjusted employee (manual), or **any recipient** of a batch distribution |
-| `code` | Leave type on the row. Conversion rows also match **from** or **to** (so `?code=VL` still finds conversion activity after the leave becomes SL) |
+| `code` | Leave type on the row. Conversion rows also match **from** or **to** (so `?code=VL` still finds conversion activity after the leave becomes SL or EL) |
 | `month` | Calendar month of `timestamp` in **Asia/Manila**. Unknown format → **422** |
 
 Does **not** include `balance_impact` / `ledger`. Open leave detail with `GET /leaves/{id}` when `leave_id` is set.
@@ -406,9 +407,9 @@ Does **not** include `balance_impact` / `ledger`. Open leave detail with `GET /l
 | `rejected` | Leave request rejected |
 | `attachment_added` | Attachment added |
 | `leave_confirmed` | Leave request approved |
-| `conversion_requested` | VL to SL conversion requested |
-| `conversion_approved` | VL to SL conversion approved |
-| `conversion_rejected` | VL to SL conversion rejected |
+| `conversion_requested` | VL to SL conversion requested (or **VL to EL** when `to_leave_type.code` is `EL`) |
+| `conversion_approved` | VL to SL conversion approved (or **VL to EL**) |
+| `conversion_rejected` | VL to SL conversion rejected (or **VL to EL**) |
 | `annual_credits_distributed` | Annual leave credits distributed |
 | `regularization_credits_distributed` | Newly regularized credits distributed |
 | `contractual_credits_distributed` | Contractual leave credits distributed |
@@ -466,7 +467,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 | POST | `/leaves/{id}/attachments` | Add 1+ files to pending SL/PTB/EL/LL/PL (multipart `leave_attachment[]`). Total after add ≤ 5 |
 | GET | `/leaves/{id}/attachments/{attachmentId}` | Download one file (required for SL/PTB/EL/LL/PL; VL/ML have none) |
 | DELETE | `/leaves/{id}/attachments/{attachmentId}` | Remove one file from pending SL/PTB/EL/LL/PL. Cannot drop below 1 |
-| POST | `/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required |
+| POST | `/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required. Employee only; `pending_approval` only |
 
 #### POST `/leaves` body
 
@@ -688,7 +689,7 @@ Who can view: employee on leave, filer, admin, past approver on the leave, **PIC
 | Leave `status` | `eligible_approvers` |
 |----------------|----------------------|
 | `pending_approval`, `confirmed`, `rejected`, `cancelled` | People matching snapshotted leave requirements (formspic + group + `allowed_levels`, or president/admin when the requirement type says so) |
-| `pending_conversion`, `converted_to_sl` | Admin only (`LEAVE_ADMIN_EMP_ID`, purpose `Admin validation`) |
+| `pending_conversion`, `converted_to_sl`, `converted_to_el` | Admin only (`LEAVE_ADMIN_EMP_ID`, purpose `Admin validation`) |
 
 If conversion is rejected, leave returns to `confirmed` and the VL leave-approval list comes back.
 
@@ -719,12 +720,13 @@ When status is `pending_conversion` (or after a conversion exists), `conversion`
 
 `reviewed_by` is who approved or rejected the conversion (`leave_conversion.reviewed_by_emp_id`) — slim nest (`id`, `employee_number`, `name`), same as `filed_by`. Null while `status` is `pending_review`. `reviewed_by_emp_id` remains for convenience.
 
-`conversion.reason` is the **employee’s** conversion reason (why VL → SL). `conversion.remarks` is the **admin reject note** only (null while pending / after approve).
+`conversion.reason` is the **employee’s** conversion reason (why VL → SL or VL → EL). `conversion.remarks` is the **admin reject note** only (null while pending / after approve).
 
 Store / update / cancel / approve / reject also return this **detail** shape.
 
-**Edit rules:** only while status is `pending_approval` and no approval history yet. **Self-file:** the employee may edit. **On-behalf:** only the original filer (`filed_by_emp_id`) — the member gets **403** (`Only the person who filed this leave can modify it.`). Hide edit for the member when `filed_by.id` ≠ `employee.id`. VL and ML prohibit files. SL, PTB, EL, LL, and PL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). Self-filed VL still cannot be edited to 3+ workdays inside the 1-calendar-month window. PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months (always unpaid). ML stays exactly 105 calendar days. PL stays exactly 7 workdays.  
-**Cancel:** open requests (pending / partially approved); reason required. Only the **employee on leave** may cancel (including on-behalf). Pending VL that should have been SL: cancel, then file SL with the med cert. Confirmed VL: convert instead (cannot cancel, cannot file overlapping SL).
+**Edit rules:** only while status is `pending_approval` and no approval history yet. **Self-file:** the employee may edit. **On-behalf:** the employee on leave or the original filer (`filed_by_emp_id`) may edit dates, reason, and attachments. Strangers get **403** (`You are not allowed to modify this leave request.`). Show edit when the viewer is `employee.id` or `filed_by.id`. VL and ML prohibit files. SL, PTB, EL, LL, and PL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). Self-filed VL still cannot be edited to 3+ workdays inside the 1-calendar-month window. PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months (always unpaid). ML stays exactly 105 calendar days. PL stays exactly 7 workdays.  
+**Cancel (employee):** open requests (`pending_approval`, including after a partial approval); reason required. Only the **employee on leave** may cancel (including on-behalf). Pending VL that should have been SL: cancel, then file SL with the med cert. Confirmed leave cannot be cancelled by the employee (**422**).
+**Cancel (admin):** confirmed leave only, via `POST /admin/leaves/{id}/cancel`. See **All Leave Requests (admin)**. `pending_conversion` / converted statuses cannot be cancelled — reject the conversion first if needed.
 
 ---
 
@@ -732,7 +734,7 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Method | Path | Body / query |
 |--------|------|----------------|
-| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|pending_conversion\|converted_to_sl`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|pending_conversion\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
 | GET | `/approvals/pending` | — actionable inbox only (slim rows; not paginated) |
 | POST | `/leaves/{id}/approve` | empty |
 | POST | `/leaves/{id}/reject` | `{ "remarks": "..." }` required |
@@ -741,10 +743,10 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Endpoint | Who | Statuses |
 |----------|-----|----------|
-| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `pending_conversion`, `converted_to_sl`. Optional `?status=` narrows to one of those. |
+| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `pending_conversion`, `converted_to_sl`, `converted_to_el`. Optional `?status=` narrows to one of those. |
 | `GET /approvals/pending` | Leaves the viewer can **act on** now (PIC group ∩ open requirement, or admin on admin-approved types) | `pending_approval` only |
 
-If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` is **not** included here (use `/approvals/pending`). Admin conversion action stays on `/conversions/pending`. Direct-filed pending SL/PTB/EL/LL/ML/PL is **not** on `/conversions/pending` — admin approves it via `POST /leaves/{id}/approve`. `cancelled` is omitted. While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) — use `?code=SL` for converted rows. Direct-filed SL that is already confirmed is also `code=SL` with status `confirmed`.
+If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` is **not** included here (use `/approvals/pending`). Admin conversion action stays on `/conversions/pending`. Direct-filed pending SL/PTB/EL/LL/ML/PL is **not** on `/conversions/pending` — admin approves it via `POST /leaves/{id}/approve`. `cancelled` is omitted. While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) or **EL** (`converted_to_el`) — use `?code=SL` or `?code=EL` for converted rows. Direct-filed SL that is already confirmed is also `code=SL` with status `confirmed`.
 
 `GET /approvals` uses the same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by `created_at` (default newest first).
 
@@ -803,7 +805,8 @@ Org-wide leave list for **`LEAVE_ADMIN_EMP_ID` only**. No PIC / formspic scoping
 
 | Method | Path | Query |
 |--------|------|--------|
-| GET | `/admin/leaves` | Optional: `?status=pending_approval\|pending_conversion\|confirmed\|converted_to_sl`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL`, `?group_id=` (`group_list.id`), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/admin/leaves` | Optional: `?status=pending_approval\|pending_conversion\|confirmed\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL`, `?group_id=` (`group_list.id`), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| POST | `/admin/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required. **Confirmed** leave only |
 | GET | `/admin/groups` | No query. Org-wide `group_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only). Includes `dept_id` so the UI can cascade after a department pick. |
 | GET | `/admin/departments` | No query. Org-wide `department_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only) |
 | GET | `/admin/employees` | Optional: `?group_id=` (`group_list.id`). Slim org-wide employee picker (`LEAVE_ADMIN_EMP_ID` only). Do **not** use `GET /admin/balances` for this. |
@@ -816,13 +819,15 @@ Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` 
 |--|--|
 | Who | Only the employee id in `LEAVE_ADMIN_EMP_ID` |
 | Employees | Entire org, including the admin |
-| Default statuses | `pending_approval`, `pending_conversion`, `confirmed`, `converted_to_sl` |
+| Default statuses | `pending_approval`, `pending_conversion`, `confirmed`, `converted_to_sl`, `converted_to_el` |
 | Omitted | `rejected`, `cancelled` |
 | `group_id` | Optional. Filters by the person on leave’s **effective** primary group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`). Omit for all groups. Unknown id → **422**. Dropdown: `GET /admin/groups`. |
 
-Optional `?status=` narrows to one of the allowed values (`rejected` / `cancelled` return **422**). While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) — use `?code=SL` for converted rows.
+Optional `?status=` narrows to one of the allowed values (`rejected` / `cancelled` return **422**). While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) or **EL** (`converted_to_el`) — use `?code=SL` or `?code=EL` for converted rows.
 
 Open detail with `GET /leaves/{id}` (admin can view any leave). Conversion review stays on `GET /conversions/pending`.
+
+**Cancel confirmed:** show Cancel on confirmed leave detail when `GET /me` `is_admin` is true. `POST /admin/leaves/{id}/cancel` with `{ "cancellation_reason": "..." }` (same reason field as employee cancel). Returns the **detail** shape (`status=cancelled`). Non-admin → **403** (`Only admin can cancel a confirmed leave.`). Not `confirmed` → **422** (`Only confirmed leave can be cancelled by admin.`). `pending_conversion` → **422** (`Leave with a pending conversion cannot be cancelled. Reject the conversion first, then cancel the confirmed leave.`). Paid credits return to available; the row then drops off the default admin list (`cancelled` is omitted). Team calendar and monthly attendance also drop it. Employee UI has no Cancel on confirmed leave.
 
 ### Admin employees (picker)
 
@@ -878,7 +883,7 @@ Non-admin callers get **403**. **422** when `month` / `cut_off` is missing or in
 | `first_half` | 1 through `min(15, last day)` |
 | `second_half` | 16 through the last day |
 
-**Source leaves:** `emp_id` in `emp_ids`, `start_date`/`end_date` overlap the period, `status` is `confirmed` or `converted_to_sl`. **Omitted:** `pending_approval`, `pending_conversion`, `rejected`, `cancelled`. `converted_to_sl` counts as **SL**, not VL. Pending conversion days are absent until conversion is approved or rejected (rejected returns the leave to `confirmed`).
+**Source leaves:** `emp_id` in `emp_ids`, `start_date`/`end_date` overlap the period, `status` is `confirmed`, `converted_to_sl`, or `converted_to_el`. **Omitted:** `pending_approval`, `pending_conversion`, `rejected`, `cancelled`. `converted_to_sl` counts as **SL**, not VL. `converted_to_el` counts as **EL** (`others`), not VL. Pending conversion days are absent until conversion is approved or rejected (rejected returns the leave to `confirmed`).
 
 Expand each leave the same way duration and `/team/calendar` do, then clip to the cut-off window. VL / SL / EL / PL skip weekends and holidays. **PTB**, **LL**, and **ML** include every calendar day (weekend/holiday columns can have a cell). Paid days are assigned first; LWOP is on the last workdays of the (unclipped) range. `paid_days + lwop_days = duration`. LWOP wins the category even if the original type was VL or SL.
 
@@ -886,7 +891,7 @@ Expand each leave the same way duration and `/team/calendar` do, then clip to th
 |-----------|------------|
 | VL | `vl` |
 | SL (including `converted_to_sl`) | `sl` |
-| EL, PTB, ML, PL, or any other paid type | `others` |
+| EL (including `converted_to_el`), PTB, ML, PL, or any other paid type | `others` |
 | Any LWOP (including LL) | `lwop` |
 
 `day_type` `full` → `amount` `"1.00"`, `half` `null`. `half_am` / `half_pm` → `"0.50"` with matching `half`. At most one cell per employee per date. Same-category AM+PM collapse to `"1.00"`. If categories differ, **LWOP wins**. Cells are **sparse** (only days with leave); fill blanks from `dates[]`. Include every requested employee even with zero leave (`cells: []`, zero totals). Sort `rows` by `employee.name` ascending. `totals` / `grand_totals` sum **cell amounts** (decimal strings). Do not send a preformatted display string — render `"1.00"` as `1` and `"0.50"` + `half` as `0.5 (AM)` / `0.5 (PM)`.
@@ -1396,8 +1401,8 @@ Month/week grid of **who is out** in the viewer’s PIC groups. Bars are not cli
 **Scope**
 
 - Employees whose **effective primary group** is in the viewer’s `formspic.fldGroups` (**includes the viewer’s own leave**)
-- Statuses: `confirmed`, `pending_conversion`, `converted_to_sl` only (`pending_approval`, `rejected`, `cancelled` omitted)
-- `pending_conversion` is still **VL**; `converted_to_sl` is **SL** — `?code=` filters the current type
+- Statuses: `confirmed`, `pending_conversion`, `converted_to_sl`, `converted_to_el` only (`pending_approval`, `rejected`, `cancelled` omitted)
+- `pending_conversion` is still **VL**; `converted_to_sl` is **SL**; `converted_to_el` is **EL** — `?code=` filters the current type
 - Optional `group_id` must be one of `GET /me` `role.pic_groups` — otherwise **403**. Omit for all PIC groups. With `group_id`, the viewer’s own leave is included only if their effective group matches that id
 - Not a PIC (and no `group_id`): the viewer’s own approved leaves only
 - No pagination. Max range: **62 days**. Invalid / missing `from`/`to` → **422**
@@ -1442,42 +1447,69 @@ Filter dropdowns: leave types from `leave_type.code`; groups from `GET /me` `rol
 
 ---
 
-### VL → SL conversion
+### VL conversion (SL or EL)
 
 | Method | Path | Body |
 |--------|------|------|
-| POST | `/leaves/{id}/conversion` | **multipart/form-data**: `med_cert[]` (1–5 files) + `reason` (**201**) |
-| GET | `/conversions/pending` | Admin inbox |
+| POST | `/leaves/{id}/conversion` | **multipart/form-data**: `to_code=SL\|EL` (omit = **SL**), files, `reason` (**201**) |
+| GET | `/conversions/pending` | Admin inbox (SL and EL together) |
 | POST | `/conversions/{id}/approve` | empty |
 | POST | `/conversions/{id}/reject` | `{ "remarks": "..." }` required |
-| POST | `/conversions/{id}/attachments` | Add 1+ med certs while `pending_review`. Total after add ≤ 5 |
+| POST | `/conversions/{id}/attachments` | Add 1+ files while `pending_review`. Total after add ≤ 5 |
 | GET | `/conversions/{id}/attachments/{attachmentId}` | Download one file (employee on leave, PIC-group approvers, or admin) |
 | DELETE | `/conversions/{id}/attachments/{attachmentId}` | Remove one file while `pending_review`. Cannot drop below 1 |
 
+File field depends on `to_code` (and on the pending conversion’s `to_leave_type` when adding files later):
+
+| Target | `to_code` | Files on request / add | After approve |
+|--------|-----------|------------------------|---------------|
+| Sick Leave | `SL` or omit | `med_cert[]` (1–5) | status `converted_to_sl`, type SL |
+| Emergency Leave | `EL` | `leave_attachment[]` (1–5) | status `converted_to_el`, type EL; `paid_days = duration`, `lwop_days = 0` |
+
+Sending the wrong file field → **422**. Response still lists files as `has_med_cert` / `med_certs` for both targets (same as today).
+
 #### Business rules (UI)
 
-- Only **confirmed VL** can be converted (`status` becomes `pending_conversion` while admin reviews). Direct-filed SL cannot be converted (already SL).
-- Dates already occupied by that VL cannot be filed again as SL — overlap returns **422**. Convert this leave instead.
+- Only **confirmed VL** can be converted (`status` becomes `pending_conversion` while admin reviews). Direct-filed SL/EL cannot be converted.
+- Whole leave only (no partial convert). Dates already occupied by that VL cannot be filed again as SL or EL — overlap returns **422**. Convert this leave instead.
 - Only the **employee on leave** (`emp_id`) may request — not an on-behalf filer.
-- Med cert required: 1–5 files, pdf / jpg / jpeg / png (default max 10 MB each).
-- **Conversion reason** required (`reason`, string, max 2000) — shown to admin without opening the med cert (e.g. `"Acute respiratory infection"`). Distinct from original VL `leave_reason` and from admin reject `remarks`.
-- While `pending_review`, the employee on leave may add or remove individual med certs (at least one must remain; total ≤ 5).
-- Re-request allowed after **rejected** (upload 1–5 new med certs and a reason; previous files are replaced; leave returns to `confirmed` on reject).
-- Approve / reject: **admin only** (`LEAVE_ADMIN_EMP_ID`).
+- **Conversion reason** required (`reason`, string, max 2000) — shown to admin without opening the files. Distinct from original VL `leave_reason` and from admin reject `remarks`.
+- While `pending_review`, the employee on leave may add or remove individual files (at least one must remain; total ≤ 5). SL conversions keep `med_cert[]`; EL conversions must use `leave_attachment[]`.
+- Re-request allowed after **rejected** (upload 1–5 new files and a reason; `to_code` may change; previous files are replaced; leave returns to `confirmed` on reject).
+- Approve / reject: **admin only** (`LEAVE_ADMIN_EMP_ID`). Same inbox: `GET /conversions/pending`.
 - Filter employee leave list with `GET /leaves?status=pending_conversion`.
+- Half-day VL may convert to EL when remaining EL ≥ duration (`0.50` needs ≥ `0.50`). Direct-filed EL still requires `day_type=full`.
+- **VL → EL credits:** remaining EL must be ≥ VL **duration** (not `paid_days`). Example: 5-day LWOP VL + 5 EL remaining **can** convert (restore 0 VL, deduct 5 EL). Mixed 3 paid + 2 LWOP needs ≥ 5 EL. Shortfall → **422** `{ "el": ["Remaining Emergency Leave credits (2.00) are less than this leave duration (5.00)."] }` at **request**, and again at **approve** if credits changed. Show a warning from `GET /balances?code=EL` before submit — this API does not return a warning flag.
 
-#### Multipart example
+#### Multipart example (SL — default)
 
 ```js
 const form = new FormData();
 form.append('med_cert[]', file);
 form.append('reason', 'Acute respiratory infection');
+// to_code omitted → SL
 
 await fetch(`${API}/leaves/${leaveId}/conversion`, {
   method: 'POST',
   credentials: 'include',
   headers: { Accept: 'application/json' },
   body: form, // do not set Content-Type — browser sets multipart boundary
+});
+```
+
+#### Multipart example (EL)
+
+```js
+const form = new FormData();
+form.append('to_code', 'EL');
+form.append('leave_attachment[]', file);
+form.append('reason', 'Family emergency — supporting document attached');
+
+await fetch(`${API}/leaves/${leaveId}/conversion`, {
+  method: 'POST',
+  credentials: 'include',
+  headers: { Accept: 'application/json' },
+  body: form,
 });
 ```
 
@@ -1537,7 +1569,7 @@ await fetch(`${API}/leaves/${leaveId}/conversion`, {
 
 After **approve** or **reject**, `reviewed_by` is the admin (slim nest, same as `filed_by`). It is `null` while `pending_review`.
 
-After **approve**, leave status becomes `converted_to_sl` and leave type becomes SL. On **reject**, leave returns to `confirmed`.
+After **approve**, leave type becomes the target (`SL` or `EL`) and status becomes `converted_to_sl` or `converted_to_el`. On **reject**, leave returns to `confirmed`.
 
 ---
 
@@ -1551,13 +1583,13 @@ After **approve**, leave status becomes `converted_to_sl` and leave type becomes
 6. **File LL** — `POST /leaves` multipart with `code=LL`, `day_type=full`, required supporting document (`leave_attachment[]`, 1–5). 1–3 calendar months, always unpaid. No overlapping dates; another pending LL blocks a new file. Admin approves.
 7. **File ML** — `POST /leaves` JSON with `code=ML`, `day_type=full`, no attachment. Female only. Pick start; end = 105th calendar day. Admin approves (paid ML, not LWOP).
 8. **File PL** — `POST /leaves` multipart with `code=PL`, `day_type=full`, required Paternity Notification Form (`leave_attachment[]`, 1–5). Male only. Pick start; end = 7th workday. Max 4 confirmed takes. Admin approves.
-9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. On-behalf: only the PIC who filed (hide edit for the member). SL/PTB/EL/LL/PL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
-10. **Cancel** — reason form → cancel endpoint
+9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. On-behalf: the member or the PIC who filed may edit. SL/PTB/EL/LL/PL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
+10. **Cancel (employee)** — pending only; reason form → `POST /leaves/{id}/cancel`
 11. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
 12. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
-13. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; filter by status / leave type / group). Banner: `GET /admin/reminders` → `POST /admin/reminders`. Detail: `POST /leaves/{id}/reminders`
+13. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; filter by status / leave type / group). Banner: `GET /admin/reminders` → `POST /admin/reminders`. Detail: `POST /leaves/{id}/reminders`. Cancel confirmed: `POST /admin/leaves/{id}/cancel`
 14. **Team Leave Calendar** — `GET /team/calendar?from=&to=` (optional `code`, `group_id` from `pic_groups`)
-15. **Convert VL → SL** — on confirmed VL, upload 1–5 med certs + conversion reason. Add/remove files while pending with `/conversions/{id}/attachments`
+15. **Convert VL** — on confirmed VL, choose SL (`med_cert[]`) or EL (`to_code=EL` + `leave_attachment[]`) + conversion reason. Warn when remaining EL `<` duration (`GET /balances?code=EL`). Add/remove files while pending with `/conversions/{id}/attachments`
 16. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 17. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
 18. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
@@ -1585,9 +1617,10 @@ Admin reminders are triggered from the UI (`GET`/`POST /admin/reminders`, `POST 
 | Admin reminder (bulk) | Each waiting PIC / president (generic: N pending requests need approval) | — |
 | Admin reminder (single) | That waiting approver | — |
 | Leave confirmed / rejected | Employee (+ filer if on-behalf) | — |
-| Leave cancelled (VL) | Designated approvers | — |
-| Leave cancelled (SL / PTB / EL / LL / ML / PL) | Admin | Same designated approvers |
-| Conversion requested | Admin | Same designated approvers (med cert attached) |
+| Leave cancelled by employee (VL) | Designated approvers | — |
+| Leave cancelled by employee (SL / PTB / EL / LL / ML / PL) | Admin | Same designated approvers |
+| Leave cancelled by admin (confirmed) | Employee (+ filer if on-behalf) | — |
+| Conversion requested | Admin | Same designated approvers (file attached) |
 | Conversion approved / rejected | Employee only | — |
 
 Controlled by `LEAVE_NOTIFICATIONS_ENABLED` (default `true`) and `MAIL_*` SMTP.

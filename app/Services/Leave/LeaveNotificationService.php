@@ -5,6 +5,7 @@ namespace App\Services\Leave;
 use App\Mail\Leave\ConversionApprovedMail;
 use App\Mail\Leave\ConversionRejectedMail;
 use App\Mail\Leave\ConversionRequestedMail;
+use App\Mail\Leave\LeaveCancelledByAdminMail;
 use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
 use App\Mail\Leave\LeaveEditedMail;
@@ -221,6 +222,57 @@ class LeaveNotificationService
                 );
             } catch (\Throwable $exception) {
                 Log::error('Leave reject notification failed.', [
+                    'leave_id' => $leave->id,
+                    'recipient_emp_id' => $recipient->id,
+                    'recipient_email' => $recipient->email,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Notify the employee on leave (and filer if on-behalf) when admin cancels a confirmed leave.
+     */
+    public function notifyEmployeeOnAdminCancel(LeaveInfo $leave, Employee $admin, string $cancellationReason): void
+    {
+        if (! config('leave.notifications.enabled', true)) {
+            return;
+        }
+
+        $leave->loadMissing('leaveType');
+
+        $employeeOnLeave = Employee::query()->find($leave->emp_id);
+        $employeeName = $employeeOnLeave?->fullName() ?? 'An employee';
+        $adminName = $admin->fullName() !== ''
+            ? $admin->fullName()
+            : ($admin->firstname ?: 'Admin');
+
+        $recipients = $this->employeeAndFilerRecipients($leave);
+
+        if ($recipients->isEmpty()) {
+            Log::warning('Admin confirmed leave cancel: no recipient emails found.', [
+                'leave_id' => $leave->id,
+                'emp_id' => $leave->emp_id,
+                'filed_by_emp_id' => $leave->filed_by_emp_id,
+            ]);
+
+            return;
+        }
+
+        foreach ($recipients as $recipient) {
+            try {
+                Mail::to($recipient->email)->send(
+                    new LeaveCancelledByAdminMail(
+                        leave: $leave,
+                        employeeName: $employeeName,
+                        recipientName: $recipient->firstname ?: 'there',
+                        adminName: $adminName,
+                        cancellationReason: $cancellationReason,
+                    ),
+                );
+            } catch (\Throwable $exception) {
+                Log::error('Admin confirmed leave cancel notification failed.', [
                     'leave_id' => $leave->id,
                     'recipient_emp_id' => $recipient->id,
                     'recipient_email' => $recipient->email,

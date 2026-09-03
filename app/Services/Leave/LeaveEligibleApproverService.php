@@ -42,7 +42,7 @@ class LeaveEligibleApproverService
     private function isConversionStage(LeaveStatus $status): bool
     {
         return $status === LeaveStatus::PendingConversion
-            || $status === LeaveStatus::ConvertedToSl;
+            || $status->isConverted();
     }
 
     /**

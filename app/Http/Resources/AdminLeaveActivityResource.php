@@ -24,7 +24,11 @@ class AdminLeaveActivityResource extends JsonResource
             'leave_id' => $this->leave_id,
             'timestamp' => $this->created_at?->toIso8601String(),
             'activity_type' => $this->activity_type->value,
-            'activity' => $this->activity_type->label(),
+            'activity' => $this->activity_type->label(
+                $this->activity_type instanceof ActivityType && $this->activity_type->isConversion()
+                    ? $this->leaveInfo?->conversion?->toLeaveType?->code
+                    : null,
+            ),
             'leave_type' => $this->leaveTypePayload(),
             'employee' => $this->employeePayload(),
             'performed_by' => [

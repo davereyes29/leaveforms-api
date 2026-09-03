@@ -19,8 +19,8 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `leave_approval_history` | One immutable decision per requirement |
 | `leave_activity_history` | User/system activity audit (leaves + admin credit grants) |
 | `leave_activity_recipient` | Recipients of a summarized credit-distribution activity |
-| `leave_conversion` | VL → SL conversion (med cert) |
-| `leave_conversion_attachment` | Medical certificates for a conversion (1–5) |
+| `leave_conversion` | VL → SL or VL → EL conversion |
+| `leave_conversion_attachment` | Conversion files (1–5; med certs for SL, supporting docs for EL) |
 | `leave_admin_reminder` | Admin approval-reminder sends (bulk and per-leave singles) |
 
 ---
@@ -71,6 +71,7 @@ pending_conversion
 rejected
 cancelled
 converted_to_sl
+converted_to_el
 ```
 
 ### Enums — `leave_info.day_type`
@@ -143,6 +144,8 @@ leave_confirmed
 leave_reservation_released
 vl_to_sl_restore
 vl_to_sl_deduct
+vl_to_el_restore
+vl_to_el_deduct
 monthly_accrual
 manual_adjustment
 leave_reversed
@@ -163,13 +166,15 @@ parental_entitlement_reversed
 | `monthly_accrual` | `available` +1.25 | Reserved for a future monthly job (not used by admin UI) |
 | `leave_reserved` | available −N, reserved +N | Paid leave filed |
 | `leave_confirmed` | reserved −N | All requirements approved |
-| `leave_reservation_released` | reserved −N, available +N | Reject or employee cancel |
-| `vl_to_sl_restore` | VL available +N | Conversion approved |
-| `vl_to_sl_deduct` | SL available −N (or reserved/used path per policy) | Conversion approved |
-| `leave_reversed` | Reverse prior confirm | Admin undo |
+| `leave_reservation_released` | reserved −N, available +N | Reject or employee pending cancel |
+| `vl_to_sl_restore` | VL available +N | VL → SL conversion approved |
+| `vl_to_sl_deduct` | SL available −N | VL → SL conversion approved |
+| `vl_to_el_restore` | VL available +N | VL → EL conversion approved (skipped when `paid_days` is 0) |
+| `vl_to_el_deduct` | EL available −duration | VL → EL conversion approved |
+| `leave_reversed` | `available` +paid_days | Admin cancel of confirmed leave |
 | `manual_adjustment` | Per HR edit | Correction |
 | `parental_entitlement` | `available` +N | ML/PL credits granted when the request is filed |
-| `parental_entitlement_reversed` | `available` −N | ML/PL grant reversed on reject or cancel |
+| `parental_entitlement_reversed` | `available` −N | ML/PL grant reversed on reject, employee cancel, or admin confirmed cancel |
 
 Bucket semantics: see `BALANCE_FLOW.md`.
 
@@ -322,14 +327,14 @@ Employees covered by a summarized credit-distribution activity. Used so admin lo
 
 ## `leave_conversion`
 
-VL → SL after return (unexpected sickness path). Admin reviews med cert here.
+VL → SL or VL → EL after return. Admin reviews the conversion files here.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | bigint | PK |
 | `leave_id` | bigint | FK → `leave_info.id` |
-| `from_leave_type_id` | bigint | FK → `leave_type.id` |
-| `to_leave_type_id` | bigint | FK → `leave_type.id` |
+| `from_leave_type_id` | bigint | FK → `leave_type.id` (VL) |
+| `to_leave_type_id` | bigint | FK → `leave_type.id` (SL or EL) |
 | `reason` | text | Employee conversion reason (e.g. diagnosis). Required on new requests; nullable on older rows |
 | `reviewed_by_emp_id` | bigint | Nullable; admin |
 | `status` | enum | See below |
@@ -346,7 +351,9 @@ approved
 rejected
 ```
 
-**Approved:** restore VL + deduct SL (transactions), `leave_info.status` → `converted_to_sl`, update `leave_type_id` to SL.
+**Approved (SL):** restore VL + deduct SL (`vl_to_sl_*`), `leave_info.status` → `converted_to_sl`, update `leave_type_id` to SL.
+
+**Approved (EL):** restore VL `paid_days` (if any) + deduct EL **duration** (`vl_to_el_*`), `leave_info.status` → `converted_to_el`, update `leave_type_id` to EL, set `paid_days = duration` and `lwop_days = 0`. Remaining EL must cover duration.
 
 **Rejected:** no balance changes; leave stays VL; `leave_info.status` → `confirmed`.
 
@@ -356,7 +363,7 @@ rejected
 
 ## `leave_conversion_attachment`
 
-Medical certificates for a VL → SL conversion. One conversion has 1–5 rows.
+Files for a VL conversion. One conversion has 1–5 rows (med certs for SL, supporting documents for EL).
 
 | Column | Type | Notes |
 |--------|------|-------|

@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 /**
  * Validates query parameters for GET /api/admin/leaves (org-wide All Leave Requests).
  *
- * Default statuses when omitted: pending_approval, pending_conversion, confirmed, converted_to_sl.
+ * Default statuses when omitted: pending_approval, pending_conversion, confirmed, converted_to_sl, converted_to_el.
  */
 class IndexAdminLeavesRequest extends FormRequest
 {
@@ -60,6 +60,7 @@ class IndexAdminLeavesRequest extends FormRequest
                     LeaveStatus::PendingConversion->value,
                     LeaveStatus::Confirmed->value,
                     LeaveStatus::ConvertedToSl->value,
+                    LeaveStatus::ConvertedToEl->value,
                 ]),
             ],
             'group_id' => [

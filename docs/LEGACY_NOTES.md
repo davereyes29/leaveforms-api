@@ -27,6 +27,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | Topic | Legacy | Revamp |
 |-------|--------|--------|
 | **Unexpected sickness** | Could file SL directly | File **VL** first → **VL→SL conversion** after return **or** file **SL** directly when a med cert is already available |
+| **VL → EL** | Not in legacy | Confirmed VL may convert to EL when remaining EL ≥ duration (`to_code=EL`) |
 | **HR / admin on original leave** | HR confirmed most leave (`confirmationAccepted.php`, `l_remarks`) | VL confirms when leaders approve; **admin** on `leave_conversion` or `required_approver_type = admin` for other types |
 | **Balance** | `leave_confirmation` (`lc_vl`, `lc_sl`, …) | `leave_balance` (`available`, `reserved`) + ledger |
 | **Consumed days** | Mixed into balance / `l_lwop` bugs | Not on balance row; sum **confirmed** `leave_info` for reports |
@@ -34,7 +35,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | **Approval state** | Serialized `l_status` on `leave_info` | `leave_approval_requirement` + `leave_approval_history` |
 | **Approval rules at submit** | Live `formspic` matching | **Snapshotted** requirements |
 | **Reject** | Per-approver in `leave_accept` | One row per requirement; **any reject closes** entire leave |
-| **Employee cancel** | Unclear / varied | `cancelled` + `cancellation_reason` + release reserve |
+| **Employee cancel** | Unclear / varied | Pending: `cancelled` + `cancellation_reason` + release reserve. Confirmed: admin-only (`leave_reversed`) |
 | **Edit while pending** | Allowed in places | Only if **no** requirement satisfied; else cancel + refile |
 | **P2 filer rule** | In code (`getRequired`, `checkTier`) | Documented in `APPROVAL_RULES.md` |
 

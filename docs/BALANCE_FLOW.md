@@ -226,6 +226,26 @@ reason = leave_reservation_released
 
 ---
 
+## Admin cancel confirmed — `leave_reversed`
+
+**When:** Admin (`LEAVE_ADMIN_EMP_ID`) cancels a `confirmed` leave (`POST /admin/leaves/{id}/cancel`). Not for `pending_conversion` or converted statuses.
+
+1. `cancellation_reason` required.
+2. `leave_info.status` → `cancelled`. `confirmed_at` stays.
+3. If `paid_days > 0`:
+
+```
+available_delta = +paid_days
+reserved_delta  = 0
+reason          = leave_reversed
+```
+
+4. Full LWOP (`paid_days = 0`): no ledger row.
+5. ML/PL: then `parental_entitlement_reversed` so the on-submit grant does not remain as leftover credits.
+6. **Activity:** `cancelled` (`performed_by` = admin).
+
+---
+
 ## Modify while pending
 
 | Situation | Balance action |
@@ -271,7 +291,7 @@ reason = leave_reservation_released
 
 ## VL → SL conversion
 
-After admin approves `leave_conversion` (see `APPROVAL_RULES.md`).
+After admin approves `leave_conversion` with `to` = SL (see `APPROVAL_RULES.md`).
 
 **Approved — two transactions in one DB transaction:**
 
@@ -293,6 +313,42 @@ reserved_delta  = 0
 
 3. Update `leave_info.leave_type_id` → SL, `status` → `converted_to_sl`.
 
+If `paid_days` is 0 (fully LWOP VL), both ledger rows are skipped.
+
+**Activity:** `conversion_approved`.
+
+**Rejected conversion:** No balance changes. **Activity:** `conversion_rejected`.
+
+---
+
+## VL → EL conversion
+
+After admin approves `leave_conversion` with `to` = EL.
+
+Remaining EL must be ≥ VL **duration** (checked at request and again at approve).
+
+**Approved — in one DB transaction:**
+
+1. **`vl_to_el_restore`** — restore VL paid days (omitted when `paid_days` is 0):
+
+```
+leave_type_id   = VL
+available_delta = +paid_days
+reserved_delta  = 0
+```
+
+2. **`vl_to_el_deduct`** — deduct EL for the full leave length:
+
+```
+leave_type_id   = EL
+available_delta = −duration
+reserved_delta  = 0
+```
+
+3. Update `leave_info.leave_type_id` → EL, `status` → `converted_to_el`, `paid_days` → duration, `lwop_days` → 0.
+
+Example: 5-day LWOP VL + 5 remaining EL → restore 0 VL, deduct 5 EL, leave becomes paid EL. Mixed 3 paid + 2 LWOP needs ≥ 5 EL.
+
 **Activity:** `conversion_approved`.
 
 **Rejected conversion:** No balance changes. **Activity:** `conversion_rejected`.
@@ -301,17 +357,7 @@ reserved_delta  = 0
 
 ## Undo confirmed leave — `leave_reversed`
 
-**When:** Admin reverses a previously confirmed paid leave.
-
-Reverse the net effect of `leave_confirmed` for that request’s `paid_days`:
-
-```
-available_delta = +paid_days
-reserved_delta  = 0   (or restore to reserved if policy requires — default: return to available)
-reason          = leave_reversed
-```
-
-Also set `leave_info.status` appropriately (per admin workflow).
+See **Admin cancel confirmed** above. Paid days return to **available** (not reserved).
 
 ---
 
@@ -340,6 +386,8 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | `leave_reservation_released` | +paid_days | −paid_days | set |
 | `vl_to_sl_restore` | +N (VL) | 0 | set |
 | `vl_to_sl_deduct` | −N (SL) | 0 | set |
+| `vl_to_el_restore` | +N (VL) | 0 | set |
+| `vl_to_el_deduct` | −duration (EL) | 0 | set |
 | `leave_reversed` | +paid_days | 0 | set |
 | `manual_adjustment` | varies | varies | optional |
 | `parental_entitlement` | +duration (ML 105 / PL 7) | 0 | set |
@@ -358,8 +406,10 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Confirm (paid) | `leave_confirmed` | `leave_confirmed` |
 | Confirm (LWOP) | `leave_confirmed` | — |
 | Approver reject | `rejected` | `leave_reservation_released` (then `parental_entitlement_reversed` for ML/PL) |
-| Employee cancel | `cancelled` | `leave_reservation_released` (then `parental_entitlement_reversed` for ML/PL) |
-| Conversion approved | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
+| Employee cancel (pending) | `cancelled` | `leave_reservation_released` (then `parental_entitlement_reversed` for ML/PL) |
+| Admin cancel (confirmed) | `cancelled` | `leave_reversed` (then `parental_entitlement_reversed` for ML/PL) |
+| Conversion approved (SL) | `conversion_approved` | `vl_to_sl_restore`, `vl_to_sl_deduct` |
+| Conversion approved (EL) | `conversion_approved` | `vl_to_el_restore` (if paid), `vl_to_el_deduct` |
 | Admin annual VL/SL grant | `annual_credits_distributed` (one row per type; summarized) | `annual_entitlement` |
 | Admin newly regularized grant | `regularization_credits_distributed` (one row per type; summarized) | `regularization_entitlement` |
 | Admin contractual VL/SL grant | `contractual_credits_distributed` (one row per type; summarized) | `contractual_entitlement` |

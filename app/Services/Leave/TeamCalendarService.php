@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 /**
  * Approved team leaves for the Team Leave Calendar (PIC groups + the viewer).
  *
- * Statuses: confirmed, pending_conversion, converted_to_sl.
+ * Statuses: confirmed, pending_conversion, converted_to_sl, converted_to_el.
  * pending_approval / rejected / cancelled are omitted.
  */
 class TeamCalendarService
@@ -22,6 +22,7 @@ class TeamCalendarService
         LeaveStatus::Confirmed,
         LeaveStatus::PendingConversion,
         LeaveStatus::ConvertedToSl,
+        LeaveStatus::ConvertedToEl,
     ];
 
     public function __construct(

@@ -32,7 +32,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Admin reviewer (VL → SL conversion, Sick Leave, PTB, EL, LL, ML, PL)
+    | Admin reviewer (VL → SL / VL → EL conversion, Sick Leave, PTB, EL, LL, ML, PL)
     |--------------------------------------------------------------------------
     |
     | employee_list.id of the HR/admin account that reviews conversions

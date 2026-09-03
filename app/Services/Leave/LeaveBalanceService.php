@@ -202,9 +202,10 @@ class LeaveBalanceService
     }
 
     /**
-     * Reverse the on-submit ML/PL grant after reservation release (cancel / reject).
+     * Reverse the on-submit ML/PL grant after reservation release or confirmed undo.
      *
-     * Must be called inside an outer DB::transaction, after releaseReservation.
+     * Must be called inside an outer DB::transaction, after releaseReservation
+     * or reverseConfirmedLeave.
      */
     public function reverseParentalEntitlement(LeaveInfo $leave, ?string $remarks = null): void
     {
@@ -277,6 +278,32 @@ class LeaveBalanceService
     }
 
     /**
+     * Restore paid credits after admin cancels a confirmed leave.
+     *
+     * Reserved is already 0 after confirm; days return to available.
+     * Must be called inside an outer DB::transaction.
+     */
+    public function reverseConfirmedLeave(LeaveInfo $leave, ?string $remarks = null): void
+    {
+        $paidDays = (string) $leave->paid_days;
+
+        if (bccomp($paidDays, '0', 2) <= 0) {
+            return;
+        }
+
+        $balance = $this->lockOrCreateBalance($leave->emp_id, $leave->leave_type_id);
+
+        $this->recordChange(
+            $balance,
+            $paidDays,
+            '0.00',
+            BalanceTransactionReason::LeaveReversed,
+            $remarks,
+            $leave->id,
+        );
+    }
+
+    /**
      * Finalize reserved paid credits when all approvers have approved.
      *
      * Must be called inside an outer DB::transaction.
@@ -302,16 +329,31 @@ class LeaveBalanceService
     }
 
     /**
-     * After admin approves VL → SL: restore VL paid days, deduct SL.
+     * After admin approves conversion: restore VL paid days, deduct target type.
      *
-     * Must be called inside an outer DB::transaction.
+     * VL → SL deducts paid_days from SL (LWOP VL with paid_days 0 is a no-op).
+     * VL → EL deducts duration from EL (LWOP VL still consumes EL; remaining EL
+     * must cover duration). Must be called inside an outer DB::transaction.
      */
     public function applyConversion(LeaveConversion $conversion): void
     {
+        $conversion->loadMissing('toLeaveType');
+
         $leave = $conversion->leaveInfo()
             ->lockForUpdate()
             ->firstOrFail();
 
+        if (strtoupper((string) ($conversion->toLeaveType?->code ?? '')) === 'EL') {
+            $this->applyVlToElConversion($leave, $conversion);
+
+            return;
+        }
+
+        $this->applyVlToSlConversion($leave, $conversion);
+    }
+
+    private function applyVlToSlConversion(LeaveInfo $leave, LeaveConversion $conversion): void
+    {
         $paidDays = (string) $leave->paid_days;
 
         if (bccomp($paidDays, '0', 2) <= 0) {
@@ -336,6 +378,42 @@ class LeaveBalanceService
             bcsub('0', $paidDays, 2),
             '0.00',
             BalanceTransactionReason::VlToSlDeduct,
+            null,
+            $leave->id,
+        );
+    }
+
+    private function applyVlToElConversion(LeaveInfo $leave, LeaveConversion $conversion): void
+    {
+        $duration = bcadd((string) $leave->duration, '0', 2);
+        $paidDays = bcadd((string) $leave->paid_days, '0', 2);
+
+        $elBalance = $this->lockOrCreateBalance($leave->emp_id, $conversion->to_leave_type_id);
+
+        if (bccomp((string) $elBalance->available, $duration, 2) < 0) {
+            throw new RuntimeException(
+                "Remaining Emergency Leave credits ({$elBalance->available}) are less than this leave duration ({$duration})."
+            );
+        }
+
+        if (bccomp($paidDays, '0', 2) > 0) {
+            $vlBalance = $this->lockOrCreateBalance($leave->emp_id, $conversion->from_leave_type_id);
+
+            $this->recordChange(
+                $vlBalance,
+                $paidDays,
+                '0.00',
+                BalanceTransactionReason::VlToElRestore,
+                null,
+                $leave->id,
+            );
+        }
+
+        $this->recordChange(
+            $elBalance,
+            bcsub('0', $duration, 2),
+            '0.00',
+            BalanceTransactionReason::VlToElDeduct,
             null,
             $leave->id,
         );

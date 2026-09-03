@@ -11,11 +11,12 @@ use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * VL → SL conversion after the employee returns with a med cert.
+ * VL → SL or VL → EL conversion after the employee returns.
  */
 class LeaveConversionService
 {
@@ -27,30 +28,45 @@ class LeaveConversionService
     ) {}
 
     /**
-     * @param  list<\Illuminate\Http\UploadedFile>  $medCerts
+     * @param  list<UploadedFile>  $files
      */
-    public function request(LeaveInfo $leave, Employee $employee, array $medCerts, string $reason): LeaveConversion
-    {
+    public function request(
+        LeaveInfo $leave,
+        Employee $employee,
+        array $files,
+        string $reason,
+        string $toCode = 'SL',
+    ): LeaveConversion {
         $this->assertEmployeeOwnsLeave($leave, $employee);
         $this->assertLeaveIsConvertible($leave);
 
-        $medCerts = LeaveAttachmentService::uploadedFiles($medCerts);
+        $toCode = strtoupper($toCode);
+        $field = LeaveTypeRules::conversionAttachmentField($toCode);
+        $files = LeaveAttachmentService::uploadedFiles($files);
 
-        if ($medCerts === []) {
+        if (! LeaveTypeRules::isConversionTarget($toCode)) {
             throw ValidationException::withMessages([
-                'med_cert' => ['A medical certificate attachment is required to request VL → SL conversion.'],
+                'to_code' => ['Conversion is only allowed to Sick Leave or Emergency Leave.'],
+            ]);
+        }
+
+        if ($files === []) {
+            $label = LeaveTypeRules::attachmentLabel($toCode)['singular'] ?? 'attachment';
+
+            throw ValidationException::withMessages([
+                $field => ['A '.$label.' is required to request VL → '.$toCode.' conversion.'],
             ]);
         }
 
         $maxFiles = (int) config('leave.attachments.max_files', 5);
 
-        if (count($medCerts) > $maxFiles) {
+        if (count($files) > $maxFiles) {
             throw ValidationException::withMessages([
-                'med_cert' => ["You can attach at most {$maxFiles} files."],
+                $field => ["You can attach at most {$maxFiles} files."],
             ]);
         }
 
-        $conversion = DB::transaction(function () use ($leave, $employee, $medCerts, $reason) {
+        $conversion = DB::transaction(function () use ($leave, $employee, $files, $reason, $toCode) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
                 ->lockForUpdate()
@@ -70,17 +86,21 @@ class LeaveConversionService
 
             if ($existing !== null && $existing->status === ConversionStatus::Approved) {
                 throw ValidationException::withMessages([
-                    'leave' => ['This leave has already been converted to sick leave.'],
+                    'leave' => ['This leave has already been converted.'],
                 ]);
             }
 
             $vlType = LeaveType::query()->where('code', 'VL')->firstOrFail();
-            $slType = LeaveType::query()->where('code', 'SL')->firstOrFail();
+            $toType = LeaveType::query()->where('code', $toCode)->firstOrFail();
 
             if ((int) $leave->leave_type_id !== (int) $vlType->id) {
                 throw ValidationException::withMessages([
-                    'leave' => ['Only Vacation Leave can be converted to Sick Leave.'],
+                    'leave' => ['Only Vacation Leave can be converted.'],
                 ]);
+            }
+
+            if ($toCode === 'EL') {
+                $this->assertEnoughElCredits($leave, $toType);
             }
 
             $conversionRelations = ['fromLeaveType', 'toLeaveType', 'leaveInfo.leaveType', 'attachments'];
@@ -88,7 +108,7 @@ class LeaveConversionService
             if ($existing !== null) {
                 $existing->update([
                     'from_leave_type_id' => $vlType->id,
-                    'to_leave_type_id' => $slType->id,
+                    'to_leave_type_id' => $toType->id,
                     'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
                     'reviewed_by_emp_id' => null,
@@ -97,17 +117,17 @@ class LeaveConversionService
                 ]);
 
                 $conversion = $existing->fresh($conversionRelations);
-                $this->attachmentService->replaceConversionAttachments($conversion, $medCerts);
+                $this->attachmentService->replaceConversionAttachments($conversion, $files);
             } else {
                 $conversion = LeaveConversion::query()->create([
                     'leave_id' => $leave->id,
                     'from_leave_type_id' => $vlType->id,
-                    'to_leave_type_id' => $slType->id,
+                    'to_leave_type_id' => $toType->id,
                     'reason' => $reason,
                     'status' => ConversionStatus::PendingReview,
                 ])->fresh($conversionRelations);
 
-                $this->attachmentService->storeManyForConversion($conversion, $medCerts);
+                $this->attachmentService->storeManyForConversion($conversion, $files);
             }
 
             $leave->update(['status' => LeaveStatus::PendingConversion]);
@@ -136,7 +156,7 @@ class LeaveConversionService
             $conversion = LeaveConversion::query()
                 ->whereKey($conversion->id)
                 ->lockForUpdate()
-                ->with('leaveInfo')
+                ->with(['leaveInfo', 'toLeaveType'])
                 ->firstOrFail();
 
             $this->assertConversionIsPending($conversion);
@@ -160,10 +180,20 @@ class LeaveConversionService
                 ]);
             }
 
-            $leave->update([
+            $toCode = strtoupper((string) ($conversion->toLeaveType?->code ?? 'SL'));
+            $leaveUpdate = [
                 'leave_type_id' => $conversion->to_leave_type_id,
-                'status' => LeaveStatus::ConvertedToSl,
-            ]);
+                'status' => $toCode === 'EL'
+                    ? LeaveStatus::ConvertedToEl
+                    : LeaveStatus::ConvertedToSl,
+            ];
+
+            if ($toCode === 'EL') {
+                $leaveUpdate['paid_days'] = $leave->duration;
+                $leaveUpdate['lwop_days'] = 0;
+            }
+
+            $leave->update($leaveUpdate);
 
             $conversion->update([
                 'status' => ConversionStatus::Approved,
@@ -235,6 +265,20 @@ class LeaveConversionService
         return $conversion;
     }
 
+    private function assertEnoughElCredits(LeaveInfo $leave, LeaveType $elType): void
+    {
+        $available = $this->balanceService->availableFor((int) $leave->emp_id, (int) $elType->id);
+        $duration = bcadd((string) $leave->duration, '0', 2);
+
+        if (bccomp($available, $duration, 2) < 0) {
+            throw ValidationException::withMessages([
+                'el' => [
+                    "Remaining Emergency Leave credits ({$available}) are less than this leave duration ({$duration}).",
+                ],
+            ]);
+        }
+    }
+
     private function assertEmployeeOwnsLeave(LeaveInfo $leave, Employee $employee): void
     {
         if ((int) $leave->emp_id !== (int) $employee->id) {
@@ -246,7 +290,7 @@ class LeaveConversionService
     {
         if ($leave->status !== LeaveStatus::Confirmed) {
             throw ValidationException::withMessages([
-                'leave' => ['Only a confirmed Vacation Leave can be converted to Sick Leave.'],
+                'leave' => ['Only a confirmed Vacation Leave can be converted.'],
             ]);
         }
     }

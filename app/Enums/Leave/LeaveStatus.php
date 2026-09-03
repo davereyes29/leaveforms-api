@@ -10,4 +10,10 @@ enum LeaveStatus: string
     case Rejected = 'rejected';
     case Cancelled = 'cancelled';
     case ConvertedToSl = 'converted_to_sl';
+    case ConvertedToEl = 'converted_to_el';
+
+    public function isConverted(): bool
+    {
+        return $this === self::ConvertedToSl || $this === self::ConvertedToEl;
+    }
 }

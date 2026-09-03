@@ -26,15 +26,16 @@ class LeaveConversionController extends Controller
     ) {}
 
     /**
-     * POST /api/leaves/{leave}/conversion — employee requests VL → SL with med certs and reason.
+     * POST /api/leaves/{leave}/conversion — employee requests VL → SL or VL → EL.
      */
     public function store(StoreLeaveConversionRequest $request, LeaveInfo $leave): JsonResponse
     {
         $conversion = $this->conversionService->request(
             $leave,
             $request->employee(),
-            $request->uploadedMedCerts(),
+            $request->uploadedAttachments(),
             $request->validated('reason'),
+            $request->validated('to_code'),
         );
 
         return LeaveConversionResource::make($conversion)
@@ -77,7 +78,7 @@ class LeaveConversionController extends Controller
     }
 
     /**
-     * POST /api/conversions/{conversion}/attachments — add med certs while pending review.
+     * POST /api/conversions/{conversion}/attachments — add files while pending review.
      */
     public function storeAttachments(
         StoreConversionAttachmentsRequest $request,
@@ -86,7 +87,7 @@ class LeaveConversionController extends Controller
         $conversion = $this->attachmentService->addToConversion(
             $conversion,
             $request->employee(),
-            $request->uploadedMedCerts(),
+            $request->uploadedAttachments(),
         );
 
         return LeaveConversionResource::make($conversion);

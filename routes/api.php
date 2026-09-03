@@ -61,6 +61,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
+    Route::post('/admin/leaves/{leave}/cancel', [AdminLeaveController::class, 'cancel']);
     Route::get('/admin/activities', [AdminActivityController::class, 'index']);
     Route::get('/admin/groups', [AdminLeaveController::class, 'groups']);
     Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);

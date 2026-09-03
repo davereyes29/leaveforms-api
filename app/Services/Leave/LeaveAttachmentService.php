@@ -161,18 +161,26 @@ class LeaveAttachmentService
     {
         $this->assertActorOwnsConversionLeave($conversion, $actor);
         $this->assertConversionAttachmentsEditable($conversion);
-        $this->assertCanAdd($conversion->attachments()->count(), count($files), 'med_cert');
+        $this->assertCanAdd(
+            $conversion->attachments()->count(),
+            count($files),
+            $this->conversionAttachmentField($conversion),
+        );
 
         return DB::transaction(function () use ($conversion, $actor, $files) {
             $conversion = LeaveConversion::query()
                 ->whereKey($conversion->id)
                 ->lockForUpdate()
-                ->with('leaveInfo')
+                ->with(['leaveInfo', 'toLeaveType'])
                 ->firstOrFail();
 
             $this->assertActorOwnsConversionLeave($conversion, $actor);
             $this->assertConversionAttachmentsEditable($conversion);
-            $this->assertCanAdd($conversion->attachments()->count(), count($files), 'med_cert');
+            $this->assertCanAdd(
+                $conversion->attachments()->count(),
+                count($files),
+                $this->conversionAttachmentField($conversion),
+            );
 
             $this->storeManyForConversion($conversion, $files);
 
@@ -199,13 +207,17 @@ class LeaveAttachmentService
         $this->assertAttachmentBelongsToConversion($conversion, $attachment);
         $this->assertActorOwnsConversionLeave($conversion, $actor);
         $this->assertConversionAttachmentsEditable($conversion);
-        $this->assertCanRemove($conversion->attachments()->count(), 'med_cert', 'medical certificate');
+        $this->assertCanRemove(
+            $conversion->attachments()->count(),
+            $this->conversionAttachmentField($conversion),
+            $this->conversionAttachmentLabel($conversion),
+        );
 
         return DB::transaction(function () use ($conversion, $attachment, $actor) {
             $conversion = LeaveConversion::query()
                 ->whereKey($conversion->id)
                 ->lockForUpdate()
-                ->with('leaveInfo')
+                ->with(['leaveInfo', 'toLeaveType'])
                 ->firstOrFail();
             $attachment = LeaveConversionAttachment::query()
                 ->whereKey($attachment->id)
@@ -215,7 +227,11 @@ class LeaveAttachmentService
 
             $this->assertActorOwnsConversionLeave($conversion, $actor);
             $this->assertConversionAttachmentsEditable($conversion);
-            $this->assertCanRemove($conversion->attachments()->count(), 'med_cert', 'medical certificate');
+            $this->assertCanRemove(
+                $conversion->attachments()->count(),
+                $this->conversionAttachmentField($conversion),
+                $this->conversionAttachmentLabel($conversion),
+            );
 
             $this->delete($attachment->path);
             $attachment->delete();
@@ -257,7 +273,7 @@ class LeaveAttachmentService
         $this->assertAttachmentBelongsToConversion($conversion, $attachment);
 
         if (! $this->canAccessConversion($conversion, $viewer)) {
-            throw new AuthorizationException('You are not allowed to access this medical certificate.');
+            throw new AuthorizationException('You are not allowed to access this attachment.');
         }
 
         return $this->download($attachment->path, $attachment->original_name);
@@ -366,6 +382,23 @@ class LeaveAttachmentService
         return $name !== '' ? $name : basename($path);
     }
 
+    private function conversionAttachmentField(LeaveConversion $conversion): string
+    {
+        $conversion->loadMissing('toLeaveType');
+
+        return LeaveTypeRules::conversionAttachmentField(
+            (string) ($conversion->toLeaveType?->code ?? 'SL'),
+        );
+    }
+
+    private function conversionAttachmentLabel(LeaveConversion $conversion): string
+    {
+        $conversion->loadMissing('toLeaveType');
+        $code = strtoupper((string) ($conversion->toLeaveType?->code ?? 'SL'));
+
+        return LeaveTypeRules::attachmentLabel($code)['singular'] ?? 'attachment';
+    }
+
     private function assertCanAdd(int $existingCount, int $incomingCount, string $field): void
     {
         $max = (int) config('leave.attachments.max_files', 5);
@@ -417,13 +450,7 @@ class LeaveAttachmentService
     private function assertActorCanModifyLeave(LeaveInfo $leave, Employee $actor): void
     {
         if (! LeaveActorAuthorization::mayModify($leave, $actor)) {
-            $isOnBehalf = (int) $leave->filed_by_emp_id !== (int) $leave->emp_id;
-
-            throw new AuthorizationException(
-                $isOnBehalf
-                    ? 'Only the person who filed this leave can modify it.'
-                    : 'You are not allowed to modify this leave request.',
-            );
+            throw new AuthorizationException('You are not allowed to modify this leave request.');
         }
     }
 
@@ -451,7 +478,7 @@ class LeaveAttachmentService
         $leave = $conversion->leaveInfo ?? $conversion->leaveInfo()->first();
 
         if ($leave === null || (int) $leave->emp_id !== (int) $actor->id) {
-            throw new AuthorizationException('You can only change medical certificates on your own conversion request.');
+            throw new AuthorizationException('You can only change attachments on your own conversion request.');
         }
     }
 
@@ -459,7 +486,7 @@ class LeaveAttachmentService
     {
         if ($conversion->status !== ConversionStatus::PendingReview) {
             throw ValidationException::withMessages([
-                'conversion' => ['Medical certificates can only be changed while the conversion is pending review.'],
+                'conversion' => ['Attachments can only be changed while the conversion is pending review.'],
             ]);
         }
     }
@@ -476,7 +503,7 @@ class LeaveAttachmentService
         LeaveConversionAttachment $attachment,
     ): void {
         if ((int) $attachment->conversion_id !== (int) $conversion->id) {
-            abort(404, 'Medical certificate not found.');
+            abort(404, 'Attachment not found.');
         }
     }
 }

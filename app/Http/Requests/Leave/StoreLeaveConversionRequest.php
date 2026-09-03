@@ -3,7 +3,9 @@
 namespace App\Http\Requests\Leave;
 
 use App\Services\Leave\LeaveAttachmentService;
+use App\Services\Leave\LeaveTypeRules;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreLeaveConversionRequest extends FormRequest
 {
@@ -16,7 +18,16 @@ class StoreLeaveConversionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $toCode = $this->input('to_code');
+
+        $this->merge([
+            'to_code' => ($toCode === null || $toCode === '')
+                ? 'SL'
+                : strtoupper((string) $toCode),
+        ]);
+
         $this->wrapUploadedFileArray('med_cert');
+        $this->wrapUploadedFileArray('leave_attachment');
     }
 
     /**
@@ -24,11 +35,16 @@ class StoreLeaveConversionRequest extends FormRequest
      */
     public function rules(): array
     {
+        $toCode = $this->toCode();
+        $field = LeaveTypeRules::conversionAttachmentField($toCode);
+        $otherField = $field === 'leave_attachment' ? 'med_cert' : 'leave_attachment';
         $maxFiles = (int) config('leave.attachments.max_files', 5);
 
         return [
-            'med_cert' => ['required', 'array', 'min:1', 'max:'.$maxFiles],
-            'med_cert.*' => ['file', ...$this->attachmentFileConstraints()],
+            'to_code' => ['required', 'string', Rule::in(LeaveTypeRules::conversionTargetCodes())],
+            $field => ['required', 'array', 'min:1', 'max:'.$maxFiles],
+            $field.'.*' => ['file', ...$this->attachmentFileConstraints()],
+            $otherField => ['prohibited'],
             'reason' => ['required', 'string', 'max:2000'],
         ];
     }
@@ -38,21 +54,35 @@ class StoreLeaveConversionRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            ...$this->fileArrayMessages('med_cert', [
-                'singular' => 'medical certificate',
-                'plural' => 'medical certificates',
-            ]),
-            'med_cert.required' => 'A medical certificate attachment is required to request VL → SL conversion.',
-            'reason.required' => 'A conversion reason is required so admin can review the request without opening the medical certificate.',
+        $toCode = $this->toCode();
+        $field = LeaveTypeRules::conversionAttachmentField($toCode);
+        $label = LeaveTypeRules::attachmentLabel($toCode) ?? [
+            'singular' => 'attachment',
+            'plural' => 'attachments',
         ];
+        $targetName = $toCode === 'EL' ? 'Emergency Leave' : 'Sick Leave';
+
+        return [
+            ...$this->fileArrayMessages($field, $label),
+            "{$field}.required" => 'A '.$label['singular'].' is required to request VL → '.$toCode.' conversion.',
+            'med_cert.prohibited' => 'Emergency Leave conversion uses leave_attachment[], not med_cert[].',
+            'leave_attachment.prohibited' => 'Sick Leave conversion uses med_cert[], not leave_attachment[].',
+            'reason.required' => 'A conversion reason is required so admin can review the request without opening the '.$targetName.' attachment.',
+        ];
+    }
+
+    public function toCode(): string
+    {
+        return strtoupper((string) $this->input('to_code', 'SL'));
     }
 
     /**
      * @return list<UploadedFile>
      */
-    public function uploadedMedCerts(): array
+    public function uploadedAttachments(): array
     {
-        return LeaveAttachmentService::uploadedFiles($this->file('med_cert'));
+        $field = LeaveTypeRules::conversionAttachmentField($this->toCode());
+
+        return LeaveAttachmentService::uploadedFiles($this->file($field));
     }
 }

@@ -27,6 +27,7 @@ class DevMailPreviewTest extends TestCase
             'confirmed' => 'Your leave request has been approved',
             'rejected' => 'Your leave request has been rejected',
             'cancelled' => 'Leave request cancelled',
+            'cancelled-by-admin' => 'Your leave request has been cancelled',
             'reminder' => 'Reminder: Leave request awaiting your approval',
             'reminder-digest' => 'Reminder: Pending leave requests',
             'conversion-requested' => 'Leave conversion request awaiting your review',

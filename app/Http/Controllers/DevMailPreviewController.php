@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\Leave\ConversionApprovedMail;
 use App\Mail\Leave\ConversionRejectedMail;
 use App\Mail\Leave\ConversionRequestedMail;
+use App\Mail\Leave\LeaveCancelledByAdminMail;
 use App\Mail\Leave\LeaveCancelledMail;
 use App\Mail\Leave\LeaveConfirmedMail;
 use App\Mail\Leave\LeaveRejectedMail;
@@ -34,11 +35,12 @@ class DevMailPreviewController extends Controller
         'confirmed' => 'Leave approved',
         'rejected' => 'Leave rejected',
         'cancelled' => 'Leave cancelled',
+        'cancelled-by-admin' => 'Leave cancelled by admin',
         'reminder' => 'Single reminder (to approver)',
         'reminder-digest' => 'Bulk reminder (pending count)',
-        'conversion-requested' => 'VL → SL conversion requested',
-        'conversion-approved' => 'VL → SL conversion approved',
-        'conversion-rejected' => 'VL → SL conversion rejected',
+        'conversion-requested' => 'Leave conversion requested',
+        'conversion-approved' => 'Leave conversion approved',
+        'conversion-rejected' => 'Leave conversion rejected',
     ];
 
     /**
@@ -93,6 +95,13 @@ class DevMailPreviewController extends Controller
                 $employeeName,
                 $approverName,
                 'Plans changed (sample).',
+            ),
+            'cancelled-by-admin' => new LeaveCancelledByAdminMail(
+                $this->sampleLeave(),
+                $employeeName,
+                $employeeName,
+                $adminName,
+                'Employee will report to the office (sample).',
             ),
             'reminder' => new LeaveReminderMail(
                 $this->sampleLeave(),

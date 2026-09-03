@@ -31,7 +31,7 @@ class LeaveActivityListService
         $direction = $sort === 'asc' ? 'asc' : 'desc';
 
         $paginator = LeaveActivityHistory::query()
-            ->with(['leaveInfo.leaveType'])
+            ->with(['leaveInfo.leaveType', 'leaveInfo.conversion.toLeaveType'])
             ->whereHas('leaveInfo', function ($query) use ($empId, $leaveTypeCode) {
                 $query->where('emp_id', $empId)
                     ->when($leaveTypeCode !== null, function ($query) use ($leaveTypeCode) {
@@ -143,13 +143,19 @@ class LeaveActivityListService
                 BalanceTransactionReason::LeaveReservationReleased,
                 BalanceTransactionReason::LeaveReserved,
             ],
-            ActivityType::Cancelled, ActivityType::Rejected => [
+            ActivityType::Cancelled => [
+                BalanceTransactionReason::LeaveReservationReleased,
+                BalanceTransactionReason::LeaveReversed,
+            ],
+            ActivityType::Rejected => [
                 BalanceTransactionReason::LeaveReservationReleased,
             ],
             ActivityType::LeaveConfirmed => [BalanceTransactionReason::LeaveConfirmed],
             ActivityType::ConversionApproved => [
                 BalanceTransactionReason::VlToSlRestore,
                 BalanceTransactionReason::VlToSlDeduct,
+                BalanceTransactionReason::VlToElRestore,
+                BalanceTransactionReason::VlToElDeduct,
             ],
             default => [],
         };
@@ -190,12 +196,15 @@ class LeaveActivityListService
                 $this->formatDays($tx->available_delta),
                 $code,
             ),
-            BalanceTransactionReason::VlToSlRestore => sprintf(
+            BalanceTransactionReason::LeaveReversed,
+            BalanceTransactionReason::VlToSlRestore,
+            BalanceTransactionReason::VlToElRestore => sprintf(
                 '%s %s restored',
                 $this->formatDays($tx->available_delta),
                 $code,
             ),
-            BalanceTransactionReason::VlToSlDeduct => sprintf(
+            BalanceTransactionReason::VlToSlDeduct,
+            BalanceTransactionReason::VlToElDeduct => sprintf(
                 '%s %s deducted',
                 $this->formatDays(bcsub('0', (string) $tx->available_delta, 2)),
                 $code,

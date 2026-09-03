@@ -60,7 +60,7 @@ When `POST /api/leaves` includes `emp_id` different from the logged-in user, `Le
 
 Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit.
 
-**VL 3+ workday notice** does not apply to this path. Only the original filer may edit the pending request afterward.
+**VL 3+ workday notice** does not apply to this path. The employee on leave or the original filer may edit the pending request afterward.
 
 ---
 
@@ -152,7 +152,7 @@ Stage-based list of who is responsible (still shown after someone acts). Built b
 | Leave status | List contents |
 |--------------|---------------|
 | `pending_approval`, `confirmed`, `rejected`, `cancelled` | Match snapshotted requirements (formspic + group + levels, or president/admin when required) — ignores `is_satisfied` |
-| `pending_conversion`, `converted_to_sl` | Admin only (`LEAVE_ADMIN_EMP_ID`) |
+| `pending_conversion`, `converted_to_sl`, `converted_to_el` | Admin only (`LEAVE_ADMIN_EMP_ID`) |
 
 Who actually approved/rejected remains on `approval_requirements[].history` (leave) or conversion review fields.
 
@@ -209,6 +209,23 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 
 ---
 
+## Admin cancel confirmed
+
+`LEAVE_ADMIN_EMP_ID` only. Employee cannot cancel after approval.
+
+While `status` is `confirmed` (`pending_conversion`, converted, pending, rejected, and cancelled are **422**):
+
+1. Admin submits **`cancellation_reason`** (required) via `POST /admin/leaves/{id}/cancel`.
+2. `leave_info.status = cancelled`. `confirmed_at` stays for audit.
+3. Restore paid credits → `leave_reversed` (`BALANCE_FLOW.md`). Full LWOP: no ledger.
+4. ML/PL: then reverse the on-submit grant (`parental_entitlement_reversed`).
+5. `leave_activity_history` → `cancelled` (`performed_by` = admin).
+6. Email the employee on leave (and the filer when on-behalf).
+
+If conversion is pending, reject it first (leave returns to `confirmed`), then cancel.
+
+---
+
 ## Modify while pending
 
 | Situation | Allowed? |
@@ -216,7 +233,7 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 | **No** requirement satisfied yet | Yes — edit dates/details. If `paid_days` changes, release and re-reserve (`BALANCE_FLOW.md`). Activity: `modified`. |
 | **At least one** requirement satisfied | No — employee must **cancel** and **submit a new** request. |
 
-**Who may edit:** self-filed leave → the employee. On-behalf (File Leave for Members) → **only the original filer** (`filed_by_emp_id`). The member cannot change dates, reason, or attachments. Cancel stays with the employee on leave.
+**Who may edit:** self-filed leave → the employee. On-behalf (File Leave for Members) → the employee on leave **or** the original filer (`filed_by_emp_id`). Pending cancel stays with the employee on leave. Confirmed cancel is **admin only**.
 
 ---
 
@@ -224,7 +241,7 @@ Prior approval rows, attachments, and activity history **remain** for audit.
 
 ### Vacation Leave (VL)
 
-Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL → SL conversion** below). If a medical certificate is already available, file **SL** directly.
+Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL conversion** below). If a medical certificate is already available, file **SL** directly. Confirmed VL may also convert to EL when remaining EL covers the duration.
 
 1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
 2. **Advance notice (self-file only):** VL of **3.00 or more workdays** must have `start_date` ≥ today + **1 calendar month** (Asia/Manila, `addMonthsNoOverflow`). Shorter VL is not gated. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day start is 1 Oct.
@@ -269,6 +286,8 @@ Treat like PTB for filing and approval (attachment + admin + no LWOP + multiple 
 6. Admin approves or rejects on the original leave. One admin approval confirms.
 7. Team calendar `dates` are workdays only (same as VL/SL).
 
+Confirmed VL may also be converted to EL after return (see **VL conversion** below) when remaining EL credits cover the VL duration. Direct-filed EL is unchanged.
+
 ### Long Leave (LL)
 
 Unpaid leave arranged offline with admin and superior before filing.
@@ -307,12 +326,14 @@ Same grant-on-submit pattern as ML, with a fixed workday length and a lifetime c
 
 ---
 
-## VL → SL conversion (unexpected sickness)
+## VL conversion (unexpected sickness or emergency)
 
-After the employee **returns to work**:
+After the employee **returns to work**. Same endpoint and admin inbox for both targets (`POST /leaves/{id}/conversion`, `GET /conversions/pending`). `to_code` is `SL` (default) or `EL`.
+
+### VL → SL (unexpected sickness)
 
 1. Original absence must be **confirmed VL** (`status = confirmed`).
-2. Employee requests conversion + uploads 1–5 med certs + **conversion reason** → `leave_conversion` (`status = pending_review`) and `leave_info.status` → `pending_conversion`. While pending, the employee may add or remove individual files (at least one must remain).
+2. Employee requests conversion + uploads 1–5 med certs (`med_cert[]`) + **conversion reason** → `leave_conversion` (`status = pending_review`) and `leave_info.status` → `pending_conversion`. While pending, the employee may add or remove individual files (at least one must remain).
 3. `leave_activity_history` → `conversion_requested` (remarks = employee reason).
 4. **Admin** reviews (`leave_conversion.reason` is the employee’s diagnosis; `reviewed_by_emp_id`, `reviewed_at`, `remarks` are the admin decision).
 
@@ -333,6 +354,19 @@ After the employee **returns to work**:
 
 Admin review lives on **`leave_conversion`**, not on the original VL approval chain. Employee list filters use `leave_info.status = pending_conversion`.
 
+### VL → EL
+
+Same flow as SL, with these differences:
+
+1. Request uses `to_code=EL` and `leave_attachment[]` (1–5 supporting documents). Add/remove while pending also uses `leave_attachment[]`.
+2. Remaining EL must be ≥ VL **duration** (not `paid_days`) at request and again at approve. Half-day VL is allowed when remaining EL ≥ `0.50`. Shortfall blocks the **whole** conversion (**422**).
+3. **If approved:**
+   - Restore VL `paid_days` (`vl_to_el_restore`; skipped when `paid_days` is 0)
+   - Deduct EL **duration** (`vl_to_el_deduct`)
+   - `leave_info.leave_type_id` → EL
+   - `leave_info.paid_days` → duration, `lwop_days` → 0 (LWOP VL becomes paid EL)
+   - `leave_info.status` → `converted_to_el`
+
 ---
 
 ## Status summary
@@ -341,10 +375,11 @@ Admin review lives on **`leave_conversion`**, not on the original VL approval ch
 |--------|---------|
 | `pending_approval` | Submitted; awaiting the designated approver (PIC for VL, admin for all other filable types) |
 | `confirmed` | Approver accepted; leave finalized |
-| `pending_conversion` | VL → SL conversion requested; awaiting admin review |
+| `pending_conversion` | VL → SL or VL → EL conversion requested; awaiting admin review |
 | `rejected` | Approver rejected; leave closed |
-| `cancelled` | Employee cancelled; leave closed |
+| `cancelled` | Employee cancelled pending leave, or admin cancelled confirmed leave |
 | `converted_to_sl` | VL → SL conversion approved |
+| `converted_to_el` | VL → EL conversion approved |
 
 ---
 
@@ -374,7 +409,7 @@ app/Services/Leave/
   LeaveApprovalPolicy.php      // VL matrix or SL admin requirement
   LeaveApprovalService.php     // record approve/reject; check canAct
   LeaveFinalizationService.php // confirm + call LeaveBalanceService
-  LeaveCancellationService.php // employee cancel
+  LeaveCancellationService.php // employee pending cancel; admin confirmed cancel
   LeaveSubmissionService.php   // submit + snapshot requirements + reserve
   LeaveNotificationService.php // VL To PICs; SL/conversion To admin + CC PICs
 ```

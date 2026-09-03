@@ -9,6 +9,8 @@ enum BalanceTransactionReason: string
     case LeaveReservationReleased = 'leave_reservation_released';
     case VlToSlRestore = 'vl_to_sl_restore';
     case VlToSlDeduct = 'vl_to_sl_deduct';
+    case VlToElRestore = 'vl_to_el_restore';
+    case VlToElDeduct = 'vl_to_el_deduct';
     case MonthlyAccrual = 'monthly_accrual';
     case ManualAdjustment = 'manual_adjustment';
     case LeaveReversed = 'leave_reversed';

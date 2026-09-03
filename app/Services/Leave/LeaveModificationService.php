@@ -140,13 +140,7 @@ class LeaveModificationService
     private function assertActorCanModify(LeaveInfo $leave, Employee $actor): void
     {
         if (! LeaveActorAuthorization::mayModify($leave, $actor)) {
-            $isOnBehalf = (int) $leave->filed_by_emp_id !== (int) $leave->emp_id;
-
-            throw new AuthorizationException(
-                $isOnBehalf
-                    ? 'Only the person who filed this leave can modify it.'
-                    : 'You are not allowed to modify this leave request.',
-            );
+            throw new AuthorizationException('You are not allowed to modify this leave request.');
         }
     }
 

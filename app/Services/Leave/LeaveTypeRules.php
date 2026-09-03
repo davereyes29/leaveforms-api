@@ -114,4 +114,27 @@ final class LeaveTypeRules
     {
         return in_array(strtoupper($code), self::filableCodes(), true);
     }
+
+    /**
+     * Confirmed VL may convert to these types.
+     *
+     * @return list<string>
+     */
+    public static function conversionTargetCodes(): array
+    {
+        return ['SL', 'EL'];
+    }
+
+    /**
+     * Multipart field for conversion files: SL uses med_cert[], EL uses leave_attachment[].
+     */
+    public static function conversionAttachmentField(string $toCode): string
+    {
+        return strtoupper($toCode) === 'EL' ? 'leave_attachment' : 'med_cert';
+    }
+
+    public static function isConversionTarget(string $code): bool
+    {
+        return in_array(strtoupper($code), self::conversionTargetCodes(), true);
+    }
 }

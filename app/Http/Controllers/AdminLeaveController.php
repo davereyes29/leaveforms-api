@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Leave\LeaveStatus;
+use App\Http\Requests\Leave\CancelLeaveRequest;
 use App\Http\Requests\Leave\IndexAdminEmployeesRequest;
 use App\Http\Requests\Leave\IndexAdminLeavesRequest;
 use App\Http\Resources\AdminEmployeeRefResource;
 use App\Http\Resources\DepartmentRefResource;
 use App\Http\Resources\GroupRefResource;
+use App\Http\Resources\LeaveResource;
 use App\Http\Resources\PendingApprovalResource;
+use App\Models\Leave\LeaveInfo;
 use App\Services\Leave\AdminLeaveListService;
+use App\Services\Leave\LeaveCancellationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -17,6 +21,7 @@ class AdminLeaveController extends Controller
 {
     public function __construct(
         private readonly AdminLeaveListService $adminLeaveListService,
+        private readonly LeaveCancellationService $cancellationService,
     ) {}
 
     /**
@@ -38,6 +43,20 @@ class AdminLeaveController extends Controller
         );
 
         return PendingApprovalResource::collection($leaves);
+    }
+
+    /**
+     * POST /api/admin/leaves/{leave}/cancel — admin cancels a confirmed leave.
+     */
+    public function cancel(CancelLeaveRequest $request, LeaveInfo $leave): LeaveResource
+    {
+        $leave = $this->cancellationService->cancelConfirmedByAdmin(
+            $leave,
+            $request->employee(),
+            $request->validated('cancellation_reason'),
+        );
+
+        return LeaveResource::make($leave);
     }
 
     /**

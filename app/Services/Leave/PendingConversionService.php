@@ -9,7 +9,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Admin inbox for pending VL → SL conversion reviews.
+ * Admin inbox for pending VL → SL and VL → EL conversion reviews.
  */
 class PendingConversionService
 {

@@ -20,9 +20,13 @@ enum ActivityType: string
 
     /**
      * Human-readable label for Activity Log UI.
+     *
+     * Conversion rows pass the target leave code (`SL` or `EL`).
      */
-    public function label(): string
+    public function label(?string $toLeaveCode = null): string
     {
+        $target = strtoupper((string) $toLeaveCode) === 'EL' ? 'EL' : 'SL';
+
         return match ($this) {
             self::Submitted => 'Leave request submitted',
             self::Modified => 'Leave request modified',
@@ -30,9 +34,9 @@ enum ActivityType: string
             self::Rejected => 'Leave request rejected',
             self::AttachmentAdded => 'Attachment added',
             self::LeaveConfirmed => 'Leave request approved',
-            self::ConversionRequested => 'VL to SL conversion requested',
-            self::ConversionApproved => 'VL to SL conversion approved',
-            self::ConversionRejected => 'VL to SL conversion rejected',
+            self::ConversionRequested => "VL to {$target} conversion requested",
+            self::ConversionApproved => "VL to {$target} conversion approved",
+            self::ConversionRejected => "VL to {$target} conversion rejected",
             self::AnnualCreditsDistributed => 'Annual leave credits distributed',
             self::RegularizationCreditsDistributed => 'Newly regularized credits distributed',
             self::ContractualCreditsDistributed => 'Contractual leave credits distributed',

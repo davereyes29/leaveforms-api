@@ -17,7 +17,7 @@ class LeaveActorAuthorizationTest extends TestCase
         $this->assertTrue(LeaveActorAuthorization::mayModify($leave, $employee));
     }
 
-    public function test_on_behalf_may_be_modified_only_by_the_filer(): void
+    public function test_on_behalf_may_be_modified_by_the_member_or_filer(): void
     {
         $leave = $this->leave(empId: 8, filedByEmpId: 12);
         $member = $this->employee(8);
@@ -25,7 +25,7 @@ class LeaveActorAuthorizationTest extends TestCase
         $other = $this->employee(99);
 
         $this->assertTrue(LeaveActorAuthorization::mayModify($leave, $filer));
-        $this->assertFalse(LeaveActorAuthorization::mayModify($leave, $member));
+        $this->assertTrue(LeaveActorAuthorization::mayModify($leave, $member));
         $this->assertFalse(LeaveActorAuthorization::mayModify($leave, $other));
     }
 

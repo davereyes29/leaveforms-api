@@ -26,7 +26,7 @@ class LeaveActivityResource extends JsonResource
             'leave_id' => $this->leave_id,
             'timestamp' => $this->created_at?->toIso8601String(),
             'activity_type' => $this->activity_type->value,
-            'activity' => $this->activity_type->label(),
+            'activity' => $this->activity_type->label($this->conversionTargetCode()),
             'leave_type' => $leaveType === null ? null : [
                 'id' => $leaveType->id,
                 'code' => $leaveType->code,
@@ -46,5 +46,14 @@ class LeaveActivityResource extends JsonResource
             ],
             'remarks' => $this->remarks,
         ];
+    }
+
+    private function conversionTargetCode(): ?string
+    {
+        if (! $this->activity_type?->isConversion()) {
+            return null;
+        }
+
+        return $this->leaveInfo?->conversion?->toLeaveType?->code;
     }
 }

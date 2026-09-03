@@ -21,6 +21,7 @@ class LeaveOverlapValidator
         LeaveStatus::Confirmed,
         LeaveStatus::PendingConversion,
         LeaveStatus::ConvertedToSl,
+        LeaveStatus::ConvertedToEl,
     ];
 
     /**
