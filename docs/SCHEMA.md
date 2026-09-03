@@ -313,7 +313,7 @@ Credit-grant types have `leave_id` null. Batch distributions also write `leave_a
 
 ## `leave_activity_recipient`
 
-Employees covered by a summarized credit-distribution activity. Used so admin log filters (`q`, `group_id`) can still match a batch row.
+Employees covered by a summarized credit-distribution activity. Used so admin log filters (`q`, `group_id`) can still match a batch row, and so `GET /activities` can show that grant to each recipient.
 
 | Column | Type | Notes |
 |--------|------|-------|

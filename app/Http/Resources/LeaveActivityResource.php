@@ -9,7 +9,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * One Activity Log row for GET /api/activities.
  *
  * Expects LeaveActivityHistory enriched by LeaveActivityListService
- * (performed_by_name, balance_impact, ledger).
+ * (performed_by_name, balance_impact, ledger). Credit-grant rows have
+ * leave_id null and take leave_type from the activity itself.
  */
 class LeaveActivityResource extends JsonResource
 {
@@ -18,8 +19,7 @@ class LeaveActivityResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $leave = $this->leaveInfo;
-        $leaveType = $leave?->leaveType;
+        $leaveType = $this->leaveType ?? $this->leaveInfo?->leaveType;
 
         return [
             'id' => $this->id,

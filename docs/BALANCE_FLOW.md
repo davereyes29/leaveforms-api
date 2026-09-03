@@ -415,6 +415,8 @@ To report “2 days VL taken” → read this `leave_info` row (`duration` / `pa
 | Admin contractual VL/SL grant | `contractual_credits_distributed` (one row per type; summarized) | `contractual_entitlement` |
 | Admin manual available correction | `credits_adjusted` (solo employee) | `manual_adjustment` |
 
+Credit-grant activity rows also appear on the employee's `GET /activities` feed when they are a recipient (`leave_activity_recipient`) or the adjusted subject. Balance Impact is that person's ledger amount, not the batch total.
+
 Reserved credit release is **only** in the ledger (`leave_reservation_released`), not a separate activity type.
 
 ---

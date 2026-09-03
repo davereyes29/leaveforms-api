@@ -53,4 +53,15 @@ enum ActivityType: string
             default => false,
         };
     }
+
+    public function isCreditGrant(): bool
+    {
+        return match ($this) {
+            self::AnnualCreditsDistributed,
+            self::RegularizationCreditsDistributed,
+            self::ContractualCreditsDistributed,
+            self::CreditsAdjusted => true,
+            default => false,
+        };
+    }
 }

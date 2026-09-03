@@ -15,7 +15,8 @@ class LeaveActivityController extends Controller
     ) {}
 
     /**
-     * GET /api/activities — Activity Log for leaves where the viewer is on leave.
+     * GET /api/activities — Activity Log for the viewer: their leaves plus
+     * credit grants they received (batch distribution and manual adjust).
      *
      * Optional query: ?code=VL&activity_type=submitted&sort=desc&page=1&per_page=15
      */

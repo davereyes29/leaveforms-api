@@ -220,13 +220,13 @@ Each item:
 
 ### Activities (Activity Log)
 
-Timeline of actions on leaves where **you** are the person on leave (`leave_info.emp_id`). Does **not** include leaves you only filed on behalf of someone else (unless you are also on leave), or leaves you only approved.
+Timeline of actions on leaves where **you** are the person on leave (`leave_info.emp_id`), plus credit grants **you** received (annual / newly regularized / contractual distribution, and manual `credits_adjusted`). Does **not** include leaves you only filed on behalf of someone else (unless you are also on leave), or leaves you only approved. Batch grants that went to other people only are omitted.
 
 | Method | Path | Query |
 |--------|------|--------|
 | GET | `/activities` | optional `?code=VL`, `?activity_type=submitted`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50, default 15) |
 
-Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`. Sorted by timestamp (`created_at`); default **newest first** (`sort=desc`). Balance Impact is derived from matching `leave_balance_transaction` rows for that leave.
+Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`. Sorted by timestamp (`created_at`); default **newest first** (`sort=desc`). Balance Impact is derived from matching `leave_balance_transaction` rows for that leave, or — for credit rows — **your** grant of that type (`leave_id` is null; do not open leave detail).
 
 **Response envelope** (paginated):
 
@@ -284,11 +284,37 @@ Same pagination as `GET /leaves` (Laravel length-aware): use `page` + `per_page`
 | `balance_impact` | Display string from ledger, or **"No change"** when no matching rows (e.g. LWOP submit, conversion request) |
 | `ledger` | Structured deltas paired to this activity; empty array when no change |
 | `performed_by.name` | Display name — same key as `eligible_approvers[].name` on leave detail (`/me` still uses `full_name`) |
-| `remarks` | Present on reject / cancel / conversion request (employee reason) / conversion reject; otherwise usually `null` |
+| `remarks` | Present on reject / cancel / conversion request (employee reason) / conversion reject / credit-grant remarks; otherwise usually `null` |
+| `leave_id` | `null` on credit-grant rows — do **not** open leave detail |
 
-**`activity_type` values (this endpoint):** `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`
+**`activity_type` values (this endpoint):** `submitted`, `modified`, `cancelled`, `rejected`, `attachment_added`, `leave_confirmed`, `conversion_requested`, `conversion_approved`, `conversion_rejected`, `annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`
 
-Credit distributions and manual adjustments are **not** returned here — see **Administrative Log (admin)**.
+Credit rows reuse the summarized admin-log event (one row per leave type granted). The employee feed shows **your** `balance_impact` only; other recipients are not listed. Org-wide summarized view remains **Administrative Log (admin)**.
+
+**Credit-grant row** (`leave_id` null):
+
+```json
+{
+  "id": 88,
+  "leave_id": null,
+  "timestamp": "2026-01-01T01:00:00+00:00",
+  "activity_type": "annual_credits_distributed",
+  "activity": "Annual leave credits distributed",
+  "leave_type": { "id": 1, "code": "VL", "name": "Vacation Leave" },
+  "balance_impact": "15.0 VL credited",
+  "ledger": [
+    {
+      "id": 201,
+      "reason": "annual_entitlement",
+      "leave_type_code": "VL",
+      "available_delta": "15.00",
+      "reserved_delta": "0.00"
+    }
+  ],
+  "performed_by": { "id": 12, "name": "Ariane Derigay" },
+  "remarks": "Annual entitlement 2026"
+}
+```
 
 **Balance Impact examples:**
 
@@ -300,6 +326,9 @@ Credit distributions and manual adjustments are **not** returned here — see **
 | Cancelled (admin, confirmed) | `3.0 VL restored` |
 | Modified (amount change) | `2.0 VL released; 3.0 VL reserved` |
 | Conversion approved | `3.0 VL restored; 3.0 SL deducted` |
+| Annual / regularization / contractual grant | `15.0 VL credited` |
+| Manual adjust (increase) | `2.0 VL credited` |
+| Manual adjust (decrease) | `2.0 VL deducted` |
 
 ---
 
@@ -1596,7 +1625,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 19. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
 20. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
 21. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`
-22. **Activity Log** — `GET /activities` (+ leave-type filter)
+22. **Activity Log** — `GET /activities` (+ leave-type filter). Includes the viewer's credit grants (`annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`); `leave_id` is null on those rows
 23. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
 24. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=&emp_ids[]=` (do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
 

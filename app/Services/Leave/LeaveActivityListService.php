@@ -8,15 +8,17 @@ use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveBalanceTransaction;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Read-only Activity Log feed for the person on leave (leave_info.emp_id).
+ * Read-only Activity Log for the viewer: leaves they are on, plus credit
+ * grants they received (batch distribution and solo manual adjust).
  */
 class LeaveActivityListService
 {
     /**
-     * Paginate activity rows for leaves belonging to this employee.
+     * Paginate activity rows for this employee.
      *
      * Each model is enriched with transient attributes used by LeaveActivityResource:
      * performed_by_name, balance_impact, ledger.
@@ -30,35 +32,59 @@ class LeaveActivityListService
     ): LengthAwarePaginator {
         $direction = $sort === 'asc' ? 'asc' : 'desc';
 
-        $paginator = LeaveActivityHistory::query()
-            ->with(['leaveInfo.leaveType', 'leaveInfo.conversion.toLeaveType'])
-            ->whereHas('leaveInfo', function ($query) use ($empId, $leaveTypeCode) {
-                $query->where('emp_id', $empId)
-                    ->when($leaveTypeCode !== null, function ($query) use ($leaveTypeCode) {
-                        $query->whereHas('leaveType', fn ($q) => $q->where('code', $leaveTypeCode));
-                    });
-            })
-            ->when($activityType !== null, fn ($query) => $query->where('activity_type', $activityType->value))
+        $query = LeaveActivityHistory::query()
+            ->with(['leaveInfo.leaveType', 'leaveInfo.conversion.toLeaveType', 'leaveType']);
+
+        $this->applyEmployeeScope($query, $empId, $leaveTypeCode);
+
+        $paginator = $query
+            ->when($activityType !== null, fn ($q) => $q->where('activity_type', $activityType->value))
             ->orderBy('created_at', $direction)
             ->orderBy('id', $direction)
             ->paginate($perPage);
 
-        $this->enrichPage($paginator->getCollection());
+        $this->enrichPage($paginator->getCollection(), $empId);
 
         return $paginator;
     }
 
     /**
+     * Leaves the viewer is on, batch credit rows they received, or a solo
+     * credits_adjusted row where they are the subject.
+     */
+    private function applyEmployeeScope(Builder $query, int $empId, ?string $leaveTypeCode): void
+    {
+        $query->where(function (Builder $outer) use ($empId, $leaveTypeCode): void {
+            $outer->whereHas('leaveInfo', function (Builder $leave) use ($empId, $leaveTypeCode): void {
+                $leave->where('emp_id', $empId)
+                    ->when($leaveTypeCode !== null, function (Builder $leave) use ($leaveTypeCode): void {
+                        $leave->whereHas('leaveType', fn (Builder $type) => $type->where('code', $leaveTypeCode));
+                    });
+            })->orWhere(function (Builder $credit) use ($empId, $leaveTypeCode): void {
+                $credit->whereNull('leave_id')
+                    ->where(function (Builder $who) use ($empId): void {
+                        $who->where('subject_emp_id', $empId)
+                            ->orWhereHas('recipients', fn (Builder $recipients) => $recipients->where('emp_id', $empId));
+                    })
+                    ->when($leaveTypeCode !== null, function (Builder $credit) use ($leaveTypeCode): void {
+                        $credit->whereHas('leaveType', fn (Builder $type) => $type->where('code', $leaveTypeCode));
+                    });
+            });
+        });
+    }
+
+    /**
      * @param  Collection<int, LeaveActivityHistory>  $activities
      */
-    private function enrichPage(Collection $activities): void
+    private function enrichPage(Collection $activities, int $empId): void
     {
         if ($activities->isEmpty()) {
             return;
         }
 
-        $leaveIds = $activities->pluck('leave_id')->unique()->values();
-        $impactsByActivityId = $this->matchLedgerToActivities($leaveIds);
+        $leaveIds = $activities->pluck('leave_id')->filter()->unique()->values();
+        $impactsByActivityId = $this->matchLedgerToActivities($leaveIds)
+            + $this->matchCreditLedgerToActivities($empId, $activities);
         $employeesById = $this->employeesById(
             $activities->pluck('performed_by_emp_id')->unique()->filter()->values()->all()
         );
@@ -87,6 +113,10 @@ class LeaveActivityListService
      */
     private function matchLedgerToActivities(Collection $leaveIds): array
     {
+        if ($leaveIds->isEmpty()) {
+            return [];
+        }
+
         $allActivities = LeaveActivityHistory::query()
             ->whereIn('leave_id', $leaveIds)
             ->orderBy('created_at')
@@ -133,6 +163,81 @@ class LeaveActivityListService
     }
 
     /**
+     * Pair this employee's credit-grant ledger rows to activity history.
+     * Walks the full timeline so pagination does not skip a prior grant.
+     *
+     * @param  Collection<int, LeaveActivityHistory>  $activities
+     * @return array<int, Collection<int, LeaveBalanceTransaction>>
+     */
+    private function matchCreditLedgerToActivities(int $empId, Collection $activities): array
+    {
+        $hasCreditOnPage = $activities->contains(
+            fn (LeaveActivityHistory $activity): bool => $activity->activity_type?->isCreditGrant() ?? false,
+        );
+
+        if (! $hasCreditOnPage) {
+            return [];
+        }
+
+        $allCreditActivities = LeaveActivityHistory::query()
+            ->whereNull('leave_id')
+            ->where(function (Builder $who) use ($empId): void {
+                $who->where('subject_emp_id', $empId)
+                    ->orWhereHas('recipients', fn (Builder $recipients) => $recipients->where('emp_id', $empId));
+            })
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $queue = LeaveBalanceTransaction::query()
+            ->with('leaveType')
+            ->where('emp_id', $empId)
+            ->whereNull('leave_id')
+            ->whereIn('reason', [
+                BalanceTransactionReason::AnnualEntitlement->value,
+                BalanceTransactionReason::RegularizationEntitlement->value,
+                BalanceTransactionReason::ContractualEntitlement->value,
+                BalanceTransactionReason::ManualAdjustment->value,
+            ])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->values()
+            ->all();
+
+        $used = array_fill(0, count($queue), false);
+        $matched = [];
+
+        foreach ($allCreditActivities as $activity) {
+            $picked = collect();
+
+            foreach ($this->ledgerReasonsFor($activity->activity_type) as $reason) {
+                foreach ($queue as $index => $transaction) {
+                    if ($used[$index]) {
+                        continue;
+                    }
+
+                    if ($transaction->reason !== $reason) {
+                        continue;
+                    }
+
+                    if ((int) $transaction->leave_type_id !== (int) $activity->leave_type_id) {
+                        continue;
+                    }
+
+                    $used[$index] = true;
+                    $picked->push($transaction);
+                    break;
+                }
+            }
+
+            $matched[$activity->id] = $picked;
+        }
+
+        return $matched;
+    }
+
+    /**
      * @return list<BalanceTransactionReason>
      */
     private function ledgerReasonsFor(ActivityType $type): array
@@ -157,6 +262,10 @@ class LeaveActivityListService
                 BalanceTransactionReason::VlToElRestore,
                 BalanceTransactionReason::VlToElDeduct,
             ],
+            ActivityType::AnnualCreditsDistributed => [BalanceTransactionReason::AnnualEntitlement],
+            ActivityType::RegularizationCreditsDistributed => [BalanceTransactionReason::RegularizationEntitlement],
+            ActivityType::ContractualCreditsDistributed => [BalanceTransactionReason::ContractualEntitlement],
+            ActivityType::CreditsAdjusted => [BalanceTransactionReason::ManualAdjustment],
             default => [],
         };
     }
@@ -209,6 +318,24 @@ class LeaveActivityListService
                 $this->formatDays(bcsub('0', (string) $tx->available_delta, 2)),
                 $code,
             ),
+            BalanceTransactionReason::AnnualEntitlement,
+            BalanceTransactionReason::RegularizationEntitlement,
+            BalanceTransactionReason::ContractualEntitlement => sprintf(
+                '%s %s credited',
+                $this->formatDays($tx->available_delta),
+                $code,
+            ),
+            BalanceTransactionReason::ManualAdjustment => bccomp((string) $tx->available_delta, '0', 2) < 0
+                ? sprintf(
+                    '%s %s deducted',
+                    $this->formatDays($tx->available_delta),
+                    $code,
+                )
+                : sprintf(
+                    '%s %s credited',
+                    $this->formatDays($tx->available_delta),
+                    $code,
+                ),
             default => 'No change',
         };
     }
