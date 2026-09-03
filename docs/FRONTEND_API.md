@@ -971,6 +971,102 @@ Expand each leave the same way duration and `/team/calendar` do, then clip to th
 | `cells[].amount` | `"1.00"` or `"0.50"` only |
 | `cells[].half` | `am` \| `pm` when amount is `"0.50"`, otherwise `null` |
 
+### Leave Monetization Candidates (admin)
+
+Employees with excess VL and/or SL available for cash conversion. **`LEAVE_ADMIN_EMP_ID` only**. Active employees only (`employee_list.emp_status = 1`). Includes the admin when eligible.
+
+Excel / print file generation is out of scope (frontend). No pagination and no search — the eligible set is expected to be small.
+
+| Method | Path | Query |
+|--------|------|--------|
+| GET | `/admin/reports/leave-monetization-candidates` | Optional: `year` (`YYYY`, default: current Asia/Manila year) |
+
+Non-admin callers get **403**. Invalid `year` → **422**.
+
+**As-of rule** (Asia/Manila): `as_of = min(today, November 30 of year)`.
+
+| When | Balances used |
+|------|----------------|
+| On or before Nov 30 of `year` | Live `leave_balance.available` (up to today) |
+| After Nov 30 of `year` | Latest `leave_balance_transaction.available_after` on or before end of Nov 30 |
+
+Reserved credits are ignored. Missing balance / no ledger row → `0.00`.
+
+**Eligibility** (strictly greater than the retain floor):
+
+| Type | Eligible when | Retained | Excess |
+|------|---------------|----------|--------|
+| VL | available > 10 | `"10.00"` | available − 10 |
+| SL | available > 30 | `"30.00"` | available − 30 |
+
+An employee appears if VL excess, SL excess, or both. Exact 10 VL / 30 SL is **not** eligible for that type. For a type that is not excess, `*_balance` / `*_retained` / `*_excess` are `null` (UI blank / N/A).
+
+`eligibility_basis`: `"VL and SL"` \| `"VL"` \| `"SL"`.  
+`total_eligible_days` = VL excess + SL excess (missing type counts as 0).  
+`grand_totals` sum only non-null row cells (VL-only rows do not add to SL totals). Rows sorted by employee number ascending.
+
+```json
+{
+  "data": {
+    "conversion_year": 2025,
+    "balance_cut_off": "2025-11-30",
+    "as_of": "2025-11-30",
+    "generated_at": "2026-09-03T20:45:00+08:00",
+    "eligible_employees": 8,
+    "rows": [
+      {
+        "employee": {
+          "id": 801,
+          "employee_number": "801",
+          "name": "Alex Employee",
+          "group": { "id": 16, "abbreviation": "SYS", "name": "Systems" }
+        },
+        "vl_balance": "15.00",
+        "vl_retained": "10.00",
+        "vl_excess": "5.00",
+        "sl_balance": "32.00",
+        "sl_retained": "30.00",
+        "sl_excess": "2.00",
+        "total_eligible_days": "7.00",
+        "eligibility_basis": "VL and SL"
+      },
+      {
+        "employee": {
+          "id": 808,
+          "employee_number": "808",
+          "name": "Taylor Cruz",
+          "group": { "id": 20, "abbreviation": "IT", "name": "IT" }
+        },
+        "vl_balance": "14.00",
+        "vl_retained": "10.00",
+        "vl_excess": "4.00",
+        "sl_balance": null,
+        "sl_retained": null,
+        "sl_excess": null,
+        "total_eligible_days": "4.00",
+        "eligibility_basis": "VL"
+      }
+    ],
+    "grand_totals": {
+      "vl_balance": "97.00",
+      "vl_excess_days": "37.00",
+      "sl_balance": "171.00",
+      "sl_excess_days": "21.00",
+      "total_eligible_days": "58.00"
+    }
+  }
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `balance_cut_off` | Always Nov 30 of `conversion_year` (label for the UI) |
+| `as_of` | Date the credit figures actually reflect |
+| `eligible_employees` | `rows.length` |
+| `employee.group` | Effective primary group (`LEAVE_EMPLOYEE_GROUP_OVERRIDES` applied). No `department` |
+
+This endpoint is **read-only**. Deducting monetized credits from the ledger is a separate future write API.
+
 ### Employee balances (admin)
 
 Org-wide leave-credit table for **`LEAVE_ADMIN_EMP_ID` only**. Active employees only (`employee_list.emp_status = 1`). Includes the admin.
@@ -1628,6 +1724,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 22. **Activity Log** — `GET /activities` (+ leave-type filter). Includes the viewer's credit grants (`annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`); `leave_id` is null on those rows
 23. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
 24. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=` (omit `emp_ids` for all active employees, or pass `emp_ids[]=` for a subset). Do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
+25. **Leave Monetization Candidates (admin)** — `GET /admin/reports/leave-monetization-candidates?year=` (`LEAVE_ADMIN_EMP_ID` only; excess VL > 10 and/or SL > 30; balances as of `min(today, Nov 30 of year)`). Excel / print on the frontend.
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL / SL / PTB / EL / LL / ML / PL, then approvals, then conversion, then activity log.
 

@@ -244,4 +244,22 @@ return [
         'pl_max_confirmed' => 4,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Leave monetization candidates (admin report)
+    |--------------------------------------------------------------------------
+    |
+    | Excess VL / SL above the retained floors may be converted to cash.
+    | Balances are as of min(today, Nov 30 of conversion year) Asia/Manila:
+    | on or before the cut-off day use live available; after it, ledger
+    | available_after as of end of that cut-off day.
+    |
+    */
+    'monetization' => [
+        'vl_retain' => '10.00',
+        'sl_retain' => '30.00',
+        'balance_cut_off_month' => 11,
+        'balance_cut_off_day' => 30,
+    ],
+
 ];

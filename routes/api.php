@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminAnnualEntitlementController;
 use App\Http\Controllers\AdminBalanceController;
 use App\Http\Controllers\AdminContractualEntitlementController;
 use App\Http\Controllers\AdminLeaveController;
+use App\Http\Controllers\AdminLeaveMonetizationCandidatesController;
 use App\Http\Controllers\AdminMonthlyAttendanceReportController;
 use App\Http\Controllers\AdminNewlyRegularizedController;
 use App\Http\Controllers\AdminReminderController;
@@ -67,6 +68,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/admin/departments', [AdminLeaveController::class, 'departments']);
     Route::get('/admin/employees', [AdminLeaveController::class, 'employees']);
     Route::get('/admin/reports/monthly-attendance', AdminMonthlyAttendanceReportController::class);
+    Route::get('/admin/reports/leave-monetization-candidates', AdminLeaveMonetizationCandidatesController::class);
     Route::get('/admin/balances', [AdminBalanceController::class, 'index']);
     Route::post('/admin/balances', [AdminBalanceController::class, 'store']);
     Route::get('/admin/annual-entitlements', [AdminAnnualEntitlementController::class, 'index']);
