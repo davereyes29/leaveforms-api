@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Your leave request has been approved',
-    'icon' => 'approved.png',
-    'circle' => '#e8f5ec',
+    'status' => 'Approved',
+    'message' => 'Your '.$leave->leaveType->mailLabel().' request has been approved',
+    'tone' => 'approved',
 ])
 
 Hello {{ $recipientName }},

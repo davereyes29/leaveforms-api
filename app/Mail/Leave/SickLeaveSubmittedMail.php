@@ -19,7 +19,7 @@ class SickLeaveSubmittedMail extends Mailable
         public string $employeeName,
         public string $adminName,
     ) {
-        $this->embedLeaveMailIcons('pending-conversion.png');
+        $this->embedLeaveMailIcons('pending.png');
     }
 
     public function envelope(): Envelope

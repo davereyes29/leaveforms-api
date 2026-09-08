@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Your leave request has been rejected',
-    'icon' => 'rejected.png',
-    'circle' => '#fdecea',
+    'status' => 'Rejected',
+    'message' => 'Your '.$leave->leaveType->mailLabel().' request has been rejected',
+    'tone' => 'rejected',
 ])
 
 Hello {{ $recipientName }},

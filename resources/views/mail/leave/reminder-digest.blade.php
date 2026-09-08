@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Reminder: Pending leave '.($pendingCount === 1 ? 'request' : 'requests'),
-    'icon' => 'reminder.png',
-    'circle' => '#e0f2f1',
+    'status' => 'Reminder',
+    'message' => 'Pending leave '.($pendingCount === 1 ? 'request' : 'requests').' awaiting your approval',
+    'tone' => 'reminder',
 ])
 
 Hello {{ $approverName }},

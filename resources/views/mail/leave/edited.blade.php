@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Leave request updated — approval required',
-    'icon' => 'pending.png',
-    'circle' => '#fff8e1',
+    'status' => 'Pending Approval',
+    'message' => 'Updated '.$leave->leaveType->mailLabel().' request awaiting your approval',
+    'tone' => 'pending',
 ])
 
 Hello {{ $approverName }},

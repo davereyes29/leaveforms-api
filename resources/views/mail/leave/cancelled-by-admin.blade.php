@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Your leave request has been cancelled',
-    'icon' => 'cancelled.png',
-    'circle' => '#f0f1f2',
+    'status' => 'Cancelled',
+    'message' => 'Your '.$leave->leaveType->mailLabel().' request has been cancelled',
+    'tone' => 'cancelled',
 ])
 
 Hello {{ $recipientName }},
