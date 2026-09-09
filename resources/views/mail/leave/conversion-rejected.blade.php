@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Your leave conversion request has been rejected',
-    'icon' => 'rejected.png',
-    'circle' => '#fdecea',
+    'status' => 'Rejected',
+    'message' => 'Your leave conversion request has been rejected',
+    'tone' => 'rejected',
 ])
 
 Hello {{ $recipientName }},

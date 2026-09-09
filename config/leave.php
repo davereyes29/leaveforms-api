@@ -113,8 +113,8 @@ return [
         'enabled' => env('LEAVE_NOTIFICATIONS_ENABLED', true),
 
         /*
-        | Temporary banner on all leave emails so recipients know the message
-        | is for demo / UAT only. Set LEAVE_MAIL_DEMO_LABEL=false to remove.
+        | Temporary "FOR DEMO" label in the leave email header (right of brand).
+        | Set LEAVE_MAIL_DEMO_LABEL=false to remove.
         */
         'demo_label' => env('LEAVE_MAIL_DEMO_LABEL', true),
     ],

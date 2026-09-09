@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Reminder: Leave request awaiting your approval',
-    'icon' => 'reminder.png',
-    'circle' => '#e0f2f1',
+    'status' => 'Reminder',
+    'message' => $leave->leaveType->mailLabel().' request awaiting your approval',
+    'tone' => 'reminder',
 ])
 
 Hello {{ $approverName }},

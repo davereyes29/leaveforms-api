@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Leave conversion request awaiting your review',
-    'icon' => 'pending-conversion.png',
-    'circle' => '#fff3e8',
+    'status' => 'Pending Conversion',
+    'message' => 'Leave conversion request awaiting your review',
+    'tone' => 'pending-conversion',
 ])
 
 Hello {{ $adminName }},
