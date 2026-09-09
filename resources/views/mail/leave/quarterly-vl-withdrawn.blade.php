@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Quarterly VL memo withdrawn',
-    'icon' => 'cancelled.png',
-    'circle' => '#fdecea',
+    'status' => 'Withdrawn',
+    'message' => 'Quarterly VL memo withdrawn',
+    'tone' => 'cancelled',
 ])
 
 Hello {{ $adminName }},

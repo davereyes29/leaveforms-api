@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Quarterly VL memo — cap exceeded',
-    'icon' => 'approved.png',
-    'circle' => '#e8f5e9',
+    'status' => 'Exceeded',
+    'message' => 'Quarterly VL memo — cap exceeded',
+    'tone' => 'approved',
 ])
 
 Hello {{ $adminName }},

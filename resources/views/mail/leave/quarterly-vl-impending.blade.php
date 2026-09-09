@@ -1,8 +1,8 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'title' => 'Impending quarterly VL memo',
-    'icon' => 'pending.png',
-    'circle' => '#fff8e1',
+    'status' => 'Notice',
+    'message' => 'Impending quarterly VL memo',
+    'tone' => 'pending',
 ])
 
 Hello {{ $adminName }},
