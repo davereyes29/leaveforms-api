@@ -2,15 +2,23 @@
 
 namespace App\Services\Leave;
 
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Self-filed VL of 3+ workdays must start at least 1 calendar month out.
- * On-behalf (File Leave for Members) skips this gate.
+ * Self-filed VL advance notice (on-behalf / File Leave for Members skips this).
+ *
+ * 1–2 workdays: no gate (same-day and late filing stay allowed).
+ * Exactly 3.00 workdays: start ≥ today + 3 working days.
+ * More than 3.00 workdays: start ≥ today + 30 calendar days.
  */
 class VacationLeaveNoticePolicy
 {
+    public function __construct(
+        private readonly LeaveDurationService $durationService,
+    ) {}
+
     public function assertAdvanceNotice(
         string $leaveTypeCode,
         string $duration,
@@ -21,24 +29,50 @@ class VacationLeaveNoticePolicy
             return;
         }
 
-        $minDays = (string) config('leave.vacation_leave.min_days_requiring_notice', '3.00');
+        $threshold = (string) config('leave.vacation_leave.notice_threshold_days', '3.00');
+        $cmp = bccomp($duration, $threshold, 2);
 
-        if (bccomp($duration, $minDays, 2) < 0) {
+        if ($cmp < 0) {
             return;
         }
 
         $tz = (string) config('leave.reminders.timezone', 'Asia/Manila');
-        $months = (int) config('leave.vacation_leave.notice_months', 1);
         $today = CarbonImmutable::now($tz)->startOfDay();
-        $minStart = $today->addMonthsNoOverflow($months);
         $start = CarbonImmutable::parse($startDate, $tz)->startOfDay();
+
+        if ($cmp === 0) {
+            $workdays = (int) config('leave.vacation_leave.exact_notice_workdays', 3);
+            $minStart = $this->addWorkingDays($today, $workdays);
+            $message = 'Leave requests of 3 consecutive working days must be filed at least 3 working days before the leave start date.';
+        } else {
+            $calendarDays = (int) config('leave.vacation_leave.long_notice_calendar_days', 30);
+            $minStart = $today->addDays($calendarDays);
+            $message = 'Leave requests of more than 3 consecutive working days must be filed at least 30 calendar days before the leave start date.';
+        }
 
         if ($start->lt($minStart)) {
             throw ValidationException::withMessages([
-                'start_date' => [
-                    'Leave requests of 3 or more consecutive days must be filed at least 1 month before the leave start date. Please choose a start date at least 1 month from today, or shorten the leave duration.',
-                ],
+                'start_date' => [$message],
             ]);
         }
+    }
+
+    private function addWorkingDays(CarbonImmutable $from, int $days): CarbonImmutable
+    {
+        $cursor = $from;
+        $added = 0;
+        $guard = 0;
+        $limit = max($days * 14, 60);
+
+        while ($added < $days && $guard < $limit) {
+            $cursor = $cursor->addDay();
+            $guard++;
+
+            if ($this->durationService->isWorkday(Carbon::parse($cursor->toDateString(), $cursor->timezoneName))) {
+                $added++;
+            }
+        }
+
+        return $cursor->startOfDay();
     }
 }

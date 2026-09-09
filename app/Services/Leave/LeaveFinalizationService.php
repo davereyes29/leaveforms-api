@@ -27,7 +27,11 @@ class LeaveFinalizationService
             'confirmed_at' => now(),
         ]);
 
-        $this->balanceService->confirmPaidDays($leave);
+        $leave->loadMissing('leaveType');
+
+        if (LeaveTypeRules::usesCredits((string) $leave->leaveType?->code)) {
+            $this->balanceService->confirmPaidDays($leave);
+        }
 
         LeaveActivityHistory::query()->create([
             'leave_id' => $leave->id,

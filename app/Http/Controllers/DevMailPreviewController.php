@@ -12,6 +12,9 @@ use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveReminderDigestMail;
 use App\Mail\Leave\LeaveReminderMail;
 use App\Mail\Leave\LeaveSubmittedMail;
+use App\Mail\Leave\QuarterlyVlExceededMail;
+use App\Mail\Leave\QuarterlyVlImpendingMail;
+use App\Mail\Leave\QuarterlyVlWithdrawnMail;
 use App\Mail\Leave\SickLeaveSubmittedMail;
 use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
@@ -41,6 +44,9 @@ class DevMailPreviewController extends Controller
         'conversion-requested' => 'Leave conversion requested',
         'conversion-approved' => 'Leave conversion approved',
         'conversion-rejected' => 'Leave conversion rejected',
+        'quarterly-vl-impending' => 'Quarterly VL memo impending (to admin)',
+        'quarterly-vl-exceeded' => 'Quarterly VL memo exceeded (to admin)',
+        'quarterly-vl-withdrawn' => 'Quarterly VL memo withdrawn (to admin)',
     ];
 
     /**
@@ -129,6 +135,25 @@ class DevMailPreviewController extends Controller
                 $employeeName,
                 $adminName,
                 'Medical certificate is incomplete (sample).',
+            ),
+            'quarterly-vl-impending' => new QuarterlyVlImpendingMail(
+                $this->sampleLeave(),
+                $employeeName,
+                $adminName,
+                $this->sampleQuarterUsage('9.50'),
+            ),
+            'quarterly-vl-exceeded' => new QuarterlyVlExceededMail(
+                $this->sampleLeave(),
+                $employeeName,
+                $adminName,
+                $this->sampleQuarterUsage('10.00', includeThisInTaken: true),
+            ),
+            'quarterly-vl-withdrawn' => new QuarterlyVlWithdrawnMail(
+                $this->sampleLeave(),
+                $employeeName,
+                $adminName,
+                $this->sampleQuarterUsage('9.50'),
+                'cancelled',
             ),
             default => abort(404),
         };
@@ -268,5 +293,29 @@ class DevMailPreviewController extends Controller
             'code' => $code,
             'type' => $type,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sampleQuarterUsage(string $projected, bool $includeThisInTaken = false): array
+    {
+        $thisRequest = '1.50';
+        $taken = $includeThisInTaken ? $projected : '8.00';
+
+        return [
+            'applicable' => true,
+            'quarter' => '2026-Q3',
+            'period' => [
+                'start_date' => '2026-07-01',
+                'end_date' => '2026-09-30',
+            ],
+            'taken' => $taken,
+            'this_request' => $thisRequest,
+            'projected' => $projected,
+            'cap' => '9.00',
+            'level' => 'exceeded',
+            'quarters' => [],
+        ];
     }
 }

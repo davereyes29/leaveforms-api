@@ -31,6 +31,7 @@ class MonthlyAttendanceReportService
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveDurationService $durationService,
         private readonly MonthlyAttendanceMatrix $matrix,
+        private readonly SpecialLeavePolicy $specialLeavePolicy,
     ) {}
 
     /**
@@ -226,6 +227,9 @@ class MonthlyAttendanceReportService
         foreach ($leaves as $leave) {
             $empId = (int) $leave->emp_id;
             $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
+            $calendarDays = $code === 'SPL'
+                ? $this->specialLeavePolicy->usesCalendarDaysForLeave($leave)
+                : LeaveTypeRules::usesCalendarDays($code);
 
             $cellsByEmp[$empId] = array_merge(
                 $cellsByEmp[$empId] ?? [],
@@ -238,6 +242,7 @@ class MonthlyAttendanceReportService
                     $start,
                     $end,
                     $holidayDates,
+                    $calendarDays,
                 ),
             );
         }

@@ -12,12 +12,12 @@ final class LeaveTypeRules
      */
     public static function filableCodes(): array
     {
-        return ['VL', 'SL', 'PTB', 'EL', 'LL', 'ML', 'PL'];
+        return ['VL', 'SL', 'PTB', 'EL', 'LL', 'ML', 'PL', 'SPL'];
     }
 
     public static function requiresAttachment(string $code): bool
     {
-        return in_array(strtoupper($code), ['SL', 'PTB', 'EL', 'LL', 'PL'], true);
+        return in_array(strtoupper($code), ['SL', 'PTB', 'EL', 'LL', 'PL', 'SPL'], true);
     }
 
     public static function requiresMedCert(string $code): bool
@@ -35,7 +35,7 @@ final class LeaveTypeRules
                 'singular' => 'medical certificate',
                 'plural' => 'medical certificates',
             ],
-            'EL', 'LL' => [
+            'EL', 'LL', 'SPL' => [
                 'singular' => 'supporting document',
                 'plural' => 'supporting documents',
             ],
@@ -49,7 +49,7 @@ final class LeaveTypeRules
 
     public static function isAdminApproved(string $code): bool
     {
-        return in_array(strtoupper($code), ['SL', 'PTB', 'EL', 'LL', 'ML', 'PL'], true);
+        return in_array(strtoupper($code), ['SL', 'PTB', 'EL', 'LL', 'ML', 'PL', 'SPL'], true);
     }
 
     public static function usesCalendarDays(string $code): bool
@@ -67,6 +67,15 @@ final class LeaveTypeRules
         return in_array(strtoupper($code), ['ML', 'PL'], true);
     }
 
+    /**
+     * Rolling leave_balance credits. Special Leave is paid but event-based
+     * (no reserve / confirm / reverse ledger rows).
+     */
+    public static function usesCredits(string $code): bool
+    {
+        return strtoupper($code) !== 'SPL';
+    }
+
     public static function allowsLwop(string $code): bool
     {
         return in_array(strtoupper($code), ['VL', 'SL'], true);
@@ -74,7 +83,7 @@ final class LeaveTypeRules
 
     public static function requiresFullDay(string $code): bool
     {
-        return in_array(strtoupper($code), ['PTB', 'EL', 'LL', 'ML', 'PL'], true);
+        return in_array(strtoupper($code), ['PTB', 'EL', 'LL', 'ML', 'PL', 'SPL'], true);
     }
 
     public static function exactCalendarDays(string $code): ?int

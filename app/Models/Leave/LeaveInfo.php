@@ -4,6 +4,8 @@ namespace App\Models\Leave;
 
 use App\Enums\Leave\DayType;
 use App\Enums\Leave\LeaveStatus;
+use App\Enums\Leave\SpecialLeaveAssignmentType;
+use App\Enums\Leave\SpecialLeaveReason;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,9 +26,12 @@ class LeaveInfo extends Model
         'start_date',
         'end_date',
         'leave_reason',
+        'assignment_type',
+        'special_leave_reason',
         'status',
         'cancellation_reason',
         'confirmed_at',
+        'quarterly_vl_excess_notified',
     ];
 
     protected function casts(): array
@@ -39,10 +44,13 @@ class LeaveInfo extends Model
             'paid_days' => 'decimal:2',
             'lwop_days' => 'decimal:2',
             'day_type' => DayType::class,
+            'assignment_type' => SpecialLeaveAssignmentType::class,
+            'special_leave_reason' => SpecialLeaveReason::class,
             'status' => LeaveStatus::class,
             'start_date' => 'date',
             'end_date' => 'date',
             'confirmed_at' => 'datetime',
+            'quarterly_vl_excess_notified' => 'boolean',
         ];
     }
 

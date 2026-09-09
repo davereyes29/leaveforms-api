@@ -38,6 +38,12 @@ class LeaveBalanceService
 
         $types = $typesQuery->get();
 
+        if ($code === null) {
+            $types = $types->reject(
+                fn (LeaveType $type): bool => ! LeaveTypeRules::usesCredits((string) $type->code),
+            )->values();
+        }
+
         $balances = LeaveBalance::query()
             ->where('emp_id', $empId)
             ->when($code !== null, function ($query) use ($types) {

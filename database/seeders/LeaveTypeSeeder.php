@@ -20,6 +20,7 @@ class LeaveTypeSeeder extends Seeder
             ['code' => 'PL',    'type' => 'Paternity Leave'],
             ['code' => 'PTB',   'type' => 'Pulmonary Tuberculosis Leave'],
             ['code' => 'LL',    'type' => 'Long Leave'],
+            ['code' => 'SPL',   'type' => 'Special Leave'],
         ];
 
         foreach ($types as $row) {

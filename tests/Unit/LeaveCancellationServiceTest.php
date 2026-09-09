@@ -10,6 +10,7 @@ use App\Services\Leave\LeaveApproverResolver;
 use App\Services\Leave\LeaveBalanceService;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveNotificationService;
+use App\Services\Leave\VacationLeaveQuarterNoticeService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Validation\ValidationException;
 use Mockery;
@@ -122,6 +123,7 @@ class LeaveCancellationServiceTest extends TestCase
             Mockery::mock(LeaveBalanceService::class),
             Mockery::mock(LeaveNotificationService::class),
             $resolver,
+            Mockery::mock(VacationLeaveQuarterNoticeService::class),
         );
     }
 

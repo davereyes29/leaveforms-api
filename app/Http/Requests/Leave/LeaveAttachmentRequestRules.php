@@ -74,7 +74,7 @@ trait LeaveAttachmentRequestRules
     protected function prohibitedForVlMessages(): array
     {
         return [
-            'leave_attachment.prohibited' => 'Vacation Leave does not accept attachments. Attachments are only used for other leave types (SL, EL, PTB, LL, PL).',
+            'leave_attachment.prohibited' => 'Vacation Leave does not accept attachments. Attachments are only used for other leave types (SL, EL, PTB, LL, PL, SPL).',
             'remove_attachment.prohibited' => 'Vacation Leave does not use attachments.',
         ];
     }

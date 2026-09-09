@@ -28,6 +28,7 @@ class TeamCalendarService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveDurationService $durationService,
+        private readonly SpecialLeavePolicy $specialLeavePolicy,
     ) {}
 
     /**
@@ -163,8 +164,11 @@ class TeamCalendarService
 
         foreach ($leaves as $leave) {
             $code = strtoupper((string) ($leave->leaveType?->code ?? ''));
+            $calendarDays = $code === 'SPL'
+                ? $this->specialLeavePolicy->usesCalendarDaysForLeave($leave)
+                : LeaveTypeRules::usesCalendarDays($code);
 
-            if (LeaveTypeRules::usesCalendarDays($code)) {
+            if ($calendarDays) {
                 $leave->setAttribute('calendar_dates', $this->durationService->calendarDatesBetween(
                     $leave->start_date->toDateString(),
                     $leave->end_date->toDateString(),

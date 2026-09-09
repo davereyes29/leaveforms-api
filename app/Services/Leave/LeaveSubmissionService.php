@@ -5,6 +5,8 @@ namespace App\Services\Leave;
 use App\Enums\Leave\ActivityType;
 use App\Enums\Leave\DayType;
 use App\Enums\Leave\LeaveStatus;
+use App\Enums\Leave\SpecialLeaveAssignmentType;
+use App\Enums\Leave\SpecialLeaveReason;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveApprovalRequirement;
@@ -15,11 +17,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Orchestrates filing a new leave request (VL, SL, PTB, EL, LL, ML, or PL).
+ * Orchestrates filing a new leave request (VL, SL, PTB, EL, LL, ML, PL, or SPL).
  *
  * VL and ML do not accept attachments. SL and PTB require a medical certificate.
- * EL and LL require a supporting document. PL requires a Paternity Notification Form.
- * LL is always unpaid. ML/PL credits are granted on submit.
+ * EL, LL, and SPL require a supporting document. PL requires a Paternity Notification Form.
+ * LL is always unpaid. ML/PL credits are granted on submit. SPL is paid without credits.
  */
 class LeaveSubmissionService
 {
@@ -33,7 +35,9 @@ class LeaveSubmissionService
         private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
+        private readonly SpecialLeavePolicy $specialLeavePolicy,
         private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
+        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -44,6 +48,8 @@ class LeaveSubmissionService
      *     end_date: string,
      *     day_type: string,
      *     leave_reason: string,
+     *     assignment_type?: string,
+     *     special_leave_reason?: string,
      *     leave_attachment?: UploadedFile|list<UploadedFile>
      * }  $data
      */
@@ -58,12 +64,26 @@ class LeaveSubmissionService
         $leaveType = LeaveType::query()->where('code', $code)->firstOrFail();
         $dayType = DayType::from($data['day_type']);
         $attachments = LeaveAttachmentService::uploadedFiles($data['leave_attachment'] ?? null);
+        $assignmentType = $this->assignmentTypeFrom($data);
+        $specialLeaveReason = $this->specialLeaveReasonFrom($data);
+        $specialLeave = null;
+
+        if ($code === 'SPL') {
+            if ($assignmentType === null || $specialLeaveReason === null) {
+                throw ValidationException::withMessages([
+                    'special_leave_reason' => ['A qualifying event is required to file Special Leave.'],
+                ]);
+            }
+
+            $specialLeave = $this->specialLeavePolicy->allotment($assignmentType, $specialLeaveReason);
+        }
 
         $duration = $this->durationService->calculate(
             $data['start_date'],
             $data['end_date'],
             $dayType,
             $code,
+            $specialLeave,
         );
 
         $this->overlapValidator->assertNoOverlap(
@@ -85,6 +105,9 @@ class LeaveSubmissionService
             $lwopDays = $duration;
         } elseif (LeaveTypeRules::grantsCreditsOnSubmit($code)) {
             $this->parentalLeavePolicy->assertEligibleToFile($employeeOnLeave, $code);
+            $paidDays = $duration;
+            $lwopDays = '0.00';
+        } elseif (! LeaveTypeRules::usesCredits($code)) {
             $paidDays = $duration;
             $lwopDays = '0.00';
         } else {
@@ -113,6 +136,8 @@ class LeaveSubmissionService
             $paidDays,
             $lwopDays,
             $attachments,
+            $assignmentType,
+            $specialLeaveReason,
         ) {
             $leave = LeaveInfo::query()->create([
                 'emp_id' => $employeeOnLeave->id,
@@ -125,6 +150,8 @@ class LeaveSubmissionService
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'leave_reason' => $data['leave_reason'],
+                'assignment_type' => $assignmentType,
+                'special_leave_reason' => $specialLeaveReason,
                 'status' => LeaveStatus::PendingApproval,
             ]);
 
@@ -147,7 +174,9 @@ class LeaveSubmissionService
                 $this->balanceService->grantParentalEntitlement($fresh);
             }
 
-            $this->balanceService->reservePaidDays($fresh);
+            if (LeaveTypeRules::usesCredits($code)) {
+                $this->balanceService->reservePaidDays($fresh);
+            }
 
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
@@ -159,7 +188,44 @@ class LeaveSubmissionService
         });
 
         $this->notificationService->notifyApproversOnSubmit($leave);
+        $this->quarterNoticeService->onSubmitted($leave);
 
         return $leave;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function assignmentTypeFrom(array $data): ?SpecialLeaveAssignmentType
+    {
+        $value = $data['assignment_type'] ?? null;
+
+        if ($value instanceof SpecialLeaveAssignmentType) {
+            return $value;
+        }
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        return SpecialLeaveAssignmentType::from($value);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function specialLeaveReasonFrom(array $data): ?SpecialLeaveReason
+    {
+        $value = $data['special_leave_reason'] ?? null;
+
+        if ($value instanceof SpecialLeaveReason) {
+            return $value;
+        }
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        return SpecialLeaveReason::from($value);
     }
 }

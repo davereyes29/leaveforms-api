@@ -10,7 +10,7 @@ class LeaveTypeRulesTest extends TestCase
     public function test_maternity_and_paternity_are_filable(): void
     {
         $this->assertSame(
-            ['VL', 'SL', 'PTB', 'EL', 'LL', 'ML', 'PL'],
+            ['VL', 'SL', 'PTB', 'EL', 'LL', 'ML', 'PL', 'SPL'],
             LeaveTypeRules::filableCodes(),
         );
     }
@@ -21,6 +21,26 @@ class LeaveTypeRulesTest extends TestCase
         $this->assertTrue(LeaveTypeRules::grantsCreditsOnSubmit('PL'));
         $this->assertFalse(LeaveTypeRules::grantsCreditsOnSubmit('VL'));
         $this->assertFalse(LeaveTypeRules::grantsCreditsOnSubmit('LL'));
+        $this->assertFalse(LeaveTypeRules::grantsCreditsOnSubmit('SPL'));
+        $this->assertFalse(LeaveTypeRules::usesCredits('SPL'));
+        $this->assertTrue(LeaveTypeRules::usesCredits('EL'));
+    }
+
+    public function test_special_leave_is_admin_approved_full_day_with_supporting_documents(): void
+    {
+        $this->assertTrue(LeaveTypeRules::isAdminApproved('SPL'));
+        $this->assertTrue(LeaveTypeRules::requiresFullDay('SPL'));
+        $this->assertTrue(LeaveTypeRules::requiresAttachment('SPL'));
+        $this->assertFalse(LeaveTypeRules::allowsLwop('SPL'));
+        $this->assertFalse(LeaveTypeRules::isUnpaid('SPL'));
+        $this->assertFalse(LeaveTypeRules::usesCalendarDays('SPL'));
+        $this->assertSame(
+            [
+                'singular' => 'supporting document',
+                'plural' => 'supporting documents',
+            ],
+            LeaveTypeRules::attachmentLabel('SPL'),
+        );
     }
 
     public function test_maternity_uses_exact_calendar_days_and_paternity_uses_exact_workdays(): void

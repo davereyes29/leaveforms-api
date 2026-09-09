@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Leave;
 
 use App\Enums\Leave\DayType;
+use App\Enums\Leave\SpecialLeaveAssignmentType;
+use App\Enums\Leave\SpecialLeaveReason;
 use App\Services\Leave\LeaveTypeRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -29,6 +31,14 @@ class StoreLeaveRequest extends FormRequest
         }
 
         $this->merge(['code' => strtoupper(trim((string) $code))]);
+
+        foreach (['assignment_type', 'special_leave_reason'] as $field) {
+            $value = $this->input($field);
+
+            if (is_string($value) && $value !== '') {
+                $this->merge([$field => strtolower(trim($value))]);
+            }
+        }
     }
 
     /**
@@ -48,6 +58,7 @@ class StoreLeaveRequest extends FormRequest
                 ? ['required', Rule::in([DayType::Full->value])]
                 : ['required', Rule::enum(DayType::class)],
             'leave_reason' => ['required', 'string', 'max:2000'],
+            ...$this->specialLeaveFieldRules($code),
             ...(LeaveTypeRules::requiresAttachment($code)
                 ? $this->requiredAttachmentRules()
                 : $this->prohibitedForVlRules()),
@@ -64,8 +75,28 @@ class StoreLeaveRequest extends FormRequest
         return [
             'code.in' => 'Unsupported leave type.',
             'day_type.in' => 'This leave type can only be filed as a full day.',
+            'assignment_type.prohibited' => 'Assignment type is only used for Special Leave.',
+            'special_leave_reason.prohibited' => 'A qualifying event is only used for Special Leave.',
             ...$this->prohibitedAttachmentMessages($code),
             ...$this->requiredAttachmentMessages($code),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function specialLeaveFieldRules(string $code): array
+    {
+        if (strtoupper($code) === 'SPL') {
+            return [
+                'assignment_type' => ['required', Rule::enum(SpecialLeaveAssignmentType::class)],
+                'special_leave_reason' => ['required', Rule::enum(SpecialLeaveReason::class)],
+            ];
+        }
+
+        return [
+            'assignment_type' => ['prohibited'],
+            'special_leave_reason' => ['prohibited'],
         ];
     }
 }

@@ -23,7 +23,7 @@ class DevMailPreviewTest extends TestCase
 
         $expected = [
             'submitted' => 'Leave request awaiting your approval',
-            'sick-leave-submitted' => 'Sick Leave request awaiting your review',
+            'sick-leave-submitted' => 'Sick Leave request awaiting your approval',
             'confirmed' => 'Your leave request has been approved',
             'rejected' => 'Your leave request has been rejected',
             'cancelled' => 'Leave request cancelled',
@@ -33,6 +33,9 @@ class DevMailPreviewTest extends TestCase
             'conversion-requested' => 'Leave conversion request awaiting your review',
             'conversion-approved' => 'Your leave conversion request has been approved',
             'conversion-rejected' => 'Your leave conversion request has been rejected',
+            'quarterly-vl-impending' => 'Impending quarterly VL memo',
+            'quarterly-vl-exceeded' => 'Quarterly VL memo — cap exceeded',
+            'quarterly-vl-withdrawn' => 'Quarterly VL memo withdrawn',
         ];
 
         foreach ($expected as $template => $heading) {

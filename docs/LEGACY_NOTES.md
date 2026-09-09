@@ -99,6 +99,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | `pleave` | `PL` | Paid; admin; exactly 7 workdays; grant on submit; male only; max 4 confirmed; Paternity Notification Form (1–5 files) |
 | `ptbleave` | `PTB` | Direct filing (med cert + admin). Calendar days; full day; no LWOP |
 | `lleave` | `LL` | Unpaid; admin; 1–3 calendar months; no overlapping dates; one pending LL at a time; supporting document (1–5 files) |
+| — | `SPL` | New in revamp. Paid; admin; exact matrix duration; supporting document (1–5 files); no credits |
 
 ---
 
@@ -124,7 +125,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 - `isWorkDay()` / holidays → duration calculation in `BALANCE_FLOW.md`
 - Email on submit / notify on approve-reject
 - File on behalf of member → `filed_by_emp_id`
-- Quarterly absence warnings (revamp slides; partial overlap in reports)
+- Quarterly VL cap (9 days / quarter; employee warning + admin memo mails)
 
 ### Do not port
 

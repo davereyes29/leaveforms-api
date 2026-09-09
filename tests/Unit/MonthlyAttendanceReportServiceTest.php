@@ -9,6 +9,7 @@ use App\Services\Leave\LeaveApproverResolver;
 use App\Services\Leave\LeaveDurationService;
 use App\Services\Leave\MonthlyAttendanceMatrix;
 use App\Services\Leave\MonthlyAttendanceReportService;
+use App\Services\Leave\SpecialLeavePolicy;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -67,6 +68,7 @@ class MonthlyAttendanceReportServiceTest extends TestCase
             $resolver,
             $duration,
             new MonthlyAttendanceMatrix($duration),
+            new SpecialLeavePolicy,
         );
     }
 

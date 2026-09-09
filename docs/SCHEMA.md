@@ -50,9 +50,12 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `start_date` | date | |
 | `end_date` | date | |
 | `leave_reason` | text | |
+| `assignment_type` | varchar | Nullable. Special Leave only: `philippines_based` or `long_term_overseas` |
+| `special_leave_reason` | varchar | Nullable. Special Leave qualifying-event enum |
 | `status` | enum | See below |
 | `cancellation_reason` | text | Nullable; **required** when `status = cancelled` |
 | `confirmed_at` | datetime | Nullable; set when `status = confirmed` |
+| `quarterly_vl_excess_notified` | boolean | Default false. Set when self/on-behalf VL would exceed 9 confirmed VL days in a quarter if approved (admin memo mail). |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 
@@ -86,7 +89,7 @@ half_pm
 
 ## `leave_info_attachment`
 
-Supporting files for SL, PTB, EL, LL, and PL. One leave has 1–5 rows. VL / ML have none.
+Supporting files for SL, PTB, EL, LL, PL, and SPL. One leave has 1–5 rows. VL / ML have none.
 
 | Column | Type | Notes |
 |--------|------|-------|

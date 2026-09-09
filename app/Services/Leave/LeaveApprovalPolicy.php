@@ -22,7 +22,7 @@ class LeaveApprovalPolicy
     public function requirementsFor(int $empId, string $leaveTypeCode): array
     {
         return match (strtoupper($leaveTypeCode)) {
-            'SL', 'PTB', 'EL', 'LL', 'ML', 'PL' => [
+            'SL', 'PTB', 'EL', 'LL', 'ML', 'PL', 'SPL' => [
                 $this->specialRequirement(1, RequiredApproverType::Admin),
             ],
             default => $this->vlRequirementsForFiler($empId),

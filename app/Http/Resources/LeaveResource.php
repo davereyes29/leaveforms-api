@@ -241,6 +241,10 @@ class LeaveResource extends JsonResource
             'start_date' => $this->start_date->toDateString(),
             'end_date' => $this->end_date->toDateString(),
             'leave_reason' => $this->leave_reason,
+            'assignment_type' => $this->assignment_type?->value,
+            'assignment_type_label' => $this->assignment_type?->label(),
+            'special_leave_reason' => $this->special_leave_reason?->value,
+            'special_leave_reason_label' => $this->special_leave_reason?->label(),
             'has_attachment' => $this->relationLoaded('attachments')
                 ? $this->attachments->isNotEmpty()
                 : false,

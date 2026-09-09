@@ -32,11 +32,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Admin reviewer (VL → SL / VL → EL conversion, Sick Leave, PTB, EL, LL, ML, PL)
+    | Admin reviewer (VL → SL / VL → EL conversion, Sick Leave, PTB, EL, LL, ML, PL, SPL)
     |--------------------------------------------------------------------------
     |
     | employee_list.id of the HR/admin account that reviews conversions
-    | and admin-approved leave requests (SL, PTB, EL, LL, ML, PL).
+    | and admin-approved leave requests (SL, PTB, EL, LL, ML, PL, SPL).
     |
     */
     'admin_emp_id' => env('LEAVE_ADMIN_EMP_ID'),
@@ -202,14 +202,24 @@ return [
     | Vacation Leave (VL) advance notice
     |--------------------------------------------------------------------------
     |
-    | Self-filed VL of this many workdays or more must start at least
-    | notice_months calendar months from today (Asia/Manila). File Leave for
-    | Members (on-behalf) skips this gate.
+    | Self-file only. File Leave for Members (on-behalf) skips this gate.
+    | Duration below notice_threshold_days is not gated (same-day / late VL).
+    | Exactly notice_threshold_days → start ≥ today + exact_notice_workdays
+    | working days (weekends/holidays skipped). Above the threshold → start
+    | ≥ today + long_notice_calendar_days calendar days (Asia/Manila).
+    |
+    | Quarterly VL cap is informational (never 422). Confirmed + pending_conversion
+    | VL workdays overlapping the quarter count. Converted-to-SL/EL do not.
+    | Projected == cap → employee warning only. Projected > cap → warning +
+    | admin memo emails (impending on file, exceeded on approve, withdrawn
+    | on cancel/reject/edit back under the cap).
     |
     */
     'vacation_leave' => [
-        'min_days_requiring_notice' => '3.00',
-        'notice_months' => 1,
+        'notice_threshold_days' => '3.00',
+        'exact_notice_workdays' => 3,
+        'long_notice_calendar_days' => 30,
+        'quarterly_cap_days' => '9.00',
     ],
 
     /*
@@ -242,6 +252,22 @@ return [
         'ml_days' => 105,
         'pl_workdays' => 7,
         'pl_max_confirmed' => 4,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Special Leave (SPL)
+    |--------------------------------------------------------------------------
+    |
+    | Paid, event-specific, non-cumulative. No rolling credits, no carry,
+    | no cash conversion. Duration is exact from the reason matrix.
+    | Philippines-based / short-term overseas: working days.
+    | Long-term overseas qualifying deaths: 21 calendar days + 2 travel
+    | days (23 inclusive calendar days). Marriage stays working days.
+    |
+    */
+    'special_leave' => [
+        'ltd_death_calendar_days' => 23,
     ],
 
     /*

@@ -20,6 +20,7 @@ class LeaveCancellationService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveNotificationService $notificationService,
         private readonly LeaveApproverResolver $approverResolver,
+        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -44,9 +45,11 @@ class LeaveCancellationService
                 'cancellation_reason' => $cancellationReason,
             ]);
 
-            $this->balanceService->releaseReservation($leave, $cancellationReason);
-
             $leave->loadMissing('leaveType');
+
+            if (LeaveTypeRules::usesCredits((string) $leave->leaveType?->code)) {
+                $this->balanceService->releaseReservation($leave, $cancellationReason);
+            }
 
             if (LeaveTypeRules::grantsCreditsOnSubmit((string) $leave->leaveType?->code)) {
                 $this->balanceService->reverseParentalEntitlement($leave, $cancellationReason);
@@ -63,6 +66,7 @@ class LeaveCancellationService
         });
 
         $this->notificationService->notifyApproversOnCancel($leave, $cancellationReason);
+        $this->quarterNoticeService->onWithdrawn($leave, 'cancelled');
 
         return $leave;
     }
@@ -89,9 +93,11 @@ class LeaveCancellationService
                 'cancellation_reason' => $cancellationReason,
             ]);
 
-            $this->balanceService->reverseConfirmedLeave($leave, $cancellationReason);
-
             $leave->loadMissing('leaveType');
+
+            if (LeaveTypeRules::usesCredits((string) $leave->leaveType?->code)) {
+                $this->balanceService->reverseConfirmedLeave($leave, $cancellationReason);
+            }
 
             if (LeaveTypeRules::grantsCreditsOnSubmit((string) $leave->leaveType?->code)) {
                 $this->balanceService->reverseParentalEntitlement($leave, $cancellationReason);

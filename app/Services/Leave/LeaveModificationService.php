@@ -5,6 +5,8 @@ namespace App\Services\Leave;
 use App\Enums\Leave\ActivityType;
 use App\Enums\Leave\DayType;
 use App\Enums\Leave\LeaveStatus;
+use App\Enums\Leave\SpecialLeaveAssignmentType;
+use App\Enums\Leave\SpecialLeaveReason;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveActivityHistory;
 use App\Models\Leave\LeaveInfo;
@@ -15,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Edit an open leave request before any approver has acted.
  *
- * VL and ML do not accept attachments. SL, PTB, EL, LL, and PL files are
+ * VL and ML do not accept attachments. SL, PTB, EL, LL, PL, and SPL files are
  * added or removed through dedicated attachment endpoints.
  */
 class LeaveModificationService
@@ -27,7 +29,9 @@ class LeaveModificationService
         private readonly LeaveNotificationService $notificationService,
         private readonly LongLeavePolicy $longLeavePolicy,
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
+        private readonly SpecialLeavePolicy $specialLeavePolicy,
         private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
+        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -35,7 +39,9 @@ class LeaveModificationService
      *     start_date: string,
      *     end_date: string,
      *     day_type: string,
-     *     leave_reason: string
+     *     leave_reason: string,
+     *     assignment_type?: string,
+     *     special_leave_reason?: string
      * }  $data
      */
     public function update(LeaveInfo $leave, Employee $actor, array $data): LeaveInfo
@@ -44,14 +50,25 @@ class LeaveModificationService
         $this->assertLeaveIsEditable($leave);
         $this->assertIsEditableType($leave);
 
+        $wasQuarterlyNotified = (bool) $leave->quarterly_vl_excess_notified;
         $dayType = DayType::from($data['day_type']);
         $code = strtoupper((string) ($leave->leaveType?->code ?? 'VL'));
+        $assignmentType = null;
+        $specialLeaveReason = null;
+        $specialLeave = null;
+
+        if ($code === 'SPL') {
+            $assignmentType = SpecialLeaveAssignmentType::from((string) $data['assignment_type']);
+            $specialLeaveReason = SpecialLeaveReason::from((string) $data['special_leave_reason']);
+            $specialLeave = $this->specialLeavePolicy->allotment($assignmentType, $specialLeaveReason);
+        }
 
         $duration = $this->durationService->calculate(
             $data['start_date'],
             $data['end_date'],
             $dayType,
             $code,
+            $specialLeave,
         );
 
         $this->overlapValidator->assertNoOverlap(
@@ -77,6 +94,9 @@ class LeaveModificationService
             $this->parentalLeavePolicy->assertEligibleToFile($employeeOnLeave, $code, $leave->id);
             $paidDays = $duration;
             $lwopDays = '0.00';
+        } elseif (! LeaveTypeRules::usesCredits($code)) {
+            $paidDays = $duration;
+            $lwopDays = '0.00';
         } else {
             $effectiveAvailable = $this->balanceService->availableForEdit($leave);
 
@@ -100,6 +120,9 @@ class LeaveModificationService
             $duration,
             $paidDays,
             $lwopDays,
+            $assignmentType,
+            $specialLeaveReason,
+            $code,
         ) {
             $leave = LeaveInfo::query()
                 ->whereKey($leave->id)
@@ -109,7 +132,9 @@ class LeaveModificationService
             $this->assertActorCanModify($leave, $actor);
             $this->assertLeaveIsEditable($leave);
 
-            $this->balanceService->releaseReservation($leave, 'Leave modified');
+            if (LeaveTypeRules::usesCredits($code)) {
+                $this->balanceService->releaseReservation($leave, 'Leave modified');
+            }
 
             $leave->update([
                 'duration' => $duration,
@@ -119,9 +144,13 @@ class LeaveModificationService
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'leave_reason' => $data['leave_reason'],
+                'assignment_type' => $assignmentType,
+                'special_leave_reason' => $specialLeaveReason,
             ]);
 
-            $this->balanceService->reservePaidDays($leave->fresh());
+            if (LeaveTypeRules::usesCredits($code)) {
+                $this->balanceService->reservePaidDays($leave->fresh());
+            }
 
             LeaveActivityHistory::query()->create([
                 'leave_id' => $leave->id,
@@ -133,6 +162,7 @@ class LeaveModificationService
         });
 
         $this->notificationService->notifyApproversOnEdit($leave);
+        $this->quarterNoticeService->onModified($leave, $wasQuarterlyNotified);
 
         return $leave;
     }
@@ -171,7 +201,7 @@ class LeaveModificationService
 
         if (! LeaveTypeRules::isEditable($code)) {
             throw ValidationException::withMessages([
-                'leave' => ['Only vacation, sick, PTB, emergency, long, maternity, and paternity leave requests can be edited through this endpoint for now.'],
+                'leave' => ['Only vacation, sick, PTB, emergency, long, maternity, paternity, and special leave requests can be edited through this endpoint for now.'],
             ]);
         }
     }

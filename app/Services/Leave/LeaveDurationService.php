@@ -13,17 +13,40 @@ use Illuminate\Validation\ValidationException;
  */
 class LeaveDurationService
 {
-    public function calculate(string $startDate, string $endDate, DayType $dayType, string $leaveTypeCode = 'VL'): string
-    {
-        if (LeaveTypeRules::requiresFullDay($leaveTypeCode) && $dayType !== DayType::Full) {
+    public function calculate(
+        string $startDate,
+        string $endDate,
+        DayType $dayType,
+        string $leaveTypeCode = 'VL',
+        ?SpecialLeaveAllotment $specialLeave = null,
+    ): string {
+        $code = strtoupper($leaveTypeCode);
+
+        if (LeaveTypeRules::requiresFullDay($code) && $dayType !== DayType::Full) {
             throw ValidationException::withMessages([
                 'day_type' => ['This leave type can only be filed as a full day.'],
             ]);
         }
 
-        if (LeaveTypeRules::usesCalendarDays($leaveTypeCode)) {
-            $this->assertCalendarMonthSpan($startDate, $endDate, $leaveTypeCode);
-            $this->assertExactCalendarDays($startDate, $endDate, $leaveTypeCode);
+        if ($code === 'SPL') {
+            if ($specialLeave === null) {
+                throw ValidationException::withMessages([
+                    'special_leave_reason' => ['A qualifying event is required to file Special Leave.'],
+                ]);
+            }
+
+            if ($specialLeave->usesCalendarDays) {
+                $this->assertExactCalendarSpan($startDate, $endDate, $specialLeave->days, 'Special Leave');
+
+                return $this->calculateCalendarDays($startDate, $endDate);
+            }
+
+            return $this->calculateExactWorkdays($startDate, $endDate, $specialLeave->days, 'Special Leave');
+        }
+
+        if (LeaveTypeRules::usesCalendarDays($code)) {
+            $this->assertCalendarMonthSpan($startDate, $endDate, $code);
+            $this->assertExactCalendarDays($startDate, $endDate, $code);
 
             return $this->calculateCalendarDays($startDate, $endDate);
         }
@@ -32,21 +55,8 @@ class LeaveDurationService
             return $this->calculateHalfDay($startDate, $endDate);
         }
 
-        $workdays = 0;
-
-        foreach (CarbonPeriod::create($startDate, $endDate) as $date) {
-            if ($this->isWorkday($date)) {
-                $workdays++;
-            }
-        }
-
-        if ($workdays === 0) {
-            throw ValidationException::withMessages([
-                'start_date' => ['The selected date range has no workdays.'],
-            ]);
-        }
-
-        $this->assertExactWorkdays($startDate, $endDate, $leaveTypeCode, $workdays);
+        $workdays = $this->countWorkdays($startDate, $endDate);
+        $this->assertExactWorkdays($startDate, $endDate, $code, $workdays);
 
         return bcadd((string) $workdays, '0', 2);
     }
@@ -93,6 +103,11 @@ class LeaveDurationService
             return;
         }
 
+        $this->assertExactCalendarSpan($startDate, $endDate, $required, 'Maternity Leave');
+    }
+
+    private function assertExactCalendarSpan(string $startDate, string $endDate, int $required, string $label): void
+    {
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->startOfDay();
         $expectedEnd = $start->copy()->addDays($required - 1);
@@ -100,7 +115,7 @@ class LeaveDurationService
         if (! $end->equalTo($expectedEnd)) {
             throw ValidationException::withMessages([
                 'end_date' => [
-                    'Maternity Leave must be exactly '.$required.' calendar days. For a start date of '
+                    $label.' must be exactly '.$required.' calendar days. For a start date of '
                     .$start->toDateString().', the end date must be '.$expectedEnd->toDateString().'.',
                 ],
             ]);
@@ -115,11 +130,48 @@ class LeaveDurationService
             return;
         }
 
+        $this->assertExactWorkdaySpan($startDate, $endDate, $required, $workdays, 'Paternity Leave');
+    }
+
+    private function calculateExactWorkdays(string $startDate, string $endDate, int $required, string $label): string
+    {
+        $workdays = $this->countWorkdays($startDate, $endDate);
+        $this->assertExactWorkdaySpan($startDate, $endDate, $required, $workdays, $label);
+
+        return bcadd((string) $workdays, '0', 2);
+    }
+
+    private function countWorkdays(string $startDate, string $endDate): int
+    {
+        $workdays = 0;
+
+        foreach (CarbonPeriod::create($startDate, $endDate) as $date) {
+            if ($this->isWorkday($date)) {
+                $workdays++;
+            }
+        }
+
+        if ($workdays === 0) {
+            throw ValidationException::withMessages([
+                'start_date' => ['The selected date range has no workdays.'],
+            ]);
+        }
+
+        return $workdays;
+    }
+
+    private function assertExactWorkdaySpan(
+        string $startDate,
+        string $endDate,
+        int $required,
+        int $workdays,
+        string $label,
+    ): void {
         $start = Carbon::parse($startDate)->startOfDay();
 
         if (! $this->isWorkday($start)) {
             throw ValidationException::withMessages([
-                'start_date' => ['Paternity Leave must start on a workday.'],
+                'start_date' => [$label.' must start on a workday.'],
             ]);
         }
 
@@ -129,7 +181,7 @@ class LeaveDurationService
         if ($workdays !== $required || ! $end->equalTo($expectedEnd)) {
             throw ValidationException::withMessages([
                 'end_date' => [
-                    'Paternity Leave must be exactly '.$required.' workdays in one request. For a start date of '
+                    $label.' must be exactly '.$required.' workdays in one request. For a start date of '
                     .$start->toDateString().', the end date must be '.$expectedEnd->toDateString().'.',
                 ],
             ]);

@@ -22,6 +22,7 @@ class LeaveApprovalService
         private readonly LeaveFinalizationService $finalizationService,
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveNotificationService $notificationService,
+        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     public function approve(LeaveInfo $leave, Employee $approver): LeaveInfo
@@ -62,6 +63,7 @@ class LeaveApprovalService
 
         if ($leave->status === LeaveStatus::Confirmed) {
             $this->notificationService->notifyEmployeeOnConfirm($leave, $approver);
+            $this->quarterNoticeService->onConfirmed($leave);
         }
 
         return $leave;
@@ -94,9 +96,11 @@ class LeaveApprovalService
 
             $leave->update(['status' => LeaveStatus::Rejected]);
 
-            $this->balanceService->releaseReservation($leave, $remarks);
-
             $leave->loadMissing('leaveType');
+
+            if (LeaveTypeRules::usesCredits((string) $leave->leaveType?->code)) {
+                $this->balanceService->releaseReservation($leave, $remarks);
+            }
 
             if (LeaveTypeRules::grantsCreditsOnSubmit((string) $leave->leaveType?->code)) {
                 $this->balanceService->reverseParentalEntitlement($leave, $remarks);
@@ -113,6 +117,7 @@ class LeaveApprovalService
         });
 
         $this->notificationService->notifyEmployeeOnReject($leave, $approver, $remarks);
+        $this->quarterNoticeService->onWithdrawn($leave, 'rejected');
 
         return $leave;
     }

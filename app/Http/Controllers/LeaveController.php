@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Leave\DayType;
 use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\CancelLeaveRequest;
 use App\Http\Requests\Leave\IndexLeaveRequest;
+use App\Http\Requests\Leave\IndexVacationLeaveQuarterUsageRequest;
 use App\Http\Requests\Leave\StoreLeaveAttachmentsRequest;
 use App\Http\Requests\Leave\StoreLeaveRequest;
 use App\Http\Requests\Leave\UpdateLeaveRequest;
 use App\Http\Resources\LeaveResource;
 use App\Http\Resources\LeaveSummaryResource;
+use App\Http\Resources\VacationLeaveQuarterUsageResource;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveInfoAttachment;
 use App\Services\Leave\LeaveAttachmentService;
@@ -17,7 +20,9 @@ use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveListService;
 use App\Services\Leave\LeaveModificationService;
 use App\Services\Leave\LeaveNotificationService;
+use App\Services\Leave\LeaveOnBehalfAuthorizationService;
 use App\Services\Leave\LeaveSubmissionService;
+use App\Services\Leave\VacationLeaveQuarterUsageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -32,6 +37,8 @@ class LeaveController extends Controller
         private readonly LeaveModificationService $modificationService,
         private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveNotificationService $notificationService,
+        private readonly LeaveOnBehalfAuthorizationService $onBehalfAuthorization,
+        private readonly VacationLeaveQuarterUsageService $quarterUsageService,
     ) {}
 
     /**
@@ -51,6 +58,30 @@ class LeaveController extends Controller
     }
 
     /**
+     * GET /api/leaves/quarter-usage — confirmed VL days in the overlapping quarter(s)
+     * plus this request. Informational only (never blocks filing).
+     */
+    public function quarterUsage(IndexVacationLeaveQuarterUsageRequest $request): VacationLeaveQuarterUsageResource
+    {
+        $empId = $request->validated('emp_id');
+
+        $target = $this->onBehalfAuthorization->resolveEmployeeOnLeave(
+            $request->employee(),
+            $empId !== null ? (int) $empId : null,
+        );
+
+        $usage = $this->quarterUsageService->preview(
+            (int) $target->id,
+            (string) $request->validated('start_date'),
+            (string) $request->validated('end_date'),
+            $request->enum('day_type', DayType::class),
+            (string) $request->validated('code'),
+        );
+
+        return VacationLeaveQuarterUsageResource::make($usage);
+    }
+
+    /**
      * GET /api/leaves/{leave} — full leave detail (approvals + conversion).
      */
     public function show(Request $request, LeaveInfo $leave): LeaveResource
@@ -61,7 +92,7 @@ class LeaveController extends Controller
     }
 
     /**
-     * POST /api/leaves — file VL/ML (JSON) or SL/PTB/EL/LL/PL (multipart + required attachments).
+     * POST /api/leaves — file VL/ML (JSON) or SL/PTB/EL/LL/PL/SPL (multipart + required attachments).
      */
     public function store(StoreLeaveRequest $request): JsonResponse
     {
@@ -78,7 +109,7 @@ class LeaveController extends Controller
     /**
      * PUT|POST /api/leaves/{leave} — edit a pending leave request (no approvals yet).
      *
-     * JSON (or form fields) for dates/reason. SL, PTB, EL, LL, and PL files are added or removed
+     * JSON (or form fields) for dates/reason. SL, PTB, EL, LL, PL, and SPL files are added or removed
      * through /leaves/{id}/attachments.
      */
     public function update(UpdateLeaveRequest $request, LeaveInfo $leave): LeaveResource

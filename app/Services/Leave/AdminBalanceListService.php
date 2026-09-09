@@ -121,7 +121,9 @@ class AdminBalanceListService
 
         if (! $this->isApplicable($code, $employee)) {
             throw ValidationException::withMessages([
-                'code' => ['This leave type is not applicable to this employee.'],
+                'code' => [strtoupper($code) === 'SPL'
+                    ? 'Special Leave does not use leave credits.'
+                    : 'This leave type is not applicable to this employee.'],
             ]);
         }
 
@@ -257,6 +259,7 @@ class AdminBalanceListService
         return match (strtoupper($code)) {
             'ML' => $employee->isFemale(),
             'PL' => $employee->isMale(),
+            'SPL' => false,
             default => true,
         };
     }

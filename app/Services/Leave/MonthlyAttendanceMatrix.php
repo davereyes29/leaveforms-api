@@ -92,9 +92,11 @@ class MonthlyAttendanceMatrix
         string $clipFrom,
         string $clipTo,
         array $holidayDates,
+        ?bool $calendarDays = null,
     ): array {
         $code = strtoupper($code);
-        $dates = LeaveTypeRules::usesCalendarDays($code)
+        $useCalendar = $calendarDays ?? LeaveTypeRules::usesCalendarDays($code);
+        $dates = $useCalendar
             ? $this->durationService->calendarDatesBetween($startDate, $endDate, $startDate, $endDate)
             : $this->durationService->workdaysBetween($startDate, $endDate, $startDate, $endDate, $holidayDates);
 

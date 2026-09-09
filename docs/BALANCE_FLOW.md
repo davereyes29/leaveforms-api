@@ -141,11 +141,11 @@ From `start_date`, `end_date`, `day_type`, and leave type:
 - **LL:** inclusive calendar days, full day only, **1–3 calendar months** (end ≥ start + 1 month − 1 day and ≤ start + 3 months − 1 day).
 - **ML:** inclusive calendar days, full day only, **exactly 105 days** (end = start + 104 days).
 
-Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section). **PTB and EL never use LWOP:** if duration > remaining credits of that type, submit is **422**. **LL is always unpaid** (`paid_days = 0`, `lwop_days = duration`); no credits are checked or reserved. **ML and PL grant credits on submit** (`parental_entitlement` for the full duration) then reserve; they are never LWOP.
+Set `duration`. Split into `paid_days` and `lwop_days` (see LWOP section). **PTB and EL never use LWOP:** if duration > remaining credits of that type, submit is **422**. **LL is always unpaid** (`paid_days = 0`, `lwop_days = duration`); no credits are checked or reserved. **ML and PL grant credits on submit** (`parental_entitlement` for the full duration) then reserve; they are never LWOP. **SPL is always fully paid** (`paid_days = duration`) but **does not** touch `leave_balance`.
 
 ### Step 2 — Reserve (`leave_reserved`)
 
-**When:** Submit with `paid_days > 0` and `status` → `pending_approval`. Uses the leave type being filed (VL credits for VL, SL for SL, PTB for PTB, EL for EL). **LL never reserves** (`paid_days` is always 0). **ML/PL:** grant first (`parental_entitlement` +duration), then reserve.
+**When:** Submit with `paid_days > 0` and `status` → `pending_approval`. Uses the leave type being filed (VL credits for VL, SL for SL, PTB for PTB, EL for EL). **LL never reserves** (`paid_days` is always 0). **ML/PL:** grant first (`parental_entitlement` +duration), then reserve. **SPL never reserves** (paid without credits).
 
 **Effect:**
 
