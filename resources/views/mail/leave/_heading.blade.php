@@ -4,6 +4,7 @@
 --}}
 @php
     $tone = $tone ?? 'pending';
+    $iconPadding = $iconPadding ?? '2px';
     $tones = [
         'pending' => [
             'bg' => '#fff8e1',
@@ -46,7 +47,7 @@
 <td class="email-status-box-inner" bgcolor="{{ $bg }}" style="padding: 16px 18px; background-color: {{ $bg }}; border: 1px solid {{ $border }}; border-radius: 8px;">
 <table cellpadding="0" cellspacing="0" role="presentation" style="width: 100%;">
 <tr>
-<td style="padding-right: 2px; vertical-align: top;">
+<td style="padding-right: {{ $iconPadding }}; vertical-align: top;">
 <img src="cid:status-icon"
       width="32" height="32" alt=""
        style="display:block;border:0;outline:none;text-decoration:none;width:32px;height:32px;max-width:32px;">

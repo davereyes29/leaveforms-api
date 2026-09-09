@@ -22,7 +22,7 @@ class QuarterlyVlExceededMail extends Mailable
         public string $adminName,
         public array $usage,
     ) {
-        $this->embedLeaveMailIcons('pending.png');
+        $this->embedLeaveMailIcons('alert.png');
     }
 
     public function envelope(): Envelope
@@ -30,7 +30,7 @@ class QuarterlyVlExceededMail extends Mailable
         $quarter = $this->quarterLabel();
 
         return new Envelope(
-            subject: 'Quarterly VL limit reminder — '.$this->employeeName.' ('.$quarter.')',
+            subject: 'Quarterly Leave Limit Reminder — '.$this->employeeName.' ('.$quarter.')',
         );
     }
 

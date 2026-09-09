@@ -3,6 +3,7 @@
     'status' => 'Quarterly Leave Limit Reminder',
     'message' => 'Approved Vacation Leave exceeds the quarterly limit',
     'tone' => 'pending',
+    'iconPadding' => '10px',
 ])
 
 Hello {{ $adminName }},
@@ -11,6 +12,7 @@ Hello {{ $adminName }},
 
 @include('mail.leave._kv_table', [
     'heading' => 'Leave Summary',
+    'labelWidth' => '30%',
     'rows' => [
         ['label' => 'Quarter', 'value' => $quarterLabel],
         ['label' => 'Approved VL', 'value' => $approvedVlLabel],
