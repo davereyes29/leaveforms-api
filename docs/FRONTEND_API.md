@@ -491,6 +491,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 |--------|------|----------------|
 | GET | `/leaves` | Query: `status`, `page`, `per_page` (1–50, default 15) — **slim** list rows; same `data` / `links` / `meta` envelope as `/activities` |
 | GET | `/leaves/quarter-usage` | VL quarterly cap preview (informational). Query: `start_date`, `end_date`, optional `day_type` (default `full`), optional `emp_id`, optional `code` (default `VL`) |
+| GET | `/leaves/lwop` | Current-year VL/SL unpaid days. Query: optional `year` (`YYYY`, default: current Asia/Manila year), optional `emp_id` |
 | POST | `/leaves` | File VL/ML (JSON) or SL/PTB/EL/LL/PL/SPL (multipart + required `leave_attachment[]`, 1–5 files) — **201**, returns **detail** shape |
 | GET | `/leaves/{id}` | Full leave detail (approvals + conversion) |
 | PUT or POST | `/leaves/{id}` | Edit pending leave dates/reason (JSON). Files are **not** accepted here |
@@ -544,6 +545,23 @@ On approve of a VL request that puts confirmed VL over **9.00** in that quarter,
 ```
 
 Non-VL `code` → `applicable: false`, `level: "ok"`. Unknown/inactive `emp_id` or on-behalf not allowed → same as `POST /leaves` (**422** / **403**). Invalid dates or no workdays → **422**.
+
+**Employee LWOP (`GET /leaves/lwop`):** accepted Vacation and Sick Leave without pay in the selected calendar year. Any authenticated employee. Same counting rules as `GET /admin/reports/employees-with-lwop` (including already-approved leave later in the year). Optional `emp_id` uses the same on-behalf PIC matrix as `GET /balances`. Invalid `year` → **422**. Always returns zeros when there is no accepted VL/SL LWOP.
+
+**Source leaves:** current type VL or SL, `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el`, Long Leave. `converted_to_sl` counts as **SL**. Whole-row `lwop_days` are summed when the leave overlaps **1 January–31 December of `year`**.
+
+```json
+{
+  "data": {
+    "year": 2026,
+    "vl_lwop_days": "0.00",
+    "sl_lwop_days": "1.50",
+    "total_lwop_days": "1.50"
+  }
+}
+```
+
+Example **Vacation Leave** submit body:
 
 ```json
 {
@@ -1883,15 +1901,16 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 15. **Convert VL** — on confirmed VL, choose SL (`med_cert[]`) or EL (`to_code=EL` + `leave_attachment[]`) + conversion reason. Warn when remaining EL `<` duration (`GET /balances?code=EL`). Add/remove files while pending with `/conversions/{id}/attachments`
 16. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 17. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
-18. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
-19. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
-20. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
-21. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`
-22. **Activity Log** — `GET /activities` (+ leave-type filter). Includes the viewer's credit grants (`annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`); `leave_id` is null on those rows
-23. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
-24. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=` (omit `emp_ids` for all active employees, or pass `emp_ids[]=` for a subset). Do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
-25. **Leave Monetization Candidates (admin)** — `GET /admin/reports/leave-monetization-candidates?year=` (`LEAVE_ADMIN_EMP_ID` only; excess VL > 10 and/or SL > 30; balances as of `min(today, Nov 30 of year)`). Excel / print on the frontend.
-26. **Employees with LWOP (admin)** — `GET /admin/reports/employees-with-lwop?year=` (optional `group_id`; `LEAVE_ADMIN_EMP_ID` only; VL/SL unpaid days in that year; starting VL/SL from annual entitlement `available_after`; consumed = paid + unpaid days of that type). Excel / print / search on the frontend.
+18. **Current LWOP** — `GET /leaves/lwop` (optional `?year=` and `?emp_id=`; VL/SL unpaid days this year; same rules as the admin LWOP report)
+19. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
+20. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
+21. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
+22. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`
+23. **Activity Log** — `GET /activities` (+ leave-type filter). Includes the viewer's credit grants (`annual_credits_distributed`, `regularization_credits_distributed`, `contractual_credits_distributed`, `credits_adjusted`); `leave_id` is null on those rows
+24. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
+25. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=` (omit `emp_ids` for all active employees, or pass `emp_ids[]=` for a subset). Do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
+26. **Leave Monetization Candidates (admin)** — `GET /admin/reports/leave-monetization-candidates?year=` (`LEAVE_ADMIN_EMP_ID` only; excess VL > 10 and/or SL > 30; balances as of `min(today, Nov 30 of year)`). Excel / print on the frontend.
+27. **Employees with LWOP (admin)** — `GET /admin/reports/employees-with-lwop?year=` (optional `group_id`; `LEAVE_ADMIN_EMP_ID` only; VL/SL unpaid days in that year; starting VL/SL from annual entitlement `available_after`; consumed = paid + unpaid days of that type). Excel / print / search on the frontend.
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL / SL / PTB / EL / LL / ML / PL / SPL, then approvals, then conversion, then activity log.
 

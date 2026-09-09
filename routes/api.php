@@ -46,6 +46,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/holidays', [HolidayController::class, 'index']);
     Route::get('/leaves', [LeaveController::class, 'index']);
     Route::get('/leaves/quarter-usage', [LeaveController::class, 'quarterUsage']);
+    Route::get('/leaves/lwop', [LeaveController::class, 'lwop']);
     Route::post('/leaves', [LeaveController::class, 'store']);
     Route::get('/leaves/{leave}', [LeaveController::class, 'show']);
     // POST is preferred for multipart/form-data (PHP does not parse files on PUT).

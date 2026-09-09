@@ -1,13 +1,13 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'status' => 'Quarterly VL Limit Reminder',
+    'status' => 'Quarterly Leave Limit Reminder',
     'message' => 'Approved Vacation Leave exceeds the quarterly limit',
     'tone' => 'pending',
 ])
 
 Hello {{ $adminName }},
 
-**{{ $employeeName }}**'s approved leave records for **{{ $quarterLabel }}** have exceeded the quarterly VL limit.
+**{{ $employeeName }}**'s approved Vacation Leave records for **{{ $quarterLabel }}** have exceeded the quarterly VL limit.
 
 @include('mail.leave._kv_table', [
     'heading' => 'Leave Summary',

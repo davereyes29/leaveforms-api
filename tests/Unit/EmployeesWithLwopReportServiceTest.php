@@ -240,6 +240,81 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         $service->forAdmin(Employee::query()->findOrFail(801), 2026);
     }
 
+    public function test_for_employee_splits_vl_and_sl_lwop_including_future_confirmed(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(801, $this->vlTypeId, '15.00', '2.00', '2026-03-02', '2026-03-20', 'confirmed');
+        $this->seedLeave(801, $this->slTypeId, '8.00', '1.50', '2026-04-06', '2026-04-16', 'confirmed');
+        $this->seedLeave(801, $this->vlTypeId, '0.00', '1.00', '2026-11-02', '2026-11-02', 'confirmed');
+        $this->seedLeave(801, $this->vlTypeId, '0.00', '2.00', '2026-12-01', '2026-12-02', 'pending_approval');
+        $this->seedLeave(801, $this->llTypeId, '0.00', '10.00', '2026-05-01', '2026-06-01', 'confirmed');
+        $this->seedLeave(801, $this->elTypeId, '5.00', '0.00', '2026-03-02', '2026-03-06', 'converted_to_el');
+        $this->seedLeave(801, $this->vlTypeId, '0.00', '4.00', '2025-08-04', '2025-08-05', 'confirmed');
+
+        $summary = $this->service->forEmployee(Employee::query()->findOrFail(801), 2026);
+
+        $this->assertSame([
+            'year' => 2026,
+            'vl_lwop_days' => '3.00',
+            'sl_lwop_days' => '1.50',
+            'total_lwop_days' => '4.50',
+        ], $summary);
+    }
+
+    public function test_for_employee_returns_zeros_when_there_is_no_lwop(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(801, $this->vlTypeId, '2.00', '0.00', '2026-03-02', '2026-03-03', 'confirmed');
+
+        $summary = $this->service->forEmployee(Employee::query()->findOrFail(801), 2026);
+
+        $this->assertSame([
+            'year' => 2026,
+            'vl_lwop_days' => '0.00',
+            'sl_lwop_days' => '0.00',
+            'total_lwop_days' => '0.00',
+        ], $summary);
+    }
+
+    public function test_for_employee_counts_pending_conversion_as_vl_and_converted_to_sl_as_sl(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(812, $this->vlTypeId, '5.00', '0.50', '2026-06-01', '2026-06-08', 'pending_conversion');
+        $this->seedLeave(813, $this->slTypeId, '3.00', '1.00', '2026-07-01', '2026-07-04', 'converted_to_sl');
+
+        $pat = $this->service->forEmployee(Employee::query()->findOrFail(812), 2026);
+        $sam = $this->service->forEmployee(Employee::query()->findOrFail(813), 2026);
+
+        $this->assertSame('0.50', $pat['vl_lwop_days']);
+        $this->assertSame('0.00', $pat['sl_lwop_days']);
+        $this->assertSame('0.50', $pat['total_lwop_days']);
+
+        $this->assertSame('0.00', $sam['vl_lwop_days']);
+        $this->assertSame('1.00', $sam['sl_lwop_days']);
+        $this->assertSame('1.00', $sam['total_lwop_days']);
+    }
+
+    public function test_for_employee_past_year_omits_other_years(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(815, $this->vlTypeId, '10.00', '2.00', '2025-08-04', '2025-08-18', 'confirmed');
+        $this->seedLeave(815, $this->vlTypeId, '0.00', '1.00', '2025-11-10', '2025-11-10', 'confirmed');
+        $this->seedLeave(815, $this->vlTypeId, '0.00', '4.00', '2026-02-02', '2026-02-05', 'confirmed');
+
+        $summary = $this->service->forEmployee(Employee::query()->findOrFail(815), 2025);
+
+        $this->assertSame([
+            'year' => 2025,
+            'vl_lwop_days' => '3.00',
+            'sl_lwop_days' => '0.00',
+            'total_lwop_days' => '3.00',
+        ], $summary);
+    }
+
     private function seedEntitlement(int $empId, int $leaveTypeId, string $availableAfter, string $manilaCreatedAt): void
     {
         $createdAt = CarbonImmutable::parse($manilaCreatedAt, 'Asia/Manila')->utc()->format('Y-m-d H:i:s');

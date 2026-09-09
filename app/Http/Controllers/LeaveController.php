@@ -5,16 +5,19 @@ namespace App\Http\Controllers;
 use App\Enums\Leave\DayType;
 use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\CancelLeaveRequest;
+use App\Http\Requests\Leave\IndexEmployeeLwopRequest;
 use App\Http\Requests\Leave\IndexLeaveRequest;
 use App\Http\Requests\Leave\IndexVacationLeaveQuarterUsageRequest;
 use App\Http\Requests\Leave\StoreLeaveAttachmentsRequest;
 use App\Http\Requests\Leave\StoreLeaveRequest;
 use App\Http\Requests\Leave\UpdateLeaveRequest;
+use App\Http\Resources\EmployeeLwopResource;
 use App\Http\Resources\LeaveResource;
 use App\Http\Resources\LeaveSummaryResource;
 use App\Http\Resources\VacationLeaveQuarterUsageResource;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveInfoAttachment;
+use App\Services\Leave\EmployeesWithLwopReportService;
 use App\Services\Leave\LeaveAttachmentService;
 use App\Services\Leave\LeaveCancellationService;
 use App\Services\Leave\LeaveListService;
@@ -39,6 +42,7 @@ class LeaveController extends Controller
         private readonly LeaveNotificationService $notificationService,
         private readonly LeaveOnBehalfAuthorizationService $onBehalfAuthorization,
         private readonly VacationLeaveQuarterUsageService $quarterUsageService,
+        private readonly EmployeesWithLwopReportService $lwopReportService,
     ) {}
 
     /**
@@ -79,6 +83,29 @@ class LeaveController extends Controller
         );
 
         return VacationLeaveQuarterUsageResource::make($usage);
+    }
+
+    /**
+     * GET /api/leaves/lwop — accepted VL/SL unpaid days for the current
+     * Manila calendar year (same rules as the admin LWOP report).
+     *
+     * Optional query: ?emp_id=212&year=2026
+     */
+    public function lwop(IndexEmployeeLwopRequest $request): EmployeeLwopResource
+    {
+        $empId = $request->validated('emp_id');
+
+        $target = $this->onBehalfAuthorization->resolveEmployeeOnLeave(
+            $request->employee(),
+            $empId !== null ? (int) $empId : null,
+        );
+
+        $summary = $this->lwopReportService->forEmployee(
+            $target,
+            (int) $request->validated('year'),
+        );
+
+        return EmployeeLwopResource::make($summary);
     }
 
     /**

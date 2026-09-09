@@ -15,14 +15,15 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Admin Employees with LWOP — VL/SL unpaid days for a Manila calendar year.
+ * VL/SL unpaid days for a Manila calendar year.
  *
- * Display period: 1 January of `year` through min(today, 31 December of `year`).
- * Leave totals: every accepted VL/SL overlapping 1 January–31 December of
- * `year`, including dates after today. Starting VL/SL = `available_after` on
- * that year's `annual_entitlement` ledger row (carryover + grant). Consumed =
- * accepted VL/SL days taken (`paid_days` + `lwop_days` of that type). LWOP =
- * `lwop_days` on VL/SL only (not Long Leave).
+ * Display period (admin report): 1 January of `year` through min(today,
+ * 31 December of `year`). Leave totals: every accepted VL/SL overlapping
+ * 1 January–31 December of `year`, including dates after today. Starting VL/SL
+ * = `available_after` on that year's `annual_entitlement` ledger row (carryover
+ * + grant). Consumed = accepted VL/SL days taken (`paid_days` + `lwop_days` of
+ * that type). LWOP = `lwop_days` on VL/SL only (not Long Leave).
+ * Employee summary (`forEmployee`) uses the same leave query and statuses.
  */
 class EmployeesWithLwopReportService
 {
@@ -140,6 +141,42 @@ class EmployeesWithLwopReportService
     }
 
     /**
+     * Current employee's VL/SL LWOP for a Manila calendar year (same rules as
+     * the admin report). Always returns zeros when there is no accepted LWOP.
+     *
+     * @return array{year: int, vl_lwop_days: string, sl_lwop_days: string, total_lwop_days: string}
+     *
+     * @throws ValidationException
+     */
+    public function forEmployee(Employee $employee, int $year): array
+    {
+        $tz = (string) config('leave.reminders.timezone', 'Asia/Manila');
+        [$periodStart, , $yearEnd] = $this->period($year, $tz);
+        [$vlType, $slType] = $this->vlAndSlTypes();
+
+        $totals = $this->totalsByEmployee(
+            [(int) $employee->id],
+            (int) $vlType->id,
+            (int) $slType->id,
+            $periodStart->toDateString(),
+            $yearEnd->toDateString(),
+        );
+
+        $row = $totals[(int) $employee->id] ?? [
+            'vl_lwop_days' => '0.00',
+            'sl_lwop_days' => '0.00',
+            'total_lwop_days' => '0.00',
+        ];
+
+        return [
+            'year' => $year,
+            'vl_lwop_days' => $row['vl_lwop_days'],
+            'sl_lwop_days' => $row['sl_lwop_days'],
+            'total_lwop_days' => $row['total_lwop_days'],
+        ];
+    }
+
+    /**
      * Display window is Jan 1 through min(today, Dec 31). Leave query uses the
      * full calendar year so future accepted dates in `year` still count.
      *
@@ -218,7 +255,7 @@ class EmployeesWithLwopReportService
 
     /**
      * @param  list<int>  $empIds
-     * @return array<int, array{vl_consumed: string, sl_consumed: string, total_lwop_days: string}>
+     * @return array<int, array{vl_consumed: string, sl_consumed: string, vl_lwop_days: string, sl_lwop_days: string, total_lwop_days: string}>
      */
     private function totalsByEmployee(
         array $empIds,
@@ -248,6 +285,8 @@ class EmployeesWithLwopReportService
                 $map[$empId] = [
                     'vl_consumed' => '0.00',
                     'sl_consumed' => '0.00',
+                    'vl_lwop_days' => '0.00',
+                    'sl_lwop_days' => '0.00',
                     'total_lwop_days' => '0.00',
                 ];
             }
@@ -261,10 +300,12 @@ class EmployeesWithLwopReportService
 
             if ((int) $leave->leave_type_id === $vlTypeId) {
                 $map[$empId]['vl_consumed'] = bcadd($map[$empId]['vl_consumed'], $taken, 2);
+                $map[$empId]['vl_lwop_days'] = bcadd($map[$empId]['vl_lwop_days'], $lwop, 2);
             }
 
             if ((int) $leave->leave_type_id === $slTypeId) {
                 $map[$empId]['sl_consumed'] = bcadd($map[$empId]['sl_consumed'], $taken, 2);
+                $map[$empId]['sl_lwop_days'] = bcadd($map[$empId]['sl_lwop_days'], $lwop, 2);
             }
 
             $map[$empId]['total_lwop_days'] = bcadd($map[$empId]['total_lwop_days'], $lwop, 2);
