@@ -31,7 +31,6 @@ class LeaveModificationService
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
         private readonly SpecialLeavePolicy $specialLeavePolicy,
         private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
-        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -50,7 +49,6 @@ class LeaveModificationService
         $this->assertLeaveIsEditable($leave);
         $this->assertIsEditableType($leave);
 
-        $wasQuarterlyNotified = (bool) $leave->quarterly_vl_excess_notified;
         $dayType = DayType::from($data['day_type']);
         $code = strtoupper((string) ($leave->leaveType?->code ?? 'VL'));
         $assignmentType = null;
@@ -162,7 +160,6 @@ class LeaveModificationService
         });
 
         $this->notificationService->notifyApproversOnEdit($leave);
-        $this->quarterNoticeService->onModified($leave, $wasQuarterlyNotified);
 
         return $leave;
     }

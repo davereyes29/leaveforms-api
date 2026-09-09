@@ -37,7 +37,6 @@ class LeaveSubmissionService
         private readonly ParentalLeavePolicy $parentalLeavePolicy,
         private readonly SpecialLeavePolicy $specialLeavePolicy,
         private readonly VacationLeaveNoticePolicy $vacationLeaveNoticePolicy,
-        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -188,7 +187,6 @@ class LeaveSubmissionService
         });
 
         $this->notificationService->notifyApproversOnSubmit($leave);
-        $this->quarterNoticeService->onSubmitted($leave);
 
         return $leave;
     }

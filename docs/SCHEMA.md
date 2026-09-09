@@ -55,7 +55,7 @@ Database schema for the Leave Form Revamp. Employee data is read from **kdtphdb*
 | `status` | enum | See below |
 | `cancellation_reason` | text | Nullable; **required** when `status = cancelled` |
 | `confirmed_at` | datetime | Nullable; set when `status = confirmed` |
-| `quarterly_vl_excess_notified` | boolean | Default false. Set when self/on-behalf VL would exceed 9 confirmed VL days in a quarter if approved (admin memo mail). |
+| `quarterly_vl_excess_notified` | boolean | Default false. Legacy flag from an earlier impending-memo flow; unused by current quarterly VL limit reminder (sent on approve when over cap). |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 

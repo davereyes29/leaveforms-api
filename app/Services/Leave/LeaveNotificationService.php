@@ -12,8 +12,6 @@ use App\Mail\Leave\LeaveEditedMail;
 use App\Mail\Leave\LeaveRejectedMail;
 use App\Mail\Leave\LeaveSubmittedMail;
 use App\Mail\Leave\QuarterlyVlExceededMail;
-use App\Mail\Leave\QuarterlyVlImpendingMail;
-use App\Mail\Leave\QuarterlyVlWithdrawnMail;
 use App\Mail\Leave\SickLeaveSubmittedMail;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveConversion;
@@ -530,43 +528,13 @@ class LeaveNotificationService
     /**
      * @param  array<string, mixed>  $usage
      */
-    public function notifyAdminOnQuarterlyVlImpending(LeaveInfo $leave, array $usage): void
-    {
-        $this->sendQuarterlyVlAdminMail(
-            $leave,
-            $usage,
-            'impending',
-            'Quarterly VL impending memo: admin email not found.',
-            'Quarterly VL impending memo failed.',
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $usage
-     */
     public function notifyAdminOnQuarterlyVlExceeded(LeaveInfo $leave, array $usage): void
     {
         $this->sendQuarterlyVlAdminMail(
             $leave,
             $usage,
-            'exceeded',
             'Quarterly VL exceeded memo: admin email not found.',
             'Quarterly VL exceeded memo failed.',
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $usage
-     */
-    public function notifyAdminOnQuarterlyVlWithdrawn(LeaveInfo $leave, array $usage, string $reason): void
-    {
-        $this->sendQuarterlyVlAdminMail(
-            $leave,
-            $usage,
-            'withdrawn',
-            'Quarterly VL withdrawn memo: admin email not found.',
-            'Quarterly VL withdrawn memo failed.',
-            $reason,
         );
     }
 
@@ -717,10 +685,8 @@ class LeaveNotificationService
     private function sendQuarterlyVlAdminMail(
         LeaveInfo $leave,
         array $usage,
-        string $kind,
         string $missingAdminLog,
         string $failedLog,
-        string $reason = 'cancelled',
     ): void {
         if (! config('leave.notifications.enabled', true)) {
             return;
@@ -744,11 +710,6 @@ class LeaveNotificationService
 
         $adminName = $admin->firstname ?: 'there';
         $ccEmails = $this->managerCcEmails($leave, $admin);
-        $mailable = match ($kind) {
-            'exceeded' => new QuarterlyVlExceededMail($leave, $employeeName, $adminName, $usage),
-            'withdrawn' => new QuarterlyVlWithdrawnMail($leave, $employeeName, $adminName, $usage, $reason),
-            default => new QuarterlyVlImpendingMail($leave, $employeeName, $adminName, $usage),
-        };
 
         try {
             $mail = Mail::to($admin->email);
@@ -757,7 +718,7 @@ class LeaveNotificationService
                 $mail->cc($ccEmails);
             }
 
-            $mail->send($mailable);
+            $mail->send(new QuarterlyVlExceededMail($leave, $employeeName, $adminName, $usage));
         } catch (\Throwable $exception) {
             Log::error($failedLog, [
                 'leave_id' => $leave->id,

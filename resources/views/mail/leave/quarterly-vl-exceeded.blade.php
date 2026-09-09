@@ -1,27 +1,30 @@
 <x-mail::message>
 @include('mail.leave._heading', [
-    'status' => 'Exceeded',
-    'message' => 'Quarterly VL memo — cap exceeded',
-    'tone' => 'approved',
+    'status' => 'Quarterly VL Limit Reminder',
+    'message' => 'Approved Vacation Leave exceeds the quarterly limit',
+    'tone' => 'pending',
 ])
 
 Hello {{ $adminName }},
 
-**{{ $employeeName }}** has now exceeded **{{ $usage['cap'] }} VL days** in **{{ $usage['quarter'] }}**. They currently have **{{ $usage['taken'] }} confirmed VL day(s)** against the quarterly cap. A memo may be issued.
+**{{ $employeeName }}**'s approved leave records for **{{ $quarterLabel }}** have exceeded the quarterly VL limit.
 
 @include('mail.leave._kv_table', [
-    'heading' => 'Quarter summary',
+    'heading' => 'Leave Summary',
     'rows' => [
-        ['label' => 'Employee', 'value' => $employeeName],
-        ['label' => 'Quarter', 'value' => $usage['quarter']],
-        ['label' => 'Confirmed VL this quarter', 'value' => $usage['taken'].' day(s)'],
-        ['label' => 'Quarterly cap', 'value' => $usage['cap'].' day(s)'],
+        ['label' => 'Quarter', 'value' => $quarterLabel],
+        ['label' => 'Approved VL', 'value' => $approvedVlLabel],
+        ['label' => 'Excess', 'value' => $excessLabel],
+        ['label' => 'Latest Approved Leave', 'value' => $latestLeaveDates],
+        ['label' => 'Duration', 'value' => $durationLabel],
     ],
 ])
 
+For management monitoring only. Any further action is subject to Management’s assessment.
+
 @if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-Open Leave Forms
+View leave record
 </x-mail::button>
 @endif
 

@@ -117,7 +117,6 @@ class LeaveApprovalService
         });
 
         $this->notificationService->notifyEmployeeOnReject($leave, $approver, $remarks);
-        $this->quarterNoticeService->onWithdrawn($leave, 'rejected');
 
         return $leave;
     }

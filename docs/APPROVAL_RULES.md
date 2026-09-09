@@ -248,7 +248,7 @@ Unexpected sickness **without** a medical certificate is filed as VL, then conve
 3. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
 4. Approvers act per matrix above.
 5. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
-6. Quarterly VL cap (**9.00** confirmed workdays, calendar quarter, Asia/Manila) is informational — **do not block** approval. `converted_to_sl` / `converted_to_el` do not count; `pending_conversion` still does. At **9.00** warn the employee. Above **9.00** warn and email **To** admin, **CC** designated VL-matrix approvers (impending on file, exceeded on approve, withdrawn on cancel/reject/edit back under the cap).
+6. Quarterly VL cap (**9.00** confirmed workdays, calendar quarter, Asia/Manila) is informational — **do not block** approval. `converted_to_sl` / `converted_to_el` do not count; `pending_conversion` still does. At **9.00** warn the employee. Above **9.00** warn the employee; when such a request is **approved** and confirmed VL is over the cap, email **To** admin, **CC** designated VL-matrix approvers (quarterly VL limit reminder).
 
 ### Sick Leave (SL) — direct filing
 

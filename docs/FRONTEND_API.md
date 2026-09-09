@@ -515,7 +515,7 @@ Self-filed VL notice (Asia/Manila): **exactly 3.00 workdays** must start at leas
 
 `taken` is **confirmed** + **pending_conversion** VL workdays overlapping that quarter. Pending, rejected, cancelled, `converted_to_sl`, and `converted_to_el` do **not** count. Half-days count as **0.50**. A range that spans two quarters returns `quarters[]` and top-level fields for the more severe quarter.
 
-On submit with `exceeded`, the API emails **To** admin and **CC** designated VL-matrix approvers (same PIC set as SL submit; person on leave). The mail is a **quarter-cap notice for the employee** (no leave dates or request detail). On approve of that request, a second mail (they now exceed the cap). On cancel, reject, or edit back to ≤ 9.00, a withdrawn follow-up. Edit that stays exceeded does **not** send a second impending mail.
+On approve of a VL request that puts confirmed VL over **9.00** in that quarter, the API emails **To** admin and **CC** designated VL-matrix approvers (same PIC set as SL submit; person on leave). The mail is a **quarterly VL limit reminder** for management monitoring (employee name, quarter totals, excess, and the latest approved leave). Submit, edit, cancel, and reject do **not** send this memo.
 
 ```json
 {

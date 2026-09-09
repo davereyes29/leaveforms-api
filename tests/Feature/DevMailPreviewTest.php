@@ -24,18 +24,16 @@ class DevMailPreviewTest extends TestCase
         $expected = [
             'submitted' => 'Leave request awaiting your approval',
             'sick-leave-submitted' => 'Sick Leave request awaiting your approval',
-            'confirmed' => 'Your leave request has been approved',
-            'rejected' => 'Your leave request has been rejected',
-            'cancelled' => 'Leave request cancelled',
-            'cancelled-by-admin' => 'Your leave request has been cancelled',
-            'reminder' => 'Reminder: Leave request awaiting your approval',
-            'reminder-digest' => 'Reminder: Pending leave requests',
+            'confirmed' => 'Your Vacation Leave request has been approved',
+            'rejected' => 'Your Vacation Leave request has been rejected',
+            'cancelled' => 'Vacation Leave request cancelled',
+            'cancelled-by-admin' => 'Your Vacation Leave request has been cancelled',
+            'reminder' => 'Vacation Leave request awaiting your approval',
+            'reminder-digest' => 'Pending leave requests awaiting your approval',
             'conversion-requested' => 'Leave conversion request awaiting your review',
             'conversion-approved' => 'Your leave conversion request has been approved',
             'conversion-rejected' => 'Your leave conversion request has been rejected',
-            'quarterly-vl-impending' => 'Impending quarterly VL memo',
-            'quarterly-vl-exceeded' => 'Quarterly VL memo — cap exceeded',
-            'quarterly-vl-withdrawn' => 'Quarterly VL memo withdrawn',
+            'quarterly-vl-exceeded' => 'Approved Vacation Leave exceeds the quarterly limit',
         ];
 
         foreach ($expected as $template => $heading) {

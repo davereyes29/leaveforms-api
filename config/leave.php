@@ -210,9 +210,9 @@ return [
     |
     | Quarterly VL cap is informational (never 422). Confirmed + pending_conversion
     | VL workdays overlapping the quarter count. Converted-to-SL/EL do not.
-    | Projected == cap → employee warning only. Projected > cap → warning +
-    | admin memo emails (impending on file, exceeded on approve, withdrawn
-    | on cancel/reject/edit back under the cap).
+    | Projected == cap → employee warning only. Projected > cap → warning;
+    | admin memo email is sent when that leave is approved and the quarter
+    | is actually over the cap.
     |
     */
     'vacation_leave' => [

@@ -20,7 +20,6 @@ class LeaveCancellationService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveNotificationService $notificationService,
         private readonly LeaveApproverResolver $approverResolver,
-        private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
     ) {}
 
     /**
@@ -66,7 +65,6 @@ class LeaveCancellationService
         });
 
         $this->notificationService->notifyApproversOnCancel($leave, $cancellationReason);
-        $this->quarterNoticeService->onWithdrawn($leave, 'cancelled');
 
         return $leave;
     }

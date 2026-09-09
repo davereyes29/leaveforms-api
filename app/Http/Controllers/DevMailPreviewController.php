@@ -13,8 +13,6 @@ use App\Mail\Leave\LeaveReminderDigestMail;
 use App\Mail\Leave\LeaveReminderMail;
 use App\Mail\Leave\LeaveSubmittedMail;
 use App\Mail\Leave\QuarterlyVlExceededMail;
-use App\Mail\Leave\QuarterlyVlImpendingMail;
-use App\Mail\Leave\QuarterlyVlWithdrawnMail;
 use App\Mail\Leave\SickLeaveSubmittedMail;
 use App\Models\Leave\LeaveConversion;
 use App\Models\Leave\LeaveInfo;
@@ -44,9 +42,7 @@ class DevMailPreviewController extends Controller
         'conversion-requested' => 'Leave conversion requested',
         'conversion-approved' => 'Leave conversion approved',
         'conversion-rejected' => 'Leave conversion rejected',
-        'quarterly-vl-impending' => 'Quarterly VL memo impending (to admin)',
-        'quarterly-vl-exceeded' => 'Quarterly VL memo exceeded (to admin)',
-        'quarterly-vl-withdrawn' => 'Quarterly VL memo withdrawn (to admin)',
+        'quarterly-vl-exceeded' => 'Quarterly VL limit reminder (to admin)',
     ];
 
     /**
@@ -136,24 +132,11 @@ class DevMailPreviewController extends Controller
                 $adminName,
                 'Medical certificate is incomplete (sample).',
             ),
-            'quarterly-vl-impending' => new QuarterlyVlImpendingMail(
-                $this->sampleLeave(),
-                $employeeName,
-                $adminName,
-                $this->sampleQuarterUsage('9.50'),
-            ),
             'quarterly-vl-exceeded' => new QuarterlyVlExceededMail(
                 $this->sampleLeave(),
                 $employeeName,
                 $adminName,
-                $this->sampleQuarterUsage('10.00', includeThisInTaken: true),
-            ),
-            'quarterly-vl-withdrawn' => new QuarterlyVlWithdrawnMail(
-                $this->sampleLeave(),
-                $employeeName,
-                $adminName,
-                $this->sampleQuarterUsage('9.50'),
-                'cancelled',
+                $this->sampleQuarterUsage('9.50', includeThisInTaken: true),
             ),
             default => abort(404),
         };
