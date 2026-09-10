@@ -126,6 +126,8 @@ leave_id        = NULL
 
 **When:** HR corrects a balance via `POST /api/admin/balances`.
 
+**Allowlist:** **VL, SL, EL, PTB** only. **ML and PL** are grant-on-submit (`parental_entitlement` when the leave is filed) and are **not** manual-adjust types — those codes → **422**. **LL** (unpaid) and **SPL** (no rolling credits) are also **422**.
+
 Available only (`reserved_delta` = 0). `available_delta` is signed (`+3` / `-3`). Always record `remarks`. Also writes a solo `leave_activity_history` row (`credits_adjusted`, `subject_emp_id` set).
 
 ---

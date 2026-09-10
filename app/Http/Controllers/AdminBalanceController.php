@@ -42,7 +42,7 @@ class AdminBalanceController extends Controller
     /**
      * POST /api/admin/balances — manual available-credit adjustment (admin only).
      *
-     * Body: { emp_id, code, available_delta, remarks }
+     * Body: { emp_id, code, available_delta, remarks }. code: VL, SL, EL, PTB only.
      */
     public function store(StoreAdminBalanceAdjustmentRequest $request): AdminEmployeeBalanceResource
     {

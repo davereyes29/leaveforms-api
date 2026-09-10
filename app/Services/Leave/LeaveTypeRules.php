@@ -68,6 +68,44 @@ final class LeaveTypeRules
     }
 
     /**
+     * Types HR may correct via POST /admin/balances.
+     * ML/PL are grant-on-submit; LL is unpaid; SPL has no rolling credits.
+     *
+     * @return list<string>
+     */
+    public static function manuallyAdjustableCodes(): array
+    {
+        return ['VL', 'SL', 'EL', 'PTB'];
+    }
+
+    public static function isManuallyAdjustable(string $code): bool
+    {
+        return in_array(strtoupper($code), self::manuallyAdjustableCodes(), true);
+    }
+
+    /**
+     * 422 copy for POST /admin/balances when `code` is not a manual-adjust type.
+     */
+    public static function manualAdjustmentRejection(string $code): ?string
+    {
+        $code = strtoupper($code);
+
+        if (self::grantsCreditsOnSubmit($code)) {
+            return 'Maternity and Paternity Leave credits cannot be adjusted manually. They are granted when the leave is filed.';
+        }
+
+        if (self::isManuallyAdjustable($code)) {
+            return null;
+        }
+
+        return match ($code) {
+            'SPL' => 'Special Leave does not use leave credits.',
+            'LL' => 'Long Leave does not use leave credits.',
+            default => 'This leave type cannot be adjusted manually.',
+        };
+    }
+
+    /**
      * Rolling leave_balance credits. Special Leave is paid but event-based
      * (no reserve / confirm / reverse ledger rows).
      */

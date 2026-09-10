@@ -1258,7 +1258,7 @@ Org-wide leave-credit table for **`LEAVE_ADMIN_EMP_ID` only**. Active employees 
 | Method | Path | Query / body |
 |--------|------|--------|
 | GET | `/admin/balances` | Optional: `?q=` (name or employee number), `?department_id=` (`department_list.id`), `?group_id=` (`group_list.id`), `?employment_status=regular\|probationary\|contractual`, `?sort=asc\|desc` (default `asc`, by employee number), `?page=1`, `?per_page=15` (1–50) |
-| POST | `/admin/balances` | `{ "emp_id": 8, "code": "VL", "available_delta": "-3.00", "remarks": "Opening balance overstated" }` — signed **available** correction only (`reserved` unchanged) |
+| POST | `/admin/balances` | `{ "emp_id": 8, "code": "VL", "available_delta": "-3.00", "remarks": "Opening balance overstated" }` — signed **available** correction only (`reserved` unchanged). `code`: **VL, SL, EL, PTB** only |
 
 Non-admin callers get **403**. Same Laravel `data` / `links` / `meta` pagination as `GET /admin/leaves`. Sorted by employee number (`employee_list.id` / `employee.employee_number`); default **lowest first** (`sort=asc`).
 
@@ -1343,11 +1343,11 @@ Each item is **one employee** with every `leave_type` (stable column set). Missi
 | Field | Notes |
 |-------|--------|
 | `emp_id` | Required. Active employee (`employee_list`). Unknown or inactive → **422**. |
-| `code` | Required. Must exist on `leave_type` (case-insensitive; stored uppercase). Unknown → **422**. |
+| `code` | Required. **VL, SL, EL, PTB** only (case-insensitive; stored uppercase). Unknown type → **422**. **ML/PL** → **422** (`code`: “Maternity and Paternity Leave credits cannot be adjusted manually. They are granted when the leave is filed.”). **LL** → **422** (no leave credits). **SPL** → **422** (does not use leave credits). |
 | `available_delta` | Required. Signed number, not zero, at most 2 decimal places. `+3` adds, `-3` subtracts **available** only. Would make available negative → **422** (`available_delta`: “Balance cannot go negative.”). |
 | `remarks` | Required. Same as other admin remarks (`string`, max 2000). |
 
-**ML** for a male employee, **PL** for a female employee, or **SPL** → **422** on `code` (SPL does not use leave credits). After 15 available / 3 reserved, `-2` VL → available `13.00`, reserved `3.00`.
+GET may still list **ML/PL** (and LL/SPL); the credit-grid UI ignores ML/PL. After 15 available / 3 reserved, `-2` VL → available `13.00`, reserved `3.00`.
 
 ### Annual entitlement (admin)
 
@@ -1902,7 +1902,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 16. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 17. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
 18. **Current LWOP** — `GET /leaves/lwop` (optional `?year=` and `?emp_id=`; VL/SL unpaid days this year; same rules as the admin LWOP report)
-19. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code`, `available_delta`, `remarks`)
+19. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code` VL/SL/EL/PTB only, `available_delta`, `remarks`). ML/PL cannot be adjusted (grant-on-submit).
 20. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
 21. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
 22. **Contractual entitlements (admin)** — `GET /admin/contractual-entitlements` (contractuals; current VL/SL). Assign typed amounts on FE → Confirm `POST /admin/contractual-entitlements` `{ employees: [{ emp_id, vl_to_add?, sl_to_add? }] }`

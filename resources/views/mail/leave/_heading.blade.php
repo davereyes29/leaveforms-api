@@ -53,7 +53,7 @@
        style="display:block;border:0;outline:none;text-decoration:none;width:32px;height:32px;max-width:32px;">
 </td>
 <td style="vertical-align: top;">
-<div class="email-status-label" style="margin: 0 0 1px; color: {{ $statusColor }}; font-size: 20px; font-weight: 800; letter-spacing: 0.02em; line-height: 24px; mso-line-height-rule: exactly; text-transform: uppercase;">
+<div class="email-status-label" style="margin: 0 0 4px; color: {{ $statusColor }}; font-size: 20px; font-weight: 800; letter-spacing: 0.02em; line-height: 24px; mso-line-height-rule: exactly; text-transform: uppercase;">
 {{ $status }}
 </div>
 <div class="email-status-message" style="margin: 0; color: #444c54; font-size: 15px; font-weight: 600; line-height: 20px;">

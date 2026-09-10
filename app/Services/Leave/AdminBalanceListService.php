@@ -24,7 +24,8 @@ use RuntimeException;
  * Employment status uses emp_prof.fldDesig (fallback: employee_list.designation).
  * Department and group use the employee's effective primary group
  * (employee_list.group_id, or LEAVE_EMPLOYEE_GROUP_OVERRIDES).
- * POST adjustments change available only (reserved is left as-is).
+ * POST adjustments change available only (reserved is left as-is) for VL, SL, EL, PTB.
+ * ML/PL are grant-on-submit and cannot be adjusted; LL/SPL are not credit-grid types.
  */
 class AdminBalanceListService
 {
@@ -119,11 +120,17 @@ class AdminBalanceListService
             ]);
         }
 
+        $codeRejection = LeaveTypeRules::manualAdjustmentRejection($code);
+
+        if ($codeRejection !== null) {
+            throw ValidationException::withMessages([
+                'code' => [$codeRejection],
+            ]);
+        }
+
         if (! $this->isApplicable($code, $employee)) {
             throw ValidationException::withMessages([
-                'code' => [strtoupper($code) === 'SPL'
-                    ? 'Special Leave does not use leave credits.'
-                    : 'This leave type is not applicable to this employee.'],
+                'code' => ['This leave type is not applicable to this employee.'],
             ]);
         }
 

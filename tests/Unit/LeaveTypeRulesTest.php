@@ -26,6 +26,27 @@ class LeaveTypeRulesTest extends TestCase
         $this->assertTrue(LeaveTypeRules::usesCredits('EL'));
     }
 
+    public function test_manual_adjust_allowlist_is_vl_sl_el_ptb(): void
+    {
+        $this->assertSame(
+            ['VL', 'SL', 'EL', 'PTB'],
+            LeaveTypeRules::manuallyAdjustableCodes(),
+        );
+
+        foreach (['VL', 'SL', 'EL', 'PTB'] as $code) {
+            $this->assertTrue(LeaveTypeRules::isManuallyAdjustable($code));
+            $this->assertNull(LeaveTypeRules::manualAdjustmentRejection($code));
+        }
+
+        $parental = 'Maternity and Paternity Leave credits cannot be adjusted manually. They are granted when the leave is filed.';
+        $this->assertSame($parental, LeaveTypeRules::manualAdjustmentRejection('ML'));
+        $this->assertSame($parental, LeaveTypeRules::manualAdjustmentRejection('pl'));
+        $this->assertSame('Special Leave does not use leave credits.', LeaveTypeRules::manualAdjustmentRejection('SPL'));
+        $this->assertSame('Long Leave does not use leave credits.', LeaveTypeRules::manualAdjustmentRejection('LL'));
+        $this->assertFalse(LeaveTypeRules::isManuallyAdjustable('ML'));
+        $this->assertFalse(LeaveTypeRules::isManuallyAdjustable('PL'));
+    }
+
     public function test_special_leave_is_admin_approved_full_day_with_supporting_documents(): void
     {
         $this->assertTrue(LeaveTypeRules::isAdminApproved('SPL'));
