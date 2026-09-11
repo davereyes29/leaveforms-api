@@ -86,8 +86,8 @@ class LeaveController extends Controller
     }
 
     /**
-     * GET /api/leaves/lwop — accepted VL/SL unpaid days for the current
-     * Manila calendar year (same rules as the admin LWOP report).
+     * GET /api/leaves/lwop — accepted VL/SL/LL unpaid days for the current
+     * Manila calendar year (VL/SL same as the admin LWOP report, plus LL).
      *
      * Optional query: ?emp_id=212&year=2026
      */

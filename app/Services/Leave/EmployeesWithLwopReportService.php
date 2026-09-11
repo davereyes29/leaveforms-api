@@ -15,15 +15,16 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
- * VL/SL unpaid days for a Manila calendar year.
+ * VL/SL/LL unpaid days for a Manila calendar year.
  *
  * Display period (admin report): 1 January of `year` through min(today,
- * 31 December of `year`). Leave totals: every accepted VL/SL overlapping
+ * 31 December of `year`). Leave totals: every accepted VL/SL/LL overlapping
  * 1 January–31 December of `year`, including dates after today. Starting VL/SL
  * = `available_after` on that year's `annual_entitlement` ledger row (carryover
- * + grant). Consumed = accepted VL/SL days taken (`paid_days` + `lwop_days` of
- * that type). LWOP = `lwop_days` on VL/SL only (not Long Leave).
- * Employee summary (`forEmployee`) uses the same leave query and statuses.
+ * + grant). Consumed = accepted days taken (`paid_days` + `lwop_days` of
+ * that type). Admin LWOP = VL/SL `lwop_days` plus confirmed Long Leave
+ * (`ll_consumed` = duration). Employee summary (`forEmployee`) uses the same
+ * leave query and statuses.
  */
 class EmployeesWithLwopReportService
 {
@@ -53,6 +54,7 @@ class EmployeesWithLwopReportService
         $tz = (string) config('leave.reminders.timezone', 'Asia/Manila');
         [$periodStart, $asOf, $yearEnd] = $this->period($year, $tz);
         [$vlType, $slType] = $this->vlAndSlTypes();
+        $llType = $this->longLeaveType();
 
         $employees = $this->activeEmployees($groupId);
         $empIds = $employees
@@ -63,6 +65,7 @@ class EmployeesWithLwopReportService
             $empIds,
             (int) $vlType->id,
             (int) $slType->id,
+            (int) $llType->id,
             $periodStart->toDateString(),
             $yearEnd->toDateString(),
         );
@@ -87,6 +90,7 @@ class EmployeesWithLwopReportService
         $grandVlConsumed = '0.00';
         $grandSlBalance = '0.00';
         $grandSlConsumed = '0.00';
+        $grandLlConsumed = '0.00';
         $grandLwop = '0.00';
 
         foreach ($employees as $employee) {
@@ -100,6 +104,7 @@ class EmployeesWithLwopReportService
             $starting = $startingByEmp[$empId] ?? ['vl' => '0.00', 'sl' => '0.00'];
             $vlBalance = $this->decimalString($starting['vl']);
             $slBalance = $this->decimalString($starting['sl']);
+            $llConsumed = $totals['ll_consumed'];
 
             $rows[] = [
                 'employee' => $this->employeePayload($employee),
@@ -107,6 +112,7 @@ class EmployeesWithLwopReportService
                 'vl_consumed' => $totals['vl_consumed'],
                 'sl_balance' => $slBalance,
                 'sl_consumed' => $totals['sl_consumed'],
+                'll_consumed' => $llConsumed,
                 'total_lwop_days' => $totals['total_lwop_days'],
             ];
 
@@ -114,6 +120,7 @@ class EmployeesWithLwopReportService
             $grandVlConsumed = bcadd($grandVlConsumed, $totals['vl_consumed'], 2);
             $grandSlBalance = bcadd($grandSlBalance, $slBalance, 2);
             $grandSlConsumed = bcadd($grandSlConsumed, $totals['sl_consumed'], 2);
+            $grandLlConsumed = bcadd($grandLlConsumed, $llConsumed, 2);
             $grandLwop = bcadd($grandLwop, $totals['total_lwop_days'], 2);
         }
 
@@ -135,16 +142,17 @@ class EmployeesWithLwopReportService
                 'vl_consumed' => $this->decimalString($grandVlConsumed),
                 'sl_balance' => $this->decimalString($grandSlBalance),
                 'sl_consumed' => $this->decimalString($grandSlConsumed),
+                'll_consumed' => $this->decimalString($grandLlConsumed),
                 'total_lwop_days' => $this->decimalString($grandLwop),
             ],
         ];
     }
 
     /**
-     * Current employee's VL/SL LWOP for a Manila calendar year (same rules as
-     * the admin report). Always returns zeros when there is no accepted LWOP.
+     * Current employee's VL/SL/LL LWOP for a Manila calendar year. Same leave
+     * query as the admin report. Always returns zeros when there is no accepted LWOP.
      *
-     * @return array{year: int, vl_lwop_days: string, sl_lwop_days: string, total_lwop_days: string}
+     * @return array{year: int, vl_lwop_days: string, sl_lwop_days: string, ll_lwop_days: string, total_lwop_days: string}
      *
      * @throws ValidationException
      */
@@ -153,18 +161,22 @@ class EmployeesWithLwopReportService
         $tz = (string) config('leave.reminders.timezone', 'Asia/Manila');
         [$periodStart, , $yearEnd] = $this->period($year, $tz);
         [$vlType, $slType] = $this->vlAndSlTypes();
+        $llType = $this->longLeaveType();
+        $empId = (int) $employee->id;
 
         $totals = $this->totalsByEmployee(
-            [(int) $employee->id],
+            [$empId],
             (int) $vlType->id,
             (int) $slType->id,
+            (int) $llType->id,
             $periodStart->toDateString(),
             $yearEnd->toDateString(),
         );
 
-        $row = $totals[(int) $employee->id] ?? [
+        $row = $totals[$empId] ?? [
             'vl_lwop_days' => '0.00',
             'sl_lwop_days' => '0.00',
+            'll_consumed' => '0.00',
             'total_lwop_days' => '0.00',
         ];
 
@@ -172,6 +184,7 @@ class EmployeesWithLwopReportService
             'year' => $year,
             'vl_lwop_days' => $row['vl_lwop_days'],
             'sl_lwop_days' => $row['sl_lwop_days'],
+            'll_lwop_days' => $row['ll_consumed'],
             'total_lwop_days' => $row['total_lwop_days'],
         ];
     }
@@ -221,6 +234,24 @@ class EmployeesWithLwopReportService
     }
 
     /**
+     * @throws ValidationException
+     */
+    private function longLeaveType(): LeaveType
+    {
+        $ll = LeaveType::query()
+            ->where('code', 'LL')
+            ->first();
+
+        if ($ll === null) {
+            throw ValidationException::withMessages([
+                'leave_type' => ['Long Leave type must exist.'],
+            ]);
+        }
+
+        return $ll;
+    }
+
+    /**
      * @return Collection<int, Employee>
      */
     private function activeEmployees(?int $groupId): Collection
@@ -255,12 +286,13 @@ class EmployeesWithLwopReportService
 
     /**
      * @param  list<int>  $empIds
-     * @return array<int, array{vl_consumed: string, sl_consumed: string, vl_lwop_days: string, sl_lwop_days: string, total_lwop_days: string}>
+     * @return array<int, array{vl_consumed: string, sl_consumed: string, ll_consumed: string, vl_lwop_days: string, sl_lwop_days: string, total_lwop_days: string}>
      */
     private function totalsByEmployee(
         array $empIds,
         int $vlTypeId,
         int $slTypeId,
+        int $llTypeId,
         string $start,
         string $end,
     ): array {
@@ -270,7 +302,7 @@ class EmployeesWithLwopReportService
 
         $leaves = LeaveInfo::query()
             ->whereIn('emp_id', $empIds)
-            ->whereIn('leave_type_id', [$vlTypeId, $slTypeId])
+            ->whereIn('leave_type_id', [$vlTypeId, $slTypeId, $llTypeId])
             ->whereIn('status', self::STATUSES)
             ->whereDate('start_date', '<=', $end)
             ->whereDate('end_date', '>=', $start)
@@ -285,6 +317,7 @@ class EmployeesWithLwopReportService
                 $map[$empId] = [
                     'vl_consumed' => '0.00',
                     'sl_consumed' => '0.00',
+                    'll_consumed' => '0.00',
                     'vl_lwop_days' => '0.00',
                     'sl_lwop_days' => '0.00',
                     'total_lwop_days' => '0.00',
@@ -297,15 +330,20 @@ class EmployeesWithLwopReportService
                 2,
             );
             $lwop = $this->decimalString($leave->lwop_days);
+            $typeId = (int) $leave->leave_type_id;
 
-            if ((int) $leave->leave_type_id === $vlTypeId) {
+            if ($typeId === $vlTypeId) {
                 $map[$empId]['vl_consumed'] = bcadd($map[$empId]['vl_consumed'], $taken, 2);
                 $map[$empId]['vl_lwop_days'] = bcadd($map[$empId]['vl_lwop_days'], $lwop, 2);
             }
 
-            if ((int) $leave->leave_type_id === $slTypeId) {
+            if ($typeId === $slTypeId) {
                 $map[$empId]['sl_consumed'] = bcadd($map[$empId]['sl_consumed'], $taken, 2);
                 $map[$empId]['sl_lwop_days'] = bcadd($map[$empId]['sl_lwop_days'], $lwop, 2);
+            }
+
+            if ($typeId === $llTypeId) {
+                $map[$empId]['ll_consumed'] = bcadd($map[$empId]['ll_consumed'], $taken, 2);
             }
 
             $map[$empId]['total_lwop_days'] = bcadd($map[$empId]['total_lwop_days'], $lwop, 2);

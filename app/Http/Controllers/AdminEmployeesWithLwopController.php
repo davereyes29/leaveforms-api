@@ -13,7 +13,7 @@ class AdminEmployeesWithLwopController extends Controller
     ) {}
 
     /**
-     * GET /api/admin/reports/employees-with-lwop — VL/SL unpaid days (admin only).
+     * GET /api/admin/reports/employees-with-lwop — VL/SL/LL unpaid days (admin only).
      *
      * Query: optional year=YYYY (default: current Manila year), optional group_id
      */

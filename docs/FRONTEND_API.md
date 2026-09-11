@@ -491,7 +491,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 |--------|------|----------------|
 | GET | `/leaves` | Query: `status`, `page`, `per_page` (1–50, default 15) — **slim** list rows; same `data` / `links` / `meta` envelope as `/activities` |
 | GET | `/leaves/quarter-usage` | VL quarterly cap preview (informational). Query: `start_date`, `end_date`, optional `day_type` (default `full`), optional `emp_id`, optional `code` (default `VL`) |
-| GET | `/leaves/lwop` | Current-year VL/SL unpaid days. Query: optional `year` (`YYYY`, default: current Asia/Manila year), optional `emp_id` |
+| GET | `/leaves/lwop` | Current-year VL/SL/LL unpaid days. Query: optional `year` (`YYYY`, default: current Asia/Manila year), optional `emp_id` |
 | POST | `/leaves` | File VL/ML (JSON) or SL/PTB/EL/LL/PL/SPL (multipart + required `leave_attachment[]`, 1–5 files) — **201**, returns **detail** shape |
 | GET | `/leaves/{id}` | Full leave detail (approvals + conversion) |
 | PUT or POST | `/leaves/{id}` | Edit pending leave dates/reason (JSON). Files are **not** accepted here |
@@ -546,9 +546,9 @@ On approve of a VL request that puts confirmed VL over **9.00** in that quarter,
 
 Non-VL `code` → `applicable: false`, `level: "ok"`. Unknown/inactive `emp_id` or on-behalf not allowed → same as `POST /leaves` (**422** / **403**). Invalid dates or no workdays → **422**.
 
-**Employee LWOP (`GET /leaves/lwop`):** accepted Vacation and Sick Leave without pay in the selected calendar year. Any authenticated employee. Same counting rules as `GET /admin/reports/employees-with-lwop` (including already-approved leave later in the year). Optional `emp_id` uses the same on-behalf PIC matrix as `GET /balances`. Invalid `year` → **422**. Always returns zeros when there is no accepted VL/SL LWOP.
+**Employee LWOP (`GET /leaves/lwop`):** accepted Vacation, Sick, and Long Leave without pay in the selected calendar year. Any authenticated employee. Same year, statuses, and types as `GET /admin/reports/employees-with-lwop` (including already-approved leave later in the year). Optional `emp_id` uses the same on-behalf PIC matrix as `GET /balances`. Invalid `year` → **422**. Always returns zeros when there is no accepted VL/SL/LL LWOP.
 
-**Source leaves:** current type VL or SL, `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el`, Long Leave. `converted_to_sl` counts as **SL**. Whole-row `lwop_days` are summed when the leave overlaps **1 January–31 December of `year`**.
+**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el`. `converted_to_sl` counts as **SL**. Whole-row `lwop_days` are summed when the leave overlaps **1 January–31 December of `year`**. `total_lwop_days` = VL + SL + LL.
 
 ```json
 {
@@ -556,7 +556,8 @@ Non-VL `code` → `applicable: false`, `level: "ok"`. Unknown/inactive `emp_id` 
     "year": 2026,
     "vl_lwop_days": "0.00",
     "sl_lwop_days": "1.50",
-    "total_lwop_days": "1.50"
+    "ll_lwop_days": "31.00",
+    "total_lwop_days": "32.50"
   }
 }
 ```
@@ -1179,7 +1180,7 @@ This endpoint is **read-only**. Deducting monetized credits from the ledger is a
 
 ### Employees with LWOP (admin)
 
-Employees who took **Vacation or Sick Leave without pay** in the selected year. **`LEAVE_ADMIN_EMP_ID` only**. Active employees only (`employee_list.emp_status = 1`). Includes the admin when they have VL/SL LWOP.
+Employees who took **Vacation Leave, Sick Leave, or Long Leave without pay** in the selected year. **`LEAVE_ADMIN_EMP_ID` only**. Active employees only (`employee_list.emp_status = 1`). Includes the admin when they have VL/SL/LL LWOP.
 
 Excel / print file generation is out of scope (frontend). No pagination — search, group table paging, and export stay on the frontend after generate. Optional `group_id` is applied on generate (dropdown: `GET /admin/groups`).
 
@@ -1191,11 +1192,11 @@ Non-admin callers get **403**. Invalid `year` or unknown `group_id` → **422**.
 
 **Reporting period** (UI label, Asia/Manila): `1 January of year` through `min(today, 31 December of year)`. Current year shows year-to-date (e.g. 1 January 2026 – 4 September 2026). A past year shows the full calendar year (1 January 2025 – 31 December 2025).
 
-**Leave totals:** every accepted VL/SL whose `start_date`/`end_date` overlap **1 January–31 December of `year`**, including dates **after today** (already-approved leave later in the year). Whole-row `paid_days` / `lwop_days` are summed. Pending requests are omitted.
+**Leave totals:** every accepted VL/SL/LL whose `start_date`/`end_date` overlap **1 January–31 December of `year`**, including dates **after today** (already-approved leave later in the year). Whole-row `paid_days` / `lwop_days` are summed. Pending requests are omitted.
 
-**Who appears:** `total_lwop_days > 0` from **VL and SL only**. Long Leave is always unpaid by type and is **omitted**. Paid-only VL/SL is omitted.
+**Who appears:** `total_lwop_days > 0` from **VL, SL, or confirmed Long Leave**. Paid-only VL/SL is omitted unless they also have LL.
 
-**Source leaves:** current type VL or SL, `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el` (LWOP was cleared when the VL became paid EL). `converted_to_sl` counts as **SL consumed**, not VL.
+**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el` (LWOP was cleared when the VL became paid EL). `converted_to_sl` counts as **SL consumed**, not VL.
 
 | Column | Field | Meaning |
 |--------|--------|---------|
@@ -1203,7 +1204,8 @@ Non-admin callers get **403**. Invalid `year` or unknown `group_id` → **422**.
 | VL Consumed | `vl_consumed` | All accepted VL days taken that year (`paid_days` + `lwop_days`). Can exceed `vl_balance` when VL was filed without pay. |
 | SL Balance | `sl_balance` | Same as VL, for SL (15 or 18 at grant) |
 | SL Consumed | `sl_consumed` | All accepted SL days taken that year (`paid_days` + `lwop_days`). Can exceed `sl_balance` when SL was filed without pay. |
-| Total LWOP Days | `total_lwop_days` | Sum of VL + SL `lwop_days` in the selected calendar year (days beyond remaining credits) |
+| LL Consumed | `ll_consumed` | All accepted Long Leave days taken that year (always unpaid; `lwop_days` = duration). No `ll_balance`. |
+| Total LWOP Days | `total_lwop_days` | Sum of VL + SL `lwop_days` plus LL in the selected calendar year |
 
 `regularization_entitlement` / `contractual_entitlement` are **not** used as the starting snapshot. Rows sorted by employee number ascending. `grand_totals` sum every displayed row.
 
@@ -1228,7 +1230,8 @@ Non-admin callers get **403**. Invalid `year` or unknown `group_id` → **422**.
         "vl_consumed": "18.00",
         "sl_balance": "18.00",
         "sl_consumed": "9.00",
-        "total_lwop_days": "4.00"
+        "ll_consumed": "31.00",
+        "total_lwop_days": "35.00"
       }
     ],
     "grand_totals": {
@@ -1236,7 +1239,8 @@ Non-admin callers get **403**. Invalid `year` or unknown `group_id` → **422**.
       "vl_consumed": "18.00",
       "sl_balance": "18.00",
       "sl_consumed": "9.00",
-      "total_lwop_days": "4.00"
+      "ll_consumed": "31.00",
+      "total_lwop_days": "35.00"
     }
   }
 }
@@ -1901,7 +1905,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 15. **Convert VL** — on confirmed VL, choose SL (`med_cert[]`) or EL (`to_code=EL` + `leave_attachment[]`) + conversion reason. Warn when remaining EL `<` duration (`GET /balances?code=EL`). Add/remove files while pending with `/conversions/{id}/attachments`
 16. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
 17. **Balances** — `GET /balances` (optional `?emp_id=` for on-behalf)
-18. **Current LWOP** — `GET /leaves/lwop` (optional `?year=` and `?emp_id=`; VL/SL unpaid days this year; same rules as the admin LWOP report)
+18. **Current LWOP** — `GET /leaves/lwop` (optional `?year=` and `?emp_id=`; VL/SL/LL unpaid days this year; VL/SL same as the admin LWOP report, plus confirmed Long Leave)
 19. **Employee balances (admin)** — `GET /admin/balances` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; `?sort=asc|desc` by employee number; filter by department / group / employment status). Dropdowns: `GET /admin/departments`, `GET /admin/groups` (`dept_id` for cascade). Adjust available: `POST /admin/balances` (`emp_id`, `code` VL/SL/EL/PTB only, `available_delta`, `remarks`). ML/PL cannot be adjusted (grant-on-submit).
 20. **Annual entitlement (admin)** — `GET /admin/annual-entitlements` (regulars; `already_granted`; tenure as of 1 Jan). Review: refetch `GET /admin/annual-entitlements?year=&emp_ids=` then Confirm `POST /admin/annual-entitlements` `{ year, emp_ids }`
 21. **Newly regularized (admin)** — `GET /admin/newly-regularized` (6–12 months tenure; hired after 1 Jan; exclude contractual / annual recipients). Review: refetch `?year=&emp_ids=` then Confirm `POST /admin/newly-regularized` `{ year, emp_ids }`
@@ -1910,7 +1914,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 24. **Administrative Log (admin)** — `GET /admin/activities` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or number, `?group_id=`, `?code=`, `?month=YYYY-MM`). Includes cancel / edit / conversion. Batch credit grants are summarized (**Multiple Employees**); manual adjust is one employee per row.
 25. **Monthly Attendance Report (admin)** — `GET /admin/groups` + `GET /admin/employees?group_id=` for filters, then `GET /admin/reports/monthly-attendance?month=&cut_off=` (omit `emp_ids` for all active employees, or pass `emp_ids[]=` for a subset). Do **not** assemble from `/team/calendar`, `/holidays`, or `/admin/leaves` / `/admin/balances`)
 26. **Leave Monetization Candidates (admin)** — `GET /admin/reports/leave-monetization-candidates?year=` (`LEAVE_ADMIN_EMP_ID` only; excess VL > 10 and/or SL > 30; balances as of `min(today, Nov 30 of year)`). Excel / print on the frontend.
-27. **Employees with LWOP (admin)** — `GET /admin/reports/employees-with-lwop?year=` (optional `group_id`; `LEAVE_ADMIN_EMP_ID` only; VL/SL unpaid days in that year; starting VL/SL from annual entitlement `available_after`; consumed = paid + unpaid days of that type). Excel / print / search on the frontend.
+27. **Employees with LWOP (admin)** — `GET /admin/reports/employees-with-lwop?year=` (optional `group_id`; `LEAVE_ADMIN_EMP_ID` only; VL/SL/LL unpaid days in that year; starting VL/SL from annual entitlement `available_after`; consumed = paid + unpaid days of that type, plus `ll_consumed`). Excel / print / search on the frontend.
 
 Build order tip: start with `/me` + balances + holidays + my leaves + file VL / SL / PTB / EL / LL / ML / PL / SPL, then approvals, then conversion, then activity log.
 

@@ -128,32 +128,42 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         $this->assertSame('2026-01-01', $report['period']['start_date']);
         $this->assertSame('2026-09-04', $report['period']['end_date']);
         $this->assertNull($report['group']);
-        $this->assertSame(4, $report['employee_count']);
+        $this->assertSame(5, $report['employee_count']);
 
         $byId = collect($report['rows'])->keyBy(fn (array $row): int => $row['employee']['id']);
 
-        $this->assertSame([801, 812, 813, 820], $byId->keys()->all());
+        $this->assertSame([801, 810, 812, 813, 820], $byId->keys()->all());
 
         $alex = $byId->get(801);
         $this->assertSame('20.00', $alex['vl_balance']);
         $this->assertSame('18.00', $alex['vl_consumed']);
         $this->assertSame('18.00', $alex['sl_balance']);
         $this->assertSame('9.00', $alex['sl_consumed']);
+        $this->assertSame('0.00', $alex['ll_consumed']);
         $this->assertSame('4.00', $alex['total_lwop_days']);
+
+        $longLeave = $byId->get(810);
+        $this->assertSame('0.00', $longLeave['vl_consumed']);
+        $this->assertSame('0.00', $longLeave['sl_consumed']);
+        $this->assertSame('10.00', $longLeave['ll_consumed']);
+        $this->assertSame('10.00', $longLeave['total_lwop_days']);
 
         $pat = $byId->get(812);
         $this->assertSame('0.00', $pat['vl_balance']);
         $this->assertSame('5.50', $pat['vl_consumed']);
+        $this->assertSame('0.00', $pat['ll_consumed']);
         $this->assertSame('0.50', $pat['total_lwop_days']);
 
         $sam = $byId->get(813);
         $this->assertSame('0.00', $sam['vl_consumed']);
         $this->assertSame('4.00', $sam['sl_consumed']);
+        $this->assertSame('0.00', $sam['ll_consumed']);
         $this->assertSame('1.00', $sam['total_lwop_days']);
 
         $noGrant = $byId->get(820);
         $this->assertSame('0.00', $noGrant['vl_balance']);
         $this->assertSame('1.50', $noGrant['vl_consumed']);
+        $this->assertSame('0.00', $noGrant['ll_consumed']);
         $this->assertSame('1.50', $noGrant['total_lwop_days']);
 
         $this->assertSame([
@@ -161,7 +171,8 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             'vl_consumed' => '25.00',
             'sl_balance' => '18.00',
             'sl_consumed' => '13.00',
-            'total_lwop_days' => '7.00',
+            'll_consumed' => '10.00',
+            'total_lwop_days' => '17.00',
         ], $report['grand_totals']);
     }
 
@@ -178,6 +189,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         $this->assertSame('2026-09-04', $report['period']['end_date']);
         $this->assertSame(1, $report['employee_count']);
         $this->assertSame(801, $report['rows'][0]['employee']['id']);
+        $this->assertSame('0.00', $report['rows'][0]['ll_consumed']);
         $this->assertSame('1.00', $report['rows'][0]['total_lwop_days']);
     }
 
@@ -199,6 +211,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         $this->assertSame(815, $report['rows'][0]['employee']['id']);
         $this->assertSame('15.00', $report['rows'][0]['vl_balance']);
         $this->assertSame('13.00', $report['rows'][0]['vl_consumed']);
+        $this->assertSame('0.00', $report['rows'][0]['ll_consumed']);
         $this->assertSame('3.00', $report['rows'][0]['total_lwop_days']);
     }
 
@@ -219,6 +232,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         ], $report['group']);
         $this->assertSame(1, $report['employee_count']);
         $this->assertSame(808, $report['rows'][0]['employee']['id']);
+        $this->assertSame('0.00', $report['rows'][0]['ll_consumed']);
         $this->assertSame('2.00', $report['rows'][0]['total_lwop_days']);
     }
 
@@ -258,7 +272,8 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             'year' => 2026,
             'vl_lwop_days' => '3.00',
             'sl_lwop_days' => '1.50',
-            'total_lwop_days' => '4.50',
+            'll_lwop_days' => '10.00',
+            'total_lwop_days' => '14.50',
         ], $summary);
     }
 
@@ -274,6 +289,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             'year' => 2026,
             'vl_lwop_days' => '0.00',
             'sl_lwop_days' => '0.00',
+            'll_lwop_days' => '0.00',
             'total_lwop_days' => '0.00',
         ], $summary);
     }
@@ -290,10 +306,12 @@ class EmployeesWithLwopReportServiceTest extends TestCase
 
         $this->assertSame('0.50', $pat['vl_lwop_days']);
         $this->assertSame('0.00', $pat['sl_lwop_days']);
+        $this->assertSame('0.00', $pat['ll_lwop_days']);
         $this->assertSame('0.50', $pat['total_lwop_days']);
 
         $this->assertSame('0.00', $sam['vl_lwop_days']);
         $this->assertSame('1.00', $sam['sl_lwop_days']);
+        $this->assertSame('0.00', $sam['ll_lwop_days']);
         $this->assertSame('1.00', $sam['total_lwop_days']);
     }
 
@@ -311,7 +329,27 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             'year' => 2025,
             'vl_lwop_days' => '3.00',
             'sl_lwop_days' => '0.00',
+            'll_lwop_days' => '0.00',
             'total_lwop_days' => '3.00',
+        ], $summary);
+    }
+
+    public function test_for_employee_includes_confirmed_ll_and_omits_pending_ll(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(810, $this->llTypeId, '0.00', '31.00', '2026-05-01', '2026-05-31', 'confirmed');
+        $this->seedLeave(810, $this->llTypeId, '0.00', '45.00', '2026-07-01', '2026-08-14', 'pending_approval');
+        $this->seedLeave(810, $this->llTypeId, '0.00', '20.00', '2025-11-01', '2025-11-20', 'confirmed');
+
+        $summary = $this->service->forEmployee(Employee::query()->findOrFail(810), 2026);
+
+        $this->assertSame([
+            'year' => 2026,
+            'vl_lwop_days' => '0.00',
+            'sl_lwop_days' => '0.00',
+            'll_lwop_days' => '31.00',
+            'total_lwop_days' => '31.00',
         ], $summary);
     }
 
