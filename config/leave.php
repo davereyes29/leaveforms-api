@@ -106,6 +106,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Legacy leaveforms Uploads (for leave:migrate-legacy)
+    |--------------------------------------------------------------------------
+    |
+    | V1 stores files at: {uploads_path}/{emp_id}/{start_date}/{l_attachment}
+    | e.g. C:\xampp\htdocs\forms\Uploads\209\2022-12-12\medcert.pdf
+    |
+    */
+    'legacy' => [
+        'uploads_path' => env('LEGACY_UPLOADS_PATH', 'C:\\xampp\\htdocs\\forms\\Uploads'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Email notifications
     |--------------------------------------------------------------------------
     */

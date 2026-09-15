@@ -12,6 +12,7 @@ use App\Models\Leave\LeaveBalanceTransaction;
 use App\Models\Leave\LeaveInfo;
 use App\Models\Leave\LeaveType;
 use App\Services\Leave\LeaveApprovalPolicy;
+use App\Services\Leave\LeaveAttachmentService;
 use App\Services\Leave\LeaveBalanceService;
 use App\Services\Leave\LeaveTypeRules;
 use Carbon\CarbonImmutable;
@@ -30,13 +31,16 @@ class LegacyLeaveMigrationService
         private readonly LegacyLeaveRowMapper $mapper,
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveApprovalPolicy $approvalPolicy,
+        private readonly LegacyLeaveAttachmentCopier $attachmentCopier,
+        private readonly LeaveAttachmentService $attachmentService,
     ) {}
 
     /**
      * @return array{
      *     dry_run: bool,
-     *     leaves: array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>},
+     *     leaves: array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}},
      *     balances: array{read: int, inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>},
+     *     attachments: array{read: int, copied: int, missing: int, skipped_existing: int, skipped_no_name: int, skipped_reasons: array<string, int>},
      * }
      */
     public function migrate(
@@ -45,29 +49,27 @@ class LegacyLeaveMigrationService
         bool $balances = true,
         bool $fresh = false,
         bool $includePending = true,
+        bool $attachmentsOnly = false,
     ): array {
         $this->assertLegacyConnection();
         $this->assertLeaveTypesSeeded();
+
+        if ($attachmentsOnly) {
+            return [
+                'dry_run' => $dryRun,
+                'leaves' => $this->emptyLeaveStats(),
+                'balances' => $this->emptyBalanceStats(),
+                'attachments' => $this->migrateAttachmentsForImportedLeaves($dryRun),
+            ];
+        }
 
         if ($fresh && ! $dryRun) {
             $this->clearPreviousImport($leaves, $balances);
         }
 
-        $leaveStats = [
-            'read' => 0,
-            'inserted' => 0,
-            'pending_inserted' => 0,
-            'skipped_existing' => 0,
-            'skipped' => 0,
-            'skipped_reasons' => [],
-        ];
-        $balanceStats = [
-            'read' => 0,
-            'inserted' => 0,
-            'skipped_existing' => 0,
-            'skipped' => 0,
-            'skipped_reasons' => [],
-        ];
+        $leaveStats = $this->emptyLeaveStats();
+        $balanceStats = $this->emptyBalanceStats();
+        $attachmentStats = $this->emptyAttachmentStats();
 
         // Balances first so pending reserves can draw from leave_confirmation snapshot.
         if ($balances) {
@@ -76,28 +78,73 @@ class LegacyLeaveMigrationService
 
         if ($leaves) {
             $leaveStats = $this->migrateLeaves($dryRun, $includePending);
+            $attachmentStats = $leaveStats['attachments'];
         }
 
         return [
             'dry_run' => $dryRun,
             'leaves' => $leaveStats,
             'balances' => $balanceStats,
+            'attachments' => $attachmentStats,
         ];
     }
 
     /**
-     * @return array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>}
+     * @return array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
      */
-    private function migrateLeaves(bool $dryRun, bool $includePending): array
+    private function emptyLeaveStats(): array
     {
-        $stats = [
+        return [
             'read' => 0,
             'inserted' => 0,
             'pending_inserted' => 0,
             'skipped_existing' => 0,
             'skipped' => 0,
             'skipped_reasons' => [],
+            'attachments' => [
+                'copied' => 0,
+                'missing' => 0,
+                'skipped_existing' => 0,
+                'skipped_no_name' => 0,
+            ],
         ];
+    }
+
+    /**
+     * @return array{read: int, inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>}
+     */
+    private function emptyBalanceStats(): array
+    {
+        return [
+            'read' => 0,
+            'inserted' => 0,
+            'skipped_existing' => 0,
+            'skipped' => 0,
+            'skipped_reasons' => [],
+        ];
+    }
+
+    /**
+     * @return array{read: int, copied: int, missing: int, skipped_existing: int, skipped_no_name: int, skipped_reasons: array<string, int>}
+     */
+    private function emptyAttachmentStats(): array
+    {
+        return [
+            'read' => 0,
+            'copied' => 0,
+            'missing' => 0,
+            'skipped_existing' => 0,
+            'skipped_no_name' => 0,
+            'skipped_reasons' => [],
+        ];
+    }
+
+    /**
+     * @return array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
+     */
+    private function migrateLeaves(bool $dryRun, bool $includePending): array
+    {
+        $stats = $this->emptyLeaveStats();
 
         $typeIds = LeaveType::query()->pluck('id', 'code')->all();
         $existing = LeaveInfo::query()
@@ -162,13 +209,14 @@ class LegacyLeaveMigrationService
                         if ($mapped['status'] === LeaveStatus::PendingApproval) {
                             $stats['pending_inserted']++;
                         }
+                        $this->tallyAttachmentPreview($stats['attachments'], $row);
                         $existing[$legacyId] = true;
 
                         continue;
                     }
 
                     try {
-                        DB::transaction(function () use ($mapped, $typeId, $legacyId, &$existing, &$stats) {
+                        DB::transaction(function () use ($mapped, $typeId, $legacyId, $row, &$existing, &$stats) {
                             $payload = $mapped;
 
                             if ($payload['status'] === LeaveStatus::PendingApproval) {
@@ -219,6 +267,16 @@ class LegacyLeaveMigrationService
                                 $this->createApprovalStub($leave, $payload);
                             }
 
+                            $this->tallyAttachmentResult(
+                                $stats['attachments'],
+                                $this->attachmentCopier->attachToLeave(
+                                    $leave,
+                                    (int) $row->l_eid,
+                                    $row->l_sdate,
+                                    $row->l_attachment ?? null,
+                                ),
+                            );
+
                             $existing[$legacyId] = true;
                             $stats['inserted']++;
                         });
@@ -231,6 +289,103 @@ class LegacyLeaveMigrationService
             }, 'l_id');
 
         return $stats;
+    }
+
+    /**
+     * Backfill attachments for leaves already imported (legacy_leave_id set).
+     *
+     * @return array{read: int, copied: int, missing: int, skipped_existing: int, skipped_no_name: int, skipped_reasons: array<string, int>}
+     */
+    private function migrateAttachmentsForImportedLeaves(bool $dryRun): array
+    {
+        $stats = $this->emptyAttachmentStats();
+
+        if (! $this->attachmentCopier->uploadsRootExists()) {
+            $stats['skipped_reasons']['uploads path missing: '.$this->attachmentCopier->uploadsRoot()] = 1;
+
+            return $stats;
+        }
+
+        $legacy = DB::connection('formsdb');
+
+        LeaveInfo::query()
+            ->whereNotNull('legacy_leave_id')
+            ->orderBy('id')
+            ->chunkById(200, function ($leaves) use ($legacy, $dryRun, &$stats) {
+                $legacyIds = $leaves->pluck('legacy_leave_id')->all();
+                $legacyRows = $legacy->table('leave_info')
+                    ->whereIn('l_id', $legacyIds)
+                    ->get(['l_id', 'l_eid', 'l_sdate', 'l_attachment'])
+                    ->keyBy('l_id');
+
+                foreach ($leaves as $leave) {
+                    $stats['read']++;
+                    $row = $legacyRows->get($leave->legacy_leave_id);
+                    if ($row === null) {
+                        $stats['skipped_reasons']['legacy row missing'] =
+                            ($stats['skipped_reasons']['legacy row missing'] ?? 0) + 1;
+
+                        continue;
+                    }
+
+                    try {
+                        $result = $this->attachmentCopier->attachToLeave(
+                            $leave,
+                            (int) $row->l_eid,
+                            $row->l_sdate,
+                            $row->l_attachment ?? null,
+                            dryRun: $dryRun,
+                        );
+                        $this->tallyAttachmentResult($stats, $result);
+                    } catch (Throwable $e) {
+                        $stats['skipped_reasons']['copy error: '.$e->getMessage()] =
+                            ($stats['skipped_reasons']['copy error: '.$e->getMessage()] ?? 0) + 1;
+                    }
+                }
+            });
+
+        return $stats;
+    }
+
+    /**
+     * @param  array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}  $bucket
+     */
+    private function tallyAttachmentPreview(array &$bucket, object $row): void
+    {
+        $filename = $this->attachmentCopier->normalizeFilename($row->l_attachment ?? null);
+        if ($filename === null) {
+            $bucket['skipped_no_name']++;
+
+            return;
+        }
+
+        $source = $this->attachmentCopier->resolveSourcePath(
+            (int) $row->l_eid,
+            $row->l_sdate,
+            $filename,
+        );
+
+        if ($source === null) {
+            $bucket['missing']++;
+
+            return;
+        }
+
+        $bucket['copied']++;
+    }
+
+    /**
+     * @param  array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}  $bucket
+     * @param  array{status: string, path?: string}  $result
+     */
+    private function tallyAttachmentResult(array &$bucket, array $result): void
+    {
+        $status = $result['status'];
+        if (! isset($bucket[$status])) {
+            return;
+        }
+
+        $bucket[$status]++;
     }
 
     /**
@@ -493,11 +648,18 @@ class LegacyLeaveMigrationService
                     }
                 });
 
-            LeaveInfo::query()->whereNotNull('legacy_leave_id')->orderBy('id')->chunkById(200, function ($rows) {
-                foreach ($rows as $leave) {
-                    $leave->delete();
-                }
-            });
+            LeaveInfo::query()
+                ->whereNotNull('legacy_leave_id')
+                ->with('attachments')
+                ->orderBy('id')
+                ->chunkById(200, function ($rows) {
+                    foreach ($rows as $leave) {
+                        foreach ($leave->attachments as $attachment) {
+                            $this->attachmentService->delete($attachment->path);
+                        }
+                        $leave->delete();
+                    }
+                });
         }
 
         if ($balances) {

@@ -39,6 +39,8 @@ class LeaveCheckEnvironment extends Command
                 ['LEAVE_PRESIDENT_EMP_ID', config('leave.president_emp_id') ?: '(not set yet)'],
                 ['LEAVE_ADMIN_EMP_ID', config('leave.admin_emp_id') ?: '(not set yet)'],
                 ['LEAVE_EMPLOYEE_GROUP_OVERRIDES', $this->formatGroupOverrides()],
+                ['LEGACY_UPLOADS_PATH', config('leave.legacy.uploads_path')],
+                ['Uploads folder exists', is_dir((string) config('leave.legacy.uploads_path')) ? 'yes' : 'NO'],
             ]
         );
 
