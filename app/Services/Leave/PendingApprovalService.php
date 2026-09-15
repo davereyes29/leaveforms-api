@@ -5,6 +5,7 @@ namespace App\Services\Leave;
 use App\Enums\Leave\LeaveStatus;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveInfo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -19,16 +20,28 @@ class PendingApprovalService
     /**
      * @return Collection<int, LeaveInfo>
      */
-    public function forApprover(Employee $approver): Collection
+    public function forApprover(Employee $approver, ?string $q = null): Collection
     {
         $context = $this->approverResolver->contextFor($approver->id);
 
-        $leaves = LeaveInfo::query()
+        $empIds = $this->matchingEmpIds($q);
+
+        if ($empIds !== null && $empIds === []) {
+            return collect();
+        }
+
+        $query = LeaveInfo::query()
             ->with([
                 'leaveType',
                 'approvalRequirements',
             ])
-            ->where('status', LeaveStatus::PendingApproval)
+            ->where('status', LeaveStatus::PendingApproval);
+
+        if ($empIds !== null) {
+            $query->whereIn('emp_id', $empIds);
+        }
+
+        $leaves = $query
             ->orderByDesc('created_at')
             ->get();
 
@@ -47,6 +60,46 @@ class PendingApprovalService
         $this->attachEmployees($pending);
 
         return $pending;
+    }
+
+    /**
+     * @return list<int>|null null = no employee-scope filter
+     */
+    private function matchingEmpIds(?string $q): ?array
+    {
+        if ($q === null || $q === '') {
+            return null;
+        }
+
+        $query = Employee::query();
+        $this->applySearch($query, $q);
+
+        return $query
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     */
+    private function applySearch(Builder $query, ?string $q): void
+    {
+        $term = trim((string) $q);
+
+        if ($term === '') {
+            return;
+        }
+
+        $like = '%'.addcslashes($term, '%_\\').'%';
+
+        $query->where(function (Builder $inner) use ($like): void {
+            $inner->where('firstname', 'like', $like)
+                ->orWhere('surname', 'like', $like)
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", [$like])
+                ->orWhereRaw('CAST(id AS CHAR) LIKE ?', [$like]);
+        });
     }
 
     /**

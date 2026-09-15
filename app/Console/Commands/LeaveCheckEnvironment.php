@@ -22,6 +22,7 @@ class LeaveCheckEnvironment extends Command
         $ok = $this->checkDatabase('leaveforms_db', config('database.default')) && $ok;
         $ok = $this->checkDatabase('kdtphdb', 'kdtphdb') && $ok;
         $ok = $this->checkDatabase('kdtphdb_new', 'kdtphdb_new') && $ok;
+        $ok = $this->checkDatabase('formsdb (legacy)', 'formsdb') && $ok;
 
         $this->newLine();
         $this->line('Config:');
@@ -32,6 +33,7 @@ class LeaveCheckEnvironment extends Command
                 ['DB (default)', config('database.connections.'.config('database.default').'.database')],
                 ['kdtphdb', config('database.connections.kdtphdb.database')],
                 ['kdtphdb_new', config('database.connections.kdtphdb_new.database')],
+                ['formsdb (legacy)', config('database.connections.formsdb.database')],
                 ['PORTAL_COOKIE_NAME', config('leave.portal_cookie_name')],
                 ['FRONTEND_URL', config('leave.frontend_url')],
                 ['LEAVE_PRESIDENT_EMP_ID', config('leave.president_emp_id') ?: '(not set yet)'],

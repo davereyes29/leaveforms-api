@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\Leave\LeaveStatus;
 use App\Http\Requests\Leave\IndexApprovalsRequest;
+use App\Http\Requests\Leave\IndexPendingApprovalsRequest;
 use App\Http\Requests\Leave\RejectLeaveRequest;
 use App\Http\Resources\LeaveResource;
 use App\Http\Resources\PendingApprovalResource;
@@ -25,16 +26,21 @@ class LeaveApprovalController extends Controller
     /**
      * GET /api/approvals — All Leave Requests for employees in the approver's PIC groups.
      *
-     * Optional query: ?status=confirmed&code=VL&sort=desc&page=1&per_page=15
+     * Optional query: ?q=alex&group_id=16&status=confirmed&code=VL&sort=desc&page=1&per_page=15
      */
     public function index(IndexApprovalsRequest $request): AnonymousResourceCollection
     {
+        $groupId = $request->validated('group_id');
+        $q = $request->validated('q');
+
         $leaves = $this->approverLeaveListService->paginateForApprover(
             $request->employee(),
             $request->enum('status', LeaveStatus::class),
             $request->validated('code'),
             $request->integer('per_page', 15),
             $request->validated('sort') ?? 'desc',
+            $groupId !== null ? (int) $groupId : null,
+            is_string($q) && $q !== '' ? $q : null,
         );
 
         return PendingApprovalResource::collection($leaves);
@@ -42,10 +48,17 @@ class LeaveApprovalController extends Controller
 
     /**
      * GET /api/approvals/pending — leaves this approver can act on (slim inbox rows).
+     *
+     * Optional query: ?q=alex
      */
-    public function pending(Request $request): AnonymousResourceCollection
+    public function pending(IndexPendingApprovalsRequest $request): AnonymousResourceCollection
     {
-        $leaves = $this->pendingApprovalService->forApprover($request->employee());
+        $q = $request->validated('q');
+
+        $leaves = $this->pendingApprovalService->forApprover(
+            $request->employee(),
+            is_string($q) && $q !== '' ? $q : null,
+        );
 
         return PendingApprovalResource::collection($leaves);
     }

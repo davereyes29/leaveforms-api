@@ -9,6 +9,7 @@ use App\Models\Kdtph\Group;
 use App\Models\Leave\LeaveInfo;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,6 +17,7 @@ use Illuminate\Support\Collection;
  *
  * No PIC / formspic scoping. Includes the admin's own leaves.
  * Optional group_id filters by the person-on-leave's effective primary group.
+ * Optional q searches the person on leave by name or employee number.
  * Default statuses: pending_approval, pending_conversion, confirmed, converted_to_sl, converted_to_el.
  * rejected and cancelled are omitted.
  */
@@ -46,9 +48,16 @@ class AdminLeaveListService
         int $perPage,
         string $sort,
         ?int $groupId = null,
+        ?string $q = null,
     ): LengthAwarePaginator {
         if (! $this->approverResolver->contextFor($admin->id)->isAdmin) {
             throw new AuthorizationException('Only admin can view all leave requests.');
+        }
+
+        $empIds = $this->matchingEmpIds($groupId, $q);
+
+        if ($empIds !== null && $empIds === []) {
+            return LeaveInfo::query()->whereRaw('0 = 1')->paginate($perPage);
         }
 
         $statuses = $status !== null ? [$status] : self::DEFAULT_STATUSES;
@@ -60,19 +69,13 @@ class AdminLeaveListService
             ])
             ->whereIn('status', $statuses);
 
-        if ($groupId !== null) {
-            $empIds = $this->approverResolver->employeeIdsInEffectiveGroups([$groupId]);
-
-            if ($empIds === []) {
-                return LeaveInfo::query()->whereRaw('0 = 1')->paginate($perPage);
-            }
-
+        if ($empIds !== null) {
             $query->whereIn('emp_id', $empIds);
         }
 
         if ($code !== null && $code !== '') {
-            $query->whereHas('leaveType', function ($q) use ($code): void {
-                $q->where('code', $code);
+            $query->whereHas('leaveType', function (Builder $type) use ($code): void {
+                $type->where('code', $code);
             });
         }
 
@@ -167,6 +170,64 @@ class AdminLeaveListService
         }
 
         return $employees;
+    }
+
+    /**
+     * @return list<int>|null null = no employee-scope filter
+     */
+    private function matchingEmpIds(?int $groupId, ?string $q): ?array
+    {
+        $term = trim((string) $q);
+        $hasSearch = $term !== '';
+
+        if ($groupId === null && ! $hasSearch) {
+            return null;
+        }
+
+        if ($groupId !== null && ! $hasSearch) {
+            return $this->approverResolver->employeeIdsInEffectiveGroups([$groupId]);
+        }
+
+        $query = Employee::query();
+
+        if ($groupId !== null) {
+            $ids = $this->approverResolver->employeeIdsInEffectiveGroups([$groupId]);
+
+            if ($ids === []) {
+                return [];
+            }
+
+            $query->whereIn('id', $ids);
+        }
+
+        $this->applySearch($query, $q);
+
+        return $query
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     */
+    private function applySearch(Builder $query, ?string $q): void
+    {
+        $term = trim((string) $q);
+
+        if ($term === '') {
+            return;
+        }
+
+        $like = '%'.addcslashes($term, '%_\\').'%';
+
+        $query->where(function (Builder $inner) use ($like): void {
+            $inner->where('firstname', 'like', $like)
+                ->orWhere('surname', 'like', $like)
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", [$like])
+                ->orWhereRaw('CAST(id AS CHAR) LIKE ?', [$like]);
+        });
     }
 
     /**

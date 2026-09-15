@@ -38,6 +38,12 @@ class IndexAdminLeavesRequest extends FormRequest
                 'sort' => strtolower($this->sort),
             ]);
         }
+
+        if ($this->has('q') && is_string($this->q)) {
+            $this->merge([
+                'q' => trim($this->q),
+            ]);
+        }
     }
 
     /**
@@ -70,6 +76,7 @@ class IndexAdminLeavesRequest extends FormRequest
                 'min:1',
                 Rule::exists(Group::class, 'id'),
             ],
+            'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'sort' => ['sometimes', 'nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
         ];

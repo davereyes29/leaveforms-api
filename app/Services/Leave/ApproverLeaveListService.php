@@ -6,13 +6,17 @@ use App\Enums\Leave\LeaveStatus;
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\Group;
 use App\Models\Leave\LeaveInfo;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
  * All leave requests for employees in the approver's formspic PIC groups.
  *
  * Unlike PendingApprovalService (actionable inbox), this is a team history view.
+ * Optional q searches the person on leave by name or employee number (within PIC groups).
+ * Optional group_id narrows to one PIC group (must be in the viewer's formspic fldGroups).
  * Default statuses: confirmed, rejected, pending_conversion, converted_to_sl, converted_to_el.
  * pending_approval stays on GET /approvals/pending; admin review on GET /conversions/pending.
  * The viewer's own leaves are excluded (use GET /leaves).
@@ -34,6 +38,8 @@ class ApproverLeaveListService
 
     /**
      * @return LengthAwarePaginator<int, LeaveInfo>
+     *
+     * @throws AuthorizationException
      */
     public function paginateForApprover(
         Employee $approver,
@@ -41,9 +47,12 @@ class ApproverLeaveListService
         ?string $code,
         int $perPage,
         string $sort,
+        ?int $groupId = null,
+        ?string $q = null,
     ): LengthAwarePaginator {
         $context = $this->approverResolver->contextFor($approver->id);
-        $empIds = $this->employeeIdsInPicGroups($context->groupCodes, (int) $approver->id);
+        $empIds = $this->employeeIdsInPicGroups($context->groupCodes, (int) $approver->id, $groupId);
+        $empIds = $this->filterEmpIdsBySearch($empIds, $q);
 
         if ($empIds === []) {
             return LeaveInfo::query()->whereRaw('0 = 1')->paginate($perPage);
@@ -60,8 +69,8 @@ class ApproverLeaveListService
             ->whereIn('status', $statuses);
 
         if ($code !== null && $code !== '') {
-            $query->whereHas('leaveType', function ($q) use ($code): void {
-                $q->where('code', $code);
+            $query->whereHas('leaveType', function (Builder $type) use ($code): void {
+                $type->where('code', $code);
             });
         }
 
@@ -79,9 +88,23 @@ class ApproverLeaveListService
     /**
      * @param  list<string>  $groupCodes
      * @return list<int>
+     *
+     * @throws AuthorizationException
      */
-    private function employeeIdsInPicGroups(array $groupCodes, int $excludeEmpId): array
+    private function employeeIdsInPicGroups(array $groupCodes, int $excludeEmpId, ?int $groupId = null): array
     {
+        if ($groupId !== null) {
+            $group = Group::query()->find($groupId);
+
+            if ($group === null || ! in_array($group->abbreviation, $groupCodes, true)) {
+                throw new AuthorizationException(
+                    'You are not allowed to view leave requests for this group.',
+                );
+            }
+
+            return $this->approverResolver->employeeIdsInEffectiveGroups([$groupId], $excludeEmpId);
+        }
+
         if ($groupCodes === []) {
             return [];
         }
@@ -97,6 +120,43 @@ class ApproverLeaveListService
         }
 
         return $this->approverResolver->employeeIdsInEffectiveGroups($groupIds, $excludeEmpId);
+    }
+
+    /**
+     * @param  list<int>  $empIds
+     * @return list<int>
+     */
+    private function filterEmpIdsBySearch(array $empIds, ?string $q): array
+    {
+        $term = trim((string) $q);
+
+        if ($empIds === [] || $term === '') {
+            return $empIds;
+        }
+
+        $query = Employee::query()->whereIn('id', $empIds);
+        $this->applySearch($query, $term);
+
+        return $query
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     */
+    private function applySearch(Builder $query, string $term): void
+    {
+        $like = '%'.addcslashes($term, '%_\\').'%';
+
+        $query->where(function (Builder $inner) use ($like): void {
+            $inner->where('firstname', 'like', $like)
+                ->orWhere('surname', 'like', $like)
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", [$like])
+                ->orWhereRaw('CAST(id AS CHAR) LIKE ?', [$like]);
+        });
     }
 
     /**

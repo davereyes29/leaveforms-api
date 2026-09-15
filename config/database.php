@@ -171,6 +171,35 @@ return [
             ]) : [],
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | formsdb — legacy leaveforms (read-only for migration)
+        |--------------------------------------------------------------------------
+        |
+        | Old leave_info / leave_confirmation / leave_accept live here.
+        | leave:migrate-legacy reads this connection and writes leaveforms_db.
+        | Do not run revamp migrations against this database.
+        |
+        */
+        'formsdb' => [
+            'driver' => 'mysql',
+            'host' => env('LEGACY_FORMS_DB_HOST', '127.0.0.1'),
+            'port' => env('LEGACY_FORMS_DB_PORT', '3306'),
+            'database' => env('LEGACY_FORMS_DB_DATABASE', 'formsdb'),
+            'username' => env('LEGACY_FORMS_DB_USERNAME', 'root'),
+            'password' => env('LEGACY_FORMS_DB_PASSWORD', ''),
+            'unix_socket' => env('LEGACY_FORMS_DB_SOCKET', ''),
+            'charset' => env('LEGACY_FORMS_DB_CHARSET', 'utf8mb4'),
+            'collation' => env('LEGACY_FORMS_DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
     ],
 
     /*

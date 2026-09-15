@@ -27,11 +27,12 @@ class AdminLeaveController extends Controller
     /**
      * GET /api/admin/leaves — org-wide All Leave Requests (admin only).
      *
-     * Optional query: ?status=confirmed&code=VL&group_id=16&sort=desc&page=1&per_page=15
+     * Optional query: ?q=alex&status=confirmed&code=VL&group_id=16&sort=desc&page=1&per_page=15
      */
     public function index(IndexAdminLeavesRequest $request): AnonymousResourceCollection
     {
         $groupId = $request->validated('group_id');
+        $q = $request->validated('q');
 
         $leaves = $this->adminLeaveListService->paginateForAdmin(
             $request->employee(),
@@ -40,6 +41,7 @@ class AdminLeaveController extends Controller
             $request->integer('per_page', 15),
             $request->validated('sort') ?? 'desc',
             $groupId !== null ? (int) $groupId : null,
+            is_string($q) && $q !== '' ? $q : null,
         );
 
         return PendingApprovalResource::collection($leaves);

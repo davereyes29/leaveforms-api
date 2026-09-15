@@ -32,11 +32,54 @@ class LeaveEligibleApproverService
      */
     public function forLeave(LeaveInfo $leave): array
     {
+        // Settled migrated history only — live pending legacy leaves use normal PIC/admin pool.
+        if (
+            $leave->legacy_leave_id !== null
+            && $leave->status !== LeaveStatus::PendingApproval
+        ) {
+            return $this->legacyHistoryEntries($leave);
+        }
+
         if ($this->isConversionStage($leave->status)) {
             return $this->adminEntries();
         }
 
         return $this->leaveApprovalEntries($leave);
+    }
+
+    /**
+     * Migrated leaves: show only the stub history actor — not today's full PIC pool.
+     *
+     * @return list<array{emp_id: int, name: string, approver_type: string, purpose: string}>
+     */
+    private function legacyHistoryEntries(LeaveInfo $leave): array
+    {
+        $leave->loadMissing('approvalRequirements.history');
+
+        $entries = [];
+
+        foreach ($leave->approvalRequirements->sortBy('display_order') as $requirement) {
+            $history = $requirement->history;
+            if ($history === null) {
+                continue;
+            }
+
+            $empId = (int) $history->approver_emp_id;
+            $employee = Employee::query()->find($empId);
+            $approverType = $history->approver_type?->value ?? ApproverType::Leader->value;
+            $purpose = $approverType === ApproverType::Admin->value
+                ? self::PURPOSE_ADMIN_VALIDATION
+                : self::PURPOSE_LEAVE_APPROVAL;
+
+            $entries[] = $this->entry(
+                $empId,
+                $employee?->fullName() ?: "Employee #{$empId}",
+                $approverType,
+                $purpose,
+            );
+        }
+
+        return $entries;
     }
 
     private function isConversionStage(LeaveStatus $status): bool

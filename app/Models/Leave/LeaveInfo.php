@@ -16,6 +16,7 @@ class LeaveInfo extends Model
     protected $table = 'leave_info';
 
     protected $fillable = [
+        'legacy_leave_id',
         'emp_id',
         'filed_by_emp_id',
         'leave_type_id',
@@ -37,6 +38,7 @@ class LeaveInfo extends Model
     protected function casts(): array
     {
         return [
+            'legacy_leave_id' => 'integer',
             'leave_type_id' => 'integer',
             'emp_id' => 'integer',
             'filed_by_emp_id' => 'integer',

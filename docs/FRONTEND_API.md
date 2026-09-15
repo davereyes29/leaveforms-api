@@ -874,8 +874,8 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Method | Path | Body / query |
 |--------|------|----------------|
-| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?status=confirmed\|rejected\|pending_conversion\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL\|SPL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
-| GET | `/approvals/pending` | — actionable inbox only (slim rows; not paginated) |
+| GET | `/approvals` | All Leave Requests (PIC groups). Optional: `?q=` (name or employee number), `?group_id=` (`pic_groups[].id`), `?status=confirmed\|rejected\|pending_conversion\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL\|SPL`, `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/approvals/pending` | Optional: `?q=` (name or employee number). Actionable inbox only (slim rows; not paginated) |
 | POST | `/leaves/{id}/approve` | empty |
 | POST | `/leaves/{id}/reject` | `{ "remarks": "..." }` required |
 
@@ -883,12 +883,12 @@ Store / update / cancel / approve / reject also return this **detail** shape.
 
 | Endpoint | Who | Statuses |
 |----------|-----|----------|
-| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**) | Default: `confirmed`, `rejected`, `pending_conversion`, `converted_to_sl`, `converted_to_el`. Optional `?status=` narrows to one of those. |
-| `GET /approvals/pending` | Leaves the viewer can **act on** now (PIC group ∩ open requirement, or admin on admin-approved types) | `pending_approval` only |
+| `GET /approvals` | Employees whose **primary** group abbreviation is in the viewer’s formspic `fldGroups` (**excludes the viewer**). Optional `?q=` is a case-insensitive **contains** match on the person on leave’s full name or employee number (same as `GET /admin/balances`). Optional `?group_id=` must be one of `GET /me` `role.pic_groups` — otherwise **403**. Omit for all PIC groups. Unknown id → **422**. Combines with `q` / `status` / `code` (AND) **before** pagination. | Default: `confirmed`, `rejected`, `pending_conversion`, `converted_to_sl`, `converted_to_el`. Optional `?status=` narrows to one of those. |
+| `GET /approvals/pending` | Leaves the viewer can **act on** now (PIC group ∩ open requirement, or admin on admin-approved types). Optional `?q=` is a case-insensitive **contains** match on the person on leave’s full name or employee number (same as `GET /admin/balances`). Omit or whitespace-only → no search. Max 100 characters. | `pending_approval` only |
 
 If the viewer has no PIC groups, `GET /approvals` returns an empty paginated list. The viewer’s own leaves are not listed (use `GET /leaves`). `pending_approval` is **not** included here (use `/approvals/pending`). Admin conversion action stays on `/conversions/pending`. Direct-filed pending SL/PTB/EL/LL/ML/PL/SPL is **not** on `/conversions/pending` — admin approves it via `POST /leaves/{id}/approve`. `cancelled` is omitted. While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) or **EL** (`converted_to_el`) — use `?code=SL` or `?code=EL` for converted rows. Direct-filed SL that is already confirmed is also `code=SL` with status `confirmed`.
 
-`GET /approvals` uses the same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by `created_at` (default newest first).
+`GET /approvals` uses the same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /activities`. Sorted by `created_at` (default newest first). Optional `?q=` searches the person on leave by name or employee number **before** pagination; send it on each list request instead of filtering the current page. Group dropdown: `GET /me` `role.pic_groups` (do **not** use `GET /admin/groups`).
 
 Who can act on pending: formspic PICs whose `fldGroups` include the employee’s **primary** group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`), at allowed levels for that leave. One PIC approval confirms **VL**. **SL**, **PTB**, **EL**, **LL**, **ML**, **PL**, and **SPL** are admin only (`LEAVE_ADMIN_EMP_ID`) — PICs do not approve them.
 
@@ -945,13 +945,13 @@ Org-wide leave list for **`LEAVE_ADMIN_EMP_ID` only**. No PIC / formspic scoping
 
 | Method | Path | Query |
 |--------|------|--------|
-| GET | `/admin/leaves` | Optional: `?status=pending_approval\|pending_conversion\|confirmed\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL\|SPL`, `?group_id=` (`group_list.id`), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
+| GET | `/admin/leaves` | Optional: `?q=` (name or employee number), `?status=pending_approval\|pending_conversion\|confirmed\|converted_to_sl\|converted_to_el`, `?code=VL\|SL\|PTB\|EL\|LL\|ML\|PL\|SPL`, `?group_id=` (`group_list.id`), `?sort=asc\|desc` (default `desc`), `?page=1`, `?per_page=15` (1–50) |
 | POST | `/admin/leaves/{id}/cancel` | `{ "cancellation_reason": "..." }` required. **Confirmed** leave only |
 | GET | `/admin/groups` | No query. Org-wide `group_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only). Includes `dept_id` so the UI can cascade after a department pick. |
 | GET | `/admin/departments` | No query. Org-wide `department_list` for admin dropdowns (`LEAVE_ADMIN_EMP_ID` only) |
 | GET | `/admin/employees` | Optional: `?group_id=` (`group_list.id`). Slim org-wide employee picker (`LEAVE_ADMIN_EMP_ID` only). Do **not** use `GET /admin/balances` for this. |
 
-Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /approvals` and `GET /activities`. Sorted by `created_at` (default newest first).
+Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` / `meta` pagination as `GET /approvals` and `GET /activities`. Sorted by `created_at` (default newest first). Optional `?q=` searches the person on leave by name or employee number **before** pagination (same as `GET /admin/balances`); send it on each list request instead of filtering the current page.
 
 **Scope**
 
@@ -962,6 +962,7 @@ Non-admin callers get **403**. Same slim row shape and Laravel `data` / `links` 
 | Default statuses | `pending_approval`, `pending_conversion`, `confirmed`, `converted_to_sl`, `converted_to_el` |
 | Omitted | `rejected`, `cancelled` |
 | `group_id` | Optional. Filters by the person on leave’s **effective** primary group (`employee_list.group_id`, or `LEAVE_EMPLOYEE_GROUP_OVERRIDES`). Omit for all groups. Unknown id → **422**. Dropdown: `GET /admin/groups`. |
+| `q` | Optional. Search bar. Case-insensitive **contains** match on the person on leave’s full name (`firstname` + space + `surname`) or employee number (`employee_list.id`). Combines with the other filters (AND). Omit or whitespace-only → no search. Max 100 characters. |
 
 Optional `?status=` narrows to one of the allowed values (`rejected` / `cancelled` return **422**). While `pending_conversion`, type is still **VL**; after approval it becomes **SL** (`converted_to_sl`) or **EL** (`converted_to_el`) — use `?code=SL` or `?code=EL` for converted rows.
 
@@ -1898,9 +1899,9 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 8. **File PL** — `POST /leaves` multipart with `code=PL`, `day_type=full`, required Paternity Notification Form (`leave_attachment[]`, 1–5). Male only. Pick start; end = 7th workday. Max 4 confirmed takes. Admin approves.
 9. **Edit pending leave** — PUT/POST `/leaves/{id}` for dates/reason. On-behalf: the member or the PIC who filed may edit. SL/PTB/EL/LL/PL files: `POST /leaves/{id}/attachments` and `DELETE /leaves/{id}/attachments/{id}`
 10. **Cancel (employee)** — pending only; reason form → `POST /leaves/{id}/cancel`
-11. **Approver inbox** — `GET /approvals/pending` → approve / reject (or open `GET /leaves/{id}` first)
-12. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; filter by status / leave type)
-13. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; filter by status / leave type / group). Banner: `GET /admin/reminders` → `POST /admin/reminders`. Detail: `POST /leaves/{id}/reminders`. Cancel confirmed: `POST /admin/leaves/{id}/cancel`
+11. **Approver inbox** — `GET /approvals/pending` (optional `?q=` name or employee number) → approve / reject (or open `GET /leaves/{id}` first)
+12. **All Leave Requests (approver)** — `GET /approvals` (PIC groups; `?q=` name or employee number; `?group_id=` from `pic_groups`; filter by status / leave type)
+13. **All Leave Requests (admin)** — `GET /admin/leaves` (`LEAVE_ADMIN_EMP_ID` only; org-wide; `?q=` name or employee number; filter by status / leave type / group). Banner: `GET /admin/reminders` → `POST /admin/reminders`. Detail: `POST /leaves/{id}/reminders`. Cancel confirmed: `POST /admin/leaves/{id}/cancel`
 14. **Team Leave Calendar** — `GET /team/calendar?from=&to=` (optional `code`, `group_id` from `pic_groups`)
 15. **Convert VL** — on confirmed VL, choose SL (`med_cert[]`) or EL (`to_code=EL` + `leave_attachment[]`) + conversion reason. Warn when remaining EL `<` duration (`GET /balances?code=EL`). Add/remove files while pending with `/conversions/{id}/attachments`
 16. **Admin conversion inbox** — `GET /conversions/pending` → approve / reject + remarks
