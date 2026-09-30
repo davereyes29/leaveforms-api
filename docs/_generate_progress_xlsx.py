@@ -106,7 +106,7 @@ ROWS = [
     ("Balance & Credits", "Balance Ledger & Buckets", "Routes & controller — GET /balances", "Done", "", 2, True),
     ("Balance & Credits", "Balance Ledger & Buckets", "reserve / confirm / releaseReservation", "Done", "", 2, True),
     ("Balance & Credits", "Balance Ledger & Buckets", "applyInitialBalance + applyManualAdjustment", "Done", "service methods exist", 4, True),
-    ("Balance & Credits", "Balance Ledger & Buckets", "Dev seed — leave:seed-balance", "Done", "local only", 1, True),
+    ("Balance & Credits", "Balance Ledger & Buckets", "Dev seed — leave:seed-balance", "N/A", "removed for deployment", None, False),
     ("Balance & Credits", "Balance Ledger & Buckets", "Admin/HR API — set opening balance (manual from legacy)", "Todo", "manual entry; no bulk legacy import", 4, True),
     ("Balance & Credits", "Balance Ledger & Buckets", "Admin/HR API — manual adjust with remarks", "Todo", "expose applyManualAdjustment", 4, True),
     ("Balance & Credits", "Balance Ledger & Buckets", "applyAnnualEntitlement (15/15 or 15/18 by tenure)", "Todo", "if needed for Aug admin/FE", 4, True),

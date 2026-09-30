@@ -9,10 +9,7 @@ return [
     |
     | The KDT portal sets a cookie (default: userID) containing a hash that maps
     | to kdtphdb.kdtlogin.fldUserHash. This API reads that cookie — it does not
-    | issue its own login tokens in production.
-    |
-    | Local only: POST /api/dev/login returns fldUserHash for an emp_id so the
-    | React app can set the userID cookie without KDTPortalLogin.
+    | issue its own login tokens.
     |
     */
     'portal_cookie_name' => env('PORTAL_COOKIE_NAME', 'userID'),

@@ -73,38 +73,6 @@ if (res.status === 401) {
 
 ---
 
-### Dev login (local only)
-
-Bypasses KDT portal login while developing. **404 when `APP_ENV` is not `local`.**
-
-Returns `fldUserHash` so the frontend can set the `userID` cookie itself. The cookie must be visible to the API origin (same host, or Vite proxy to `/api`).
-
-| Method | Path | Body | Notes |
-|--------|------|------|--------|
-| POST | `/dev/login` | `{ "emp_id": 8 }` | Returns `userID` (= `kdtlogin.fldUserHash`) |
-
-Example response:
-
-```json
-{
-  "userID": "abc123hash...",
-  "cookie": "userID"
-}
-```
-
-```js
-const res = await fetch(`${API}/dev/login`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-  body: JSON.stringify({ emp_id: 8 }),
-});
-const { userID, cookie } = await res.json();
-document.cookie = `${cookie}=${encodeURIComponent(userID)}; path=/; SameSite=Lax`;
-// then GET /me with credentials: 'include'
-```
-
----
-
 ### Session / profile
 
 | Method | Path | Notes |

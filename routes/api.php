@@ -10,7 +10,6 @@ use App\Http\Controllers\AdminLeaveMonetizationCandidatesController;
 use App\Http\Controllers\AdminMonthlyAttendanceReportController;
 use App\Http\Controllers\AdminNewlyRegularizedController;
 use App\Http\Controllers\AdminReminderController;
-use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\GroupMemberController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HolidayController;
@@ -35,9 +34,6 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/health', HealthController::class);
-
-// Local only — returns portal userID hash for emp_id (frontend sets the cookie).
-Route::post('/dev/login', DevLoginController::class);
 
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
