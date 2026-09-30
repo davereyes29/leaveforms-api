@@ -200,6 +200,90 @@ class LegacyLeaveRowMapperTest extends TestCase
         );
     }
 
+    public function test_rejection_remarks_prefer_accept_row_then_leave_remarks(): void
+    {
+        $this->assertSame(
+            'Not enough staff',
+            $this->mapper->migrationRejectionRemarks('Not enough staff', 'rejected by HR'),
+        );
+
+        $this->assertSame(
+            'rejected by HR',
+            $this->mapper->migrationRejectionRemarks(null, 'rejected by HR'),
+        );
+
+        $this->assertSame(
+            'Rejected in Leaveforms V1',
+            $this->mapper->migrationRejectionRemarks('  ', '1'),
+        );
+    }
+
+    public function test_rejected_leave_keeps_rejecter_remarks(): void
+    {
+        $rejected = $this->mapper->mapLeaveRow((object) [
+            'l_id' => 201,
+            'l_eid' => 270,
+            'l_type' => 'vleave',
+            'l_dtype' => '0',
+            'l_duration' => 1,
+            'l_sdate' => '2026-02-02',
+            'l_edate' => '2026-02-02',
+            'l_reason' => 'Personal',
+            'l_status' => '',
+            'l_attachment' => '',
+            'l_file' => '2026-02-01',
+            'l_filedBy' => '',
+            'l_remarks' => null,
+            'l_lwop' => 0,
+        ], [
+            ['emp_id' => 40, 'accept' => 0, 'remarks' => 'Schedule conflict', 'time' => '2026-02-01 09:00:00'],
+        ]);
+
+        $this->assertSame(LeaveStatus::Rejected, $rejected['status']);
+        $this->assertNull($rejected['rejection_remarks']);
+        $this->assertSame(
+            [
+                ['emp_id' => 40, 'time' => '2026-02-01 09:00:00', 'remarks' => 'Schedule conflict'],
+            ],
+            $rejected['accepter_entries'],
+        );
+        $this->assertSame(
+            'Schedule conflict',
+            $this->mapper->migrationRejectionRemarks(
+                $rejected['accepter_entries'][0]['remarks'],
+                $rejected['rejection_remarks'],
+            ),
+        );
+
+        $fromLeaveRemarks = $this->mapper->mapLeaveRow((object) [
+            'l_id' => 202,
+            'l_eid' => 270,
+            'l_type' => 'vleave',
+            'l_dtype' => '0',
+            'l_duration' => 1,
+            'l_sdate' => '2026-02-03',
+            'l_edate' => '2026-02-03',
+            'l_reason' => 'Personal',
+            'l_status' => '',
+            'l_attachment' => '',
+            'l_file' => '2026-02-01',
+            'l_filedBy' => '',
+            'l_remarks' => 'rejected on the form',
+            'l_lwop' => 0,
+        ], [
+            ['emp_id' => 18, 'accept' => 0, 'remarks' => '', 'time' => '2026-02-01 10:00:00'],
+        ]);
+
+        $this->assertSame(LeaveStatus::Rejected, $fromLeaveRemarks['status']);
+        $this->assertSame(
+            'rejected on the form',
+            $this->mapper->migrationRejectionRemarks(
+                $fromLeaveRemarks['accepter_entries'][0]['remarks'],
+                $fromLeaveRemarks['rejection_remarks'],
+            ),
+        );
+    }
+
     public function test_accepter_emp_ids_are_unique_oldest_to_newest(): void
     {
         $accepts = [

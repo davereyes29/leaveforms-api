@@ -217,9 +217,8 @@ return [
     |
     | Self-file only. File Leave for Members (on-behalf) skips this gate.
     | Duration below notice_threshold_days is not gated (same-day / late VL).
-    | Exactly notice_threshold_days → start ≥ today + exact_notice_workdays
-    | working days (weekends/holidays skipped). Above the threshold → start
-    | ≥ today + long_notice_calendar_days calendar days (Asia/Manila).
+    | Duration at or above the threshold → start ≥ today +
+    | long_notice_calendar_days calendar days (Asia/Manila).
     |
     | Quarterly VL cap is informational (never 422). Confirmed + pending_conversion
     | VL workdays overlapping the quarter count. Converted-to-SL/EL do not.
@@ -230,7 +229,6 @@ return [
     */
     'vacation_leave' => [
         'notice_threshold_days' => '3.00',
-        'exact_notice_workdays' => 3,
         'long_notice_calendar_days' => 30,
         'quarterly_cap_days' => '9.00',
     ],

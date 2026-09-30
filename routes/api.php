@@ -20,6 +20,7 @@ use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\LeaveConversionController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\P4MemberController;
 use App\Http\Controllers\TeamCalendarController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +42,7 @@ Route::post('/dev/login', DevLoginController::class);
 Route::middleware('portal.auth')->group(function () {
     Route::get('/me', MeController::class);
     Route::get('/groups/{group}/members', [GroupMemberController::class, 'index']);
+    Route::get('/p4-members', [P4MemberController::class, 'index']);
     Route::get('/balances', [LeaveBalanceController::class, 'index']);
     Route::get('/activities', [LeaveActivityController::class, 'index']);
     Route::get('/holidays', [HolidayController::class, 'index']);

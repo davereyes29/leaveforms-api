@@ -24,7 +24,8 @@ class LeaveApprovalController extends Controller
     ) {}
 
     /**
-     * GET /api/approvals — All Leave Requests for employees in the approver's PIC groups.
+     * GET /api/approvals — All Leave Requests for employees in the approver's PIC groups
+     * (president: all P4 employees).
      *
      * Optional query: ?q=alex&group_id=16&status=confirmed&code=VL&sort=desc&page=1&per_page=15
      */

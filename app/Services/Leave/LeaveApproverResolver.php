@@ -32,6 +32,45 @@ class LeaveApproverResolver
     }
 
     /**
+     * Employees with formspic.fldRole = 4 (Senior Manager).
+     *
+     * Used for president File Leave for Members, All Leave Requests, and
+     * Team Leave Calendar. Does not write kdtphdb.
+     *
+     * @return list<int>
+     */
+    public function p4EmployeeIds(?int $excludeEmpId = null, bool $activeOnly = false): array
+    {
+        $ids = Formspic::query()
+            ->where('fldRole', 4)
+            ->pluck('fldEmployeeNum')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $query = Employee::query()->whereIn('id', $ids);
+
+        if ($excludeEmpId !== null) {
+            $query->whereKeyNot($excludeEmpId);
+        }
+
+        if ($activeOnly) {
+            $query->where('emp_status', 1);
+        }
+
+        return $query
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * formspic.fldRole per employee (null when there is no PIC row).
      *
      * @param  list<int>  $empIds

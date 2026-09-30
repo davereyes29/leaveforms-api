@@ -19,11 +19,11 @@ use Illuminate\Validation\ValidationException;
  * | P1              | P2, P3, P4     |
  * | P2              | P3, P4         |
  * | P3              | P4             |
- * | P4              | (deferred — President later) |
+ * | P4              | President      |
  *
- * Always required: target is active, and the target's effective primary group
+ * PIC filers: target is active, and the target's effective primary group
  * (employee_list.group_id, or LEAVE_EMPLOYEE_GROUP_OVERRIDES) is in the filer's
- * formspic.fldGroups.
+ * formspic.fldGroups. President filers: target is an active P4 (no group scope).
  */
 class LeaveOnBehalfAuthorizationService
 {
@@ -115,9 +115,49 @@ class LeaveOnBehalfAuthorizationService
             ->values();
     }
 
+    /**
+     * Active P4 employees the president may file for. Throws if the viewer
+     * is not the configured president.
+     *
+     * @return Collection<int, Employee>
+     *
+     * @throws AuthorizationException
+     */
+    public function eligibleP4Members(Employee $filer): Collection
+    {
+        $filerContext = $this->approverResolver->contextFor($filer->id);
+
+        if (! $filerContext->isPresident) {
+            throw new AuthorizationException(
+                'You are not allowed to file leave for P4 employees.',
+            );
+        }
+
+        $empIds = $this->approverResolver->p4EmployeeIds(
+            (int) $filer->id,
+            activeOnly: true,
+        );
+
+        if ($empIds === []) {
+            return collect();
+        }
+
+        return Employee::query()
+            ->whereIn('id', $empIds)
+            ->orderBy('id')
+            ->get();
+    }
+
     public function canFileFor(Employee $filer, Employee $target): bool
     {
         $filerContext = $this->approverResolver->contextFor($filer->id);
+
+        if ($filerContext->isPresident) {
+            $targetContext = $this->approverResolver->contextFor($target->id);
+
+            return $this->picLevel($targetContext->approvalLevel) === 4;
+        }
+
         $filerLevel = $this->picLevel($filerContext->approvalLevel);
 
         // Only P1–P4 may file on behalf of someone else.
@@ -156,7 +196,7 @@ class LeaveOnBehalfAuthorizationService
 
     /**
      * Role matrix: higher PICs cover lower ones; only P1/P2 cover regulars.
-     * P4-as-target (President) is intentionally not allowed yet.
+     * P4-as-target is president-only (handled in canFileFor, not this matrix).
      */
     private function filerLevelMayActForTarget(int $filerLevel, ?int $targetLevel): bool
     {

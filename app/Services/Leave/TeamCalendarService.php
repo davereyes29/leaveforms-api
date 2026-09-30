@@ -10,7 +10,10 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 
 /**
- * Approved team leaves for the Team Leave Calendar (PIC groups + the viewer).
+ * Approved team leaves for the Team Leave Calendar.
+ *
+ * PIC: employees in the viewer's formspic groups (+ the viewer).
+ * President: P4 employees only (formspic.fldRole = 4); group_id is ignored.
  *
  * Statuses: confirmed, pending_conversion, converted_to_sl, converted_to_el.
  * pending_approval / rejected / cancelled are omitted.
@@ -89,6 +92,10 @@ class TeamCalendarService
     {
         $context = $this->approverResolver->contextFor((int) $approver->id);
         $approverId = (int) $approver->id;
+
+        if ($context->isPresident) {
+            return $this->approverResolver->p4EmployeeIds();
+        }
 
         if ($groupId !== null) {
             $group = Group::query()->find($groupId);

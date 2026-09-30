@@ -447,7 +447,8 @@ class LegacyLeaveMigrationService
      *     status: LeaveStatus,
      *     leave_type_code: string,
      *     last_accepter_emp_id: ?int,
-     *     accepter_entries: list<array{emp_id: int, time: ?string}>,
+     *     accepter_entries: list<array{emp_id: int, time: ?string, remarks?: ?string}>,
+     *     rejection_remarks?: ?string,
      *     confirmed_at: ?string,
      *     created_at: string,
      * }  $mapped
@@ -470,7 +471,11 @@ class LegacyLeaveMigrationService
                 $fallbackEmpId = (int) (config('leave.admin_emp_id') ?: $leave->filed_by_emp_id);
             }
             if ($fallbackEmpId > 0) {
-                $entries = [['emp_id' => $fallbackEmpId, 'time' => $fallbackAction]];
+                $entries = [[
+                    'emp_id' => $fallbackEmpId,
+                    'time' => $fallbackAction,
+                    'remarks' => $mapped['rejection_remarks'] ?? null,
+                ]];
             }
         }
 
@@ -508,7 +513,12 @@ class LegacyLeaveMigrationService
                 'approval_level' => $isAdminType ? null : 1,
                 'approver_type' => $isAdminType ? ApproverType::Admin : ApproverType::Leader,
                 'is_approved' => $approved,
-                'remarks' => $this->mapper->migrationApprovalRemarks($approved, $isLast),
+                'remarks' => $approved
+                    ? $this->mapper->migrationApprovalRemarks(true, $isLast)
+                    : $this->mapper->migrationRejectionRemarks(
+                        $entry['remarks'] ?? null,
+                        $mapped['rejection_remarks'] ?? null,
+                    ),
             ]);
 
             $history->forceFill(['created_at' => $actionAtUtc]);

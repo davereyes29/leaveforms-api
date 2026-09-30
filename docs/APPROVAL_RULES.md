@@ -46,7 +46,9 @@ When `POST /api/leaves` includes `emp_id` different from the logged-in user, `Le
 
 **Group members dropdown:** `GET /api/groups/{group}/members` returns only people this PIC may file for in that group (same matrix and group scope as below). `{group}` is `group_list.id` from `GET /me` `role.pic_groups`.
 
-**Group scope (always):** the person on leave’s **primary** group abbreviation must appear in the filer’s `formspic.fldGroups`.
+**P4 members dropdown (president):** `GET /api/p4-members` returns active P4 employees (`formspic.fldRole = 4`). No group. Viewer must be `LEAVE_PRESIDENT_EMP_ID`.
+
+**Group scope (PIC filers):** the person on leave’s **primary** group abbreviation must appear in the filer’s `formspic.fldGroups`. President filers have no group scope — only P4 targets.
 
 **Role matrix** (who may submit for whom):
 
@@ -56,7 +58,7 @@ When `POST /api/leaves` includes `emp_id` different from the logged-in user, `Le
 | P1 | P2, P3, P4 |
 | P2 | P3, P4 |
 | P3 | P4 |
-| P4 | Not implemented yet (President later) |
+| P4 | President |
 
 Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit.
 
@@ -244,7 +246,7 @@ If conversion is pending, reject it first (leave returns to `confirmed`), then c
 Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL conversion** below). If a medical certificate is already available, file **SL** directly. Confirmed VL may also convert to EL when remaining EL covers the duration.
 
 1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
-2. **Advance notice (self-file only):** VL of **exactly 3.00 workdays** must have `start_date` ≥ today + **3 working days** (weekends/holidays skipped). VL of **more than 3.00 workdays** must have `start_date` ≥ today + **30 calendar days** (Asia/Manila). Shorter VL (1–2 workdays or half-day) is not gated, so same-day and late filing stay allowed. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day start is 4 Sep; earliest 4-day start is 1 Oct.
+2. **Advance notice (self-file only):** VL of **3.00 or more workdays** must have `start_date` ≥ today + **30 calendar days** (Asia/Manila). Shorter VL (1–2 workdays or half-day) is not gated, so same-day and late filing stay allowed. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day or 4-day start is 1 Oct.
 3. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
 4. Approvers act per matrix above.
 5. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.

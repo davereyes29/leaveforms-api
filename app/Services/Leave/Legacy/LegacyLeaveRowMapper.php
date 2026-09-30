@@ -118,9 +118,17 @@ final class LegacyLeaveRowMapper
         }
 
         // Fresh pending under revamp rules — do not replay partial V1 leave_accept rows.
-        $accepterEntries = $status === LeaveStatus::PendingApproval
-            ? []
-            : $this->accepterEntries($accepts);
+        // Rejected leaves keep the rejecter (fldAccept=0) so their legacy remarks survive.
+        $rejectionRemarks = null;
+        if ($status === LeaveStatus::PendingApproval) {
+            $accepterEntries = [];
+        } elseif ($status === LeaveStatus::Rejected) {
+            $accepterEntries = $this->rejecterEntries($accepts);
+            $leaveRemarks = trim((string) ($row->l_remarks ?? ''));
+            $rejectionRemarks = ($leaveRemarks !== '' && $leaveRemarks !== '1') ? $leaveRemarks : null;
+        } else {
+            $accepterEntries = $this->accepterEntries($accepts);
+        }
 
         return [
             'status' => $status,
@@ -140,6 +148,7 @@ final class LegacyLeaveRowMapper
             'updated_at' => $createdAt,
             'last_accepter_emp_id' => $statusDecision['last_accepter_emp_id'] ?? null,
             'accepter_entries' => $accepterEntries,
+            'rejection_remarks' => $rejectionRemarks,
         ];
     }
 
@@ -179,6 +188,56 @@ final class LegacyLeaveRowMapper
     }
 
     /**
+     * Unique rejecters (fldAccept=0), oldest → newest, with their action time and remarks.
+     *
+     * @param  list<array{emp_id: int, accept: int, remarks: ?string, time: ?string}>  $accepts
+     * @return list<array{emp_id: int, time: ?string, remarks: ?string}>
+     */
+    public function rejecterEntries(array $accepts): array
+    {
+        $rejected = array_values(array_filter(
+            $accepts,
+            static fn (array $row): bool => (int) $row['accept'] === 0,
+        ));
+
+        usort($rejected, static function (array $a, array $b): int {
+            return strcmp((string) ($a['time'] ?? ''), (string) ($b['time'] ?? ''));
+        });
+
+        $entries = [];
+        $indexByEmp = [];
+        foreach ($rejected as $row) {
+            $id = (int) $row['emp_id'];
+            if ($id < 1) {
+                continue;
+            }
+
+            $time = $row['time'] ?? null;
+            $time = $time !== null && trim((string) $time) !== '' ? (string) $time : null;
+            $remarks = trim((string) ($row['remarks'] ?? ''));
+            $remarks = $remarks !== '' ? $remarks : null;
+
+            if (isset($indexByEmp[$id])) {
+                $index = $indexByEmp[$id];
+                if ($entries[$index]['remarks'] === null && $remarks !== null) {
+                    $entries[$index]['remarks'] = $remarks;
+                }
+
+                continue;
+            }
+
+            $indexByEmp[$id] = count($entries);
+            $entries[] = [
+                'emp_id' => $id,
+                'time' => $time,
+                'remarks' => $remarks,
+            ];
+        }
+
+        return $entries;
+    }
+
+    /**
      * @param  list<array{emp_id: int, accept: int, remarks: ?string, time: ?string}>  $accepts
      * @return list<int>
      */
@@ -204,6 +263,24 @@ final class LegacyLeaveRowMapper
         return $isLast
             ? 'Last to approve from Leaveforms V1'
             : 'Approved in Leaveforms V1';
+    }
+
+    /**
+     * Reject history remarks: the rejecter's leave_accept text, then leave_info.l_remarks.
+     */
+    public function migrationRejectionRemarks(?string $acceptRemarks, ?string $leaveRemarks = null): string
+    {
+        $acceptText = trim((string) $acceptRemarks);
+        if ($acceptText !== '') {
+            return $acceptText;
+        }
+
+        $leaveText = trim((string) $leaveRemarks);
+        if ($leaveText !== '' && $leaveText !== '1') {
+            return $leaveText;
+        }
+
+        return 'Rejected in Leaveforms V1';
     }
 
     public function mapDayType(string $dtype): ?DayType

@@ -74,6 +74,10 @@ class LeaveListService
             return true;
         }
 
+        if ($context->isPresident && $this->isP4Employee((int) $leave->emp_id)) {
+            return true;
+        }
+
         $filerGroup = $this->approverResolver->filerGroupAbbreviation($leave->emp_id);
 
         // Same PIC coverage as GET /approvals (any status).
@@ -101,5 +105,10 @@ class LeaveListService
         }
 
         return false;
+    }
+
+    private function isP4Employee(int $empId): bool
+    {
+        return $this->approverResolver->contextFor($empId)->approvalLevel === 4;
     }
 }

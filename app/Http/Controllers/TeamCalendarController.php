@@ -15,6 +15,7 @@ class TeamCalendarController extends Controller
 
     /**
      * GET /api/team/calendar — approved leaves for the viewer's team (and self).
+     * President: P4 employees only (group_id ignored).
      *
      * Query: from + to (YYYY-MM-DD), optional code, optional group_id
      */

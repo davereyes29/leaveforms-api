@@ -12,11 +12,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * All leave requests for employees in the approver's formspic PIC groups.
+ * All leave requests for employees in the approver's formspic PIC groups,
+ * or — for the president — all P4 employees (formspic.fldRole = 4).
  *
  * Unlike PendingApprovalService (actionable inbox), this is a team history view.
- * Optional q searches the person on leave by name or employee number (within PIC groups).
+ * Optional q searches the person on leave by name or employee number (within PIC groups / P4s).
  * Optional group_id narrows to one PIC group (must be in the viewer's formspic fldGroups).
+ * group_id is ignored for the president.
  * Default statuses: confirmed, rejected, pending_conversion, converted_to_sl, converted_to_el.
  * pending_approval stays on GET /approvals/pending; admin review on GET /conversions/pending.
  * The viewer's own leaves are excluded (use GET /leaves).
@@ -51,7 +53,9 @@ class ApproverLeaveListService
         ?string $q = null,
     ): LengthAwarePaginator {
         $context = $this->approverResolver->contextFor($approver->id);
-        $empIds = $this->employeeIdsInPicGroups($context->groupCodes, (int) $approver->id, $groupId);
+        $empIds = $context->isPresident
+            ? $this->approverResolver->p4EmployeeIds((int) $approver->id)
+            : $this->employeeIdsInPicGroups($context->groupCodes, (int) $approver->id, $groupId);
         $empIds = $this->filterEmpIdsBySearch($empIds, $q);
 
         if ($empIds === []) {
