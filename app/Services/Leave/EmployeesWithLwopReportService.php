@@ -24,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  * + grant). Consumed = accepted days taken (`paid_days` + `lwop_days` of
  * that type). Admin LWOP = VL/SL `lwop_days` plus confirmed Long Leave
  * (`ll_consumed` = duration). Employee summary (`forEmployee`) uses the same
- * leave query and statuses.
+ * leave query and statuses. Imported legacy leaves (`legacy_leave_id` set)
+ * are omitted: their unpaid days come from the old system and do not count.
  */
 class EmployeesWithLwopReportService
 {
@@ -304,6 +305,7 @@ class EmployeesWithLwopReportService
             ->whereIn('emp_id', $empIds)
             ->whereIn('leave_type_id', [$vlTypeId, $slTypeId, $llTypeId])
             ->whereIn('status', self::STATUSES)
+            ->whereNull('legacy_leave_id')
             ->whereDate('start_date', '<=', $end)
             ->whereDate('end_date', '>=', $start)
             ->get(['emp_id', 'leave_type_id', 'paid_days', 'lwop_days']);

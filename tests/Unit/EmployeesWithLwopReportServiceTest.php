@@ -371,6 +371,31 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         ]);
     }
 
+    public function test_imported_legacy_lwop_is_omitted_from_the_report_and_employee_summary(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 10:23:00', 'Asia/Manila'));
+
+        $this->seedLeave(801, $this->vlTypeId, '0.00', '2.00', '2026-03-02', '2026-03-03', 'confirmed', 9001);
+        $this->seedLeave(801, $this->vlTypeId, '0.00', '1.00', '2026-04-01', '2026-04-01', 'confirmed');
+        $this->seedLeave(808, $this->slTypeId, '0.00', '3.00', '2026-05-04', '2026-05-06', 'confirmed', 9002);
+
+        $report = $this->service->forAdmin(Employee::query()->findOrFail(1), 2026);
+        $byId = collect($report['rows'])->keyBy(fn (array $row): int => $row['employee']['id']);
+
+        $this->assertSame([801], $byId->keys()->all());
+        $this->assertSame('1.00', $byId->get(801)['vl_consumed']);
+        $this->assertSame('1.00', $byId->get(801)['total_lwop_days']);
+        $this->assertSame('1.00', $report['grand_totals']['total_lwop_days']);
+
+        $alex = $this->service->forEmployee(Employee::query()->findOrFail(801), 2026);
+        $this->assertSame('1.00', $alex['vl_lwop_days']);
+        $this->assertSame('0.00', $alex['sl_lwop_days']);
+        $this->assertSame('1.00', $alex['total_lwop_days']);
+
+        $taylor = $this->service->forEmployee(Employee::query()->findOrFail(808), 2026);
+        $this->assertSame('0.00', $taylor['total_lwop_days']);
+    }
+
     private function seedLeave(
         int $empId,
         int $leaveTypeId,
@@ -379,6 +404,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
         string $startDate,
         string $endDate,
         string $status,
+        ?int $legacyLeaveId = null,
     ): void {
         $duration = bcadd($paidDays, $lwopDays, 2);
 
@@ -386,6 +412,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             'emp_id' => $empId,
             'filed_by_emp_id' => $empId,
             'leave_type_id' => $leaveTypeId,
+            'legacy_leave_id' => $legacyLeaveId,
             'duration' => $duration,
             'paid_days' => $paidDays,
             'lwop_days' => $lwopDays,
@@ -432,6 +459,7 @@ class EmployeesWithLwopReportServiceTest extends TestCase
             $table->unsignedBigInteger('emp_id');
             $table->unsignedBigInteger('filed_by_emp_id');
             $table->unsignedBigInteger('leave_type_id');
+            $table->unsignedBigInteger('legacy_leave_id')->nullable();
             $table->decimal('duration', 8, 2);
             $table->decimal('paid_days', 8, 2)->default(0);
             $table->decimal('lwop_days', 8, 2)->default(0);

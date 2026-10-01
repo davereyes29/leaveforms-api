@@ -530,7 +530,7 @@ Non-VL `code` → `applicable: false`, `level: "ok"`. Unknown/inactive `emp_id` 
 
 **Employee LWOP (`GET /leaves/lwop`):** accepted Vacation, Sick, and Long Leave without pay in the selected calendar year. Any authenticated employee. Same year, statuses, and types as `GET /admin/reports/employees-with-lwop` (including already-approved leave later in the year). Optional `emp_id` uses the same on-behalf PIC matrix as `GET /balances`. Invalid `year` → **422**. Always returns zeros when there is no accepted VL/SL/LL LWOP.
 
-**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el`. `converted_to_sl` counts as **SL**. Whole-row `lwop_days` are summed when the leave overlaps **1 January–31 December of `year`**. `total_lwop_days` = VL + SL + LL.
+**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el`, and any leave with `legacy_leave_id` (imported history; unpaid flags from the old system are not counted). `converted_to_sl` counts as **SL**. Whole-row `lwop_days` are summed when the leave overlaps **1 January–31 December of `year`**. `total_lwop_days` = VL + SL + LL.
 
 ```json
 {
@@ -1179,7 +1179,7 @@ Non-admin callers get **403**. Invalid `year` or unknown `group_id` → **422**.
 
 **Who appears:** `total_lwop_days > 0` from **VL, SL, or confirmed Long Leave**. Paid-only VL/SL is omitted unless they also have LL.
 
-**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el` (LWOP was cleared when the VL became paid EL). `converted_to_sl` counts as **SL consumed**, not VL.
+**Source leaves:** current type VL, SL, or LL. VL/SL `status` is `confirmed`, `pending_conversion`, or `converted_to_sl`. LL `status` is `confirmed`. **Omitted:** `pending_approval`, `rejected`, `cancelled`, `converted_to_el` (LWOP was cleared when the VL became paid EL), and any leave with `legacy_leave_id` (imported history does not put an employee on this report). `converted_to_sl` counts as **SL consumed**, not VL.
 
 | Column | Field | Meaning |
 |--------|--------|---------|
