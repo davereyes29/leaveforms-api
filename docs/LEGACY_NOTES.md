@@ -99,7 +99,7 @@ Do not run old and new migrations on the same `formsdb` without a cutover plan.
 | `pleave` | `PL` | Paid; admin; exactly 7 workdays; grant on submit; male only; max 4 confirmed; Paternity Notification Form (1–5 files) |
 | `ptbleave` | `PTB` | Direct filing (med cert + admin). Calendar days; full day; no LWOP |
 | `lleave` | `LL` | Unpaid; admin; 1–3 calendar months; no overlapping dates; one pending LL at a time; supporting document (1–5 files) |
-| — | `SPL` | New in revamp. Paid; admin; exact matrix duration; supporting document (1–5 files); no credits |
+| — | `SPL` | New in revamp. Paid; admin; 1 day through the matrix maximum; supporting document (1–5 files); no credits |
 
 ---
 

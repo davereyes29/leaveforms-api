@@ -214,8 +214,11 @@ return [
     |
     | Self-file only. File Leave for Members (on-behalf) skips this gate.
     | Duration below notice_threshold_days is not gated (same-day / late VL).
-    | Duration at or above the threshold → start ≥ today +
-    | long_notice_calendar_days calendar days (Asia/Manila).
+    | Duration from notice_threshold_days up to but not including
+    | long_notice_threshold_days → start ≥ today +
+    | three_day_notice_calendar_days calendar days (Asia/Manila).
+    | Duration at or above long_notice_threshold_days → start ≥ today +
+    | long_notice_calendar_days calendar days.
     |
     | Quarterly VL cap is informational (never 422). Confirmed + pending_conversion
     | VL workdays overlapping the quarter count. Converted-to-SL/EL do not.
@@ -226,6 +229,8 @@ return [
     */
     'vacation_leave' => [
         'notice_threshold_days' => '3.00',
+        'three_day_notice_calendar_days' => 7,
+        'long_notice_threshold_days' => '4.00',
         'long_notice_calendar_days' => 30,
         'quarterly_cap_days' => '9.00',
     ],
@@ -268,7 +273,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Paid, event-specific, non-cumulative. No rolling credits, no carry,
-    | no cash conversion. Duration is exact from the reason matrix.
+    | no cash conversion. Duration is 1 day through the reason-matrix maximum.
     | Philippines-based / short-term overseas: working days.
     | Long-term overseas qualifying deaths: 21 calendar days + 2 travel
     | days (23 inclusive calendar days). Marriage stays working days.

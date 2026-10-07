@@ -26,24 +26,51 @@ class VacationLeaveNoticePolicyTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_self_filed_vl_of_three_workdays_is_blocked_inside_thirty_calendar_days(): void
+    public function test_self_filed_vl_of_three_workdays_is_blocked_inside_seven_calendar_days(): void
     {
         $this->expectException(ValidationException::class);
 
         try {
-            $this->policy->assertAdvanceNotice('VL', '3.00', '2026-09-30', false);
+            $this->policy->assertAdvanceNotice('VL', '3.00', '2026-09-07', false);
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('start_date', $e->errors());
-            $this->assertStringContainsString('3 or more consecutive working days', $e->errors()['start_date'][0]);
-            $this->assertStringContainsString('30 calendar days', $e->errors()['start_date'][0]);
+            $this->assertStringContainsString('3 consecutive working days', $e->errors()['start_date'][0]);
+            $this->assertStringContainsString('7 calendar days', $e->errors()['start_date'][0]);
 
             throw $e;
         }
     }
 
-    public function test_self_filed_vl_of_three_workdays_may_start_on_the_thirtieth_calendar_day(): void
+    public function test_self_filed_vl_of_three_workdays_may_start_on_the_seventh_calendar_day(): void
     {
-        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-10-01', false);
+        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-09-08', false);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_self_filed_vl_of_three_workdays_is_not_subject_to_the_thirty_day_gate(): void
+    {
+        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-09-15', false);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_self_filed_vl_between_three_and_four_workdays_uses_the_seven_day_gate(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        try {
+            $this->policy->assertAdvanceNotice('VL', '3.50', '2026-09-07', false);
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('7 calendar days', $e->errors()['start_date'][0]);
+
+            throw $e;
+        }
+    }
+
+    public function test_self_filed_vl_between_three_and_four_workdays_may_start_on_the_seventh_calendar_day(): void
+    {
+        $this->policy->assertAdvanceNotice('VL', '3.50', '2026-09-08', false);
 
         $this->addToAssertionCount(1);
     }
@@ -56,7 +83,7 @@ class VacationLeaveNoticePolicyTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function test_self_filed_vl_over_three_workdays_is_blocked_inside_thirty_calendar_days(): void
+    public function test_self_filed_vl_of_four_or_more_workdays_is_blocked_inside_thirty_calendar_days(): void
     {
         $this->expectException(ValidationException::class);
 
@@ -64,14 +91,14 @@ class VacationLeaveNoticePolicyTest extends TestCase
             $this->policy->assertAdvanceNotice('VL', '4.00', '2026-09-30', false);
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('start_date', $e->errors());
-            $this->assertStringContainsString('3 or more consecutive working days', $e->errors()['start_date'][0]);
+            $this->assertStringContainsString('4 or more consecutive working days', $e->errors()['start_date'][0]);
             $this->assertStringContainsString('30 calendar days', $e->errors()['start_date'][0]);
 
             throw $e;
         }
     }
 
-    public function test_self_filed_vl_over_three_workdays_may_start_on_the_thirtieth_calendar_day(): void
+    public function test_self_filed_vl_of_four_or_more_workdays_may_start_on_the_thirtieth_calendar_day(): void
     {
         $this->policy->assertAdvanceNotice('VL', '4.00', '2026-10-01', false);
 
@@ -100,14 +127,32 @@ class VacationLeaveNoticePolicyTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-02-28', false);
+        $this->policy->assertAdvanceNotice('VL', '4.00', '2026-02-28', false);
     }
 
     public function test_january_31_allows_march_2_for_long_vl(): void
     {
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-01-31 08:00:00', 'Asia/Manila'));
 
-        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-03-02', false);
+        $this->policy->assertAdvanceNotice('VL', '4.00', '2026-03-02', false);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_january_31_blocks_three_day_vl_before_seven_calendar_days(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-01-31 08:00:00', 'Asia/Manila'));
+
+        $this->expectException(ValidationException::class);
+
+        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-02-06', false);
+    }
+
+    public function test_january_31_allows_february_7_for_three_day_vl(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-01-31 08:00:00', 'Asia/Manila'));
+
+        $this->policy->assertAdvanceNotice('VL', '3.00', '2026-02-07', false);
 
         $this->addToAssertionCount(1);
     }

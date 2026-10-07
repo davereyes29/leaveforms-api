@@ -36,12 +36,12 @@ class LeaveDurationService
             }
 
             if ($specialLeave->usesCalendarDays) {
-                $this->assertExactCalendarSpan($startDate, $endDate, $specialLeave->days, 'Special Leave');
+                $this->assertCalendarSpanAtMost($startDate, $endDate, $specialLeave->days, 'Special Leave');
 
                 return $this->calculateCalendarDays($startDate, $endDate);
             }
 
-            return $this->calculateExactWorkdays($startDate, $endDate, $specialLeave->days, 'Special Leave');
+            return $this->calculateWorkdaysAtMost($startDate, $endDate, $specialLeave->days, 'Special Leave');
         }
 
         if (LeaveTypeRules::usesCalendarDays($code)) {
@@ -133,12 +133,54 @@ class LeaveDurationService
         $this->assertExactWorkdaySpan($startDate, $endDate, $required, $workdays, 'Paternity Leave');
     }
 
-    private function calculateExactWorkdays(string $startDate, string $endDate, int $required, string $label): string
+    private function assertCalendarSpanAtMost(string $startDate, string $endDate, int $maximum, string $label): void
     {
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $latestEnd = $start->copy()->addDays($maximum - 1);
+
+        if ($end->lt($start) || $end->gt($latestEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => [
+                    $label.' for this event can be at most '.$maximum.' calendar days. For a start date of '
+                    .$start->toDateString().', the end date must be on or before '.$latestEnd->toDateString().'.',
+                ],
+            ]);
+        }
+    }
+
+    private function calculateWorkdaysAtMost(string $startDate, string $endDate, int $maximum, string $label): string
+    {
+        $start = Carbon::parse($startDate)->startOfDay();
+
+        if (! $this->isWorkday($start)) {
+            throw ValidationException::withMessages([
+                'start_date' => [$label.' must start on a workday.'],
+            ]);
+        }
+
         $workdays = $this->countWorkdays($startDate, $endDate);
-        $this->assertExactWorkdaySpan($startDate, $endDate, $required, $workdays, $label);
+        $latestEnd = $this->latestEndWithinWorkdayCap($start, $maximum);
+        $end = Carbon::parse($endDate)->startOfDay();
+
+        if ($workdays > $maximum || $end->gt($latestEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => [
+                    $label.' for this event can be at most '.$maximum.' workdays. For a start date of '
+                    .$start->toDateString().', the end date must be on or before '.$latestEnd->toDateString().'.',
+                ],
+            ]);
+        }
 
         return bcadd((string) $workdays, '0', 2);
+    }
+
+    private function latestEndWithinWorkdayCap(Carbon $start, int $maximum): Carbon
+    {
+        $lastWorkday = $this->nthWorkdayOnOrAfter($start, $maximum);
+        $nextWorkday = $this->nthWorkdayOnOrAfter($lastWorkday->copy()->addDay(), 1);
+
+        return $nextWorkday->copy()->subDay();
     }
 
     private function countWorkdays(string $startDate, string $endDate): int

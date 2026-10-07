@@ -246,7 +246,7 @@ If conversion is pending, reject it first (leave returns to `confirmed`), then c
 Unexpected sickness **without** a medical certificate is filed as VL, then converted to SL after return (see **VL conversion** below). If a medical certificate is already available, file **SL** directly. Confirmed VL may also convert to EL when remaining EL covers the duration.
 
 1. Employee or an allowed PIC files **VL** (`filed_by_emp_id` may differ from `emp_id` — see **Filing on behalf** above).
-2. **Advance notice (self-file only):** VL of **3.00 or more workdays** must have `start_date` ≥ today + **30 calendar days** (Asia/Manila). Shorter VL (1–2 workdays or half-day) is not gated, so same-day and late filing stay allowed. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day or 4-day start is 1 Oct.
+2. **Advance notice (self-file only):** VL of **3.00 up to but not including 4.00 workdays** must have `start_date` ≥ today + **7 calendar days** (Asia/Manila). VL of **4.00 or more workdays** must have `start_date` ≥ today + **30 calendar days**. Shorter VL (under 3.00 workdays, including 1–2 workdays or half-day) is not gated, so same-day and late filing stay allowed. **On-behalf PIC filing skips this** (any PIC already allowed to file for that member). Example: filed 1 Sep → earliest self-file 3-day start is 8 Sep; earliest 4-day start is 1 Oct.
 3. Snapshot requirements + reserve paid **VL** credits (or LWOP path).
 4. Approvers act per matrix above.
 5. When all requirements satisfied → **confirm immediately**. **No admin step** on the original VL request.
@@ -331,7 +331,7 @@ Same grant-on-submit pattern as ML, with a fixed workday length and a lifetime c
 Paid company benefit, separate from VL and EL. Event-specific, non-cumulative, cannot be carried forward, and cannot be converted to cash. Qualifying deaths file **SPL**, not EL.
 
 1. Employee or an allowed PIC files **SPL** as multipart (`day_type=full`, 1–5 `leave_attachment[]` — supporting documents) with `assignment_type` (`philippines_based` or `long_term_overseas`) and `special_leave_reason` (matrix enum).
-2. Duration is **exact**. Philippines-based (and long-term overseas marriage) uses **workdays**. Long-term overseas qualifying deaths use **23 inclusive calendar days** (21 + 2 travel). `death_child_spouse` and `death_sibling_spouse` are **422** for long-term overseas.
+2. Duration is **1 day through the matrix maximum** (the employee may take fewer days). Philippines-based (and long-term overseas marriage) uses **workdays**. Long-term overseas qualifying deaths use at most **23 inclusive calendar days** (21 + 2 travel). `death_child_spouse` and `death_sibling_spouse` are **422** for long-term overseas.
 3. Always paid: `paid_days = duration`, `lwop_days = 0`. **No** `leave_balance` reserve/confirm. Admin balances show SPL as not applicable.
 4. Snapshot **one** requirement: `required_approver_type = admin`. Email: **To** admin, **CC** designated VL-matrix approvers. Supporting document attached. PICs do not approve.
 5. Admin approves or rejects. No lifetime cap and no “one pending SPL” gate.

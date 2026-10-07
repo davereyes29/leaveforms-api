@@ -145,7 +145,7 @@ The viewer must be a PIC (P1–P4) whose `formspic.fldGroups` includes this grou
 
 The list is the same people `POST /leaves` would accept for on-behalf (`LeaveOnBehalfAuthorizationService`): active employees (`emp_status = 1`) in that group, excluding the viewer, filtered by the on-behalf role matrix. Not paginated. Sorted by `id` (same as `emp_id`).
 
-**VL advance notice:** File Leave for Members **does not** apply the 30-calendar-day start-date gate for 3+ workday VL (self-file does). Do not show the “Filing not allowed” banner on this screen for that rule.
+**VL advance notice:** File Leave for Members **does not** apply the advance-notice start-date gate (7 calendar days for 3-workday VL, 30 calendar days for 4 or more). Self-file does. Do not show the “Filing not allowed” banner on this screen for that rule.
 
 ```json
 {
@@ -486,7 +486,7 @@ Full detail: `docs/API_HOLIDAYS.md`.
 
 **Vacation Leave** — JSON (or form fields). Omit `code` or send `"VL"`. No file.
 
-Self-filed VL notice (Asia/Manila): **3.00 or more workdays** must start at least **30 calendar days** from today. Example: filed **1 Sep 2026** → earliest 3-day or 4-day start is **1 Oct**; **2–30 Sep** 3-day VL → **422** on `start_date`. Shorter VL (1–2 workdays or half-day) is not gated (same-day / late filing allowed). **File Leave for Members** (on-behalf `emp_id`) skips this — any PIC already allowed to file for that member. The same gate runs on edit.
+Self-filed VL notice (Asia/Manila): **3.00 up to but not including 4.00 workdays** must start at least **7 calendar days** from today. **4.00 or more workdays** must start at least **30 calendar days** from today. Example: filed **1 Sep 2026** → earliest 3-day start is **8 Sep**; earliest 4-day start is **1 Oct**. A 3-day VL starting **2–7 Sep** → **422** on `start_date`. Shorter VL (under 3.00 workdays, including 1–2 workdays or half-day) is not gated (same-day / late filing allowed). **File Leave for Members** (on-behalf `emp_id`) skips this — any PIC already allowed to file for that member. The same gate runs on edit.
 
 **Quarterly VL cap (informational):** more than **9.00** confirmed VL workdays in a calendar quarter (Q1 Jan–Mar … Q4 Oct–Dec, Asia/Manila) may result in a memo. Call `GET /leaves/quarter-usage` after dates are chosen (same `emp_id` / on-behalf rules as `POST /leaves`). **Never 422** for this cap — the employee can still submit.
 
@@ -647,11 +647,11 @@ Required extra fields:
 | `assignment_type` | `philippines_based` (Philippines-Based / Short-Term Overseas) or `long_term_overseas` |
 | `special_leave_reason` | See matrix below. Long-term overseas **cannot** file `death_child_spouse` or `death_sibling_spouse` (**422**). |
 
-Duration is **exact** (FE computes `end_date` from start + assignment + event; API re-checks):
+Duration is **1 day through the matrix maximum** (FE lets the employee pick `end_date`; API re-checks). Taking the full maximum is still allowed.
 
-- `philippines_based`: working days (weekends/holidays skipped). Start must be a workday.
-- `long_term_overseas` marriage (`employee_marriage` / `child_marriage`): working days (6 / 2).
-- `long_term_overseas` qualifying death: **exactly 23 inclusive calendar days** (21 + 2 travel). Example: start **10 Sep 2026** → end **2 Oct 2026**. Duration `"23.00"`.
+- `philippines_based`: working days (weekends/holidays skipped), from **1** through the matrix maximum. Start must be a workday.
+- `long_term_overseas` marriage (`employee_marriage` / `child_marriage`): working days, at most **6** / **2**.
+- `long_term_overseas` qualifying death: at most **23 inclusive calendar days** (21 + 2 travel). Example: start **10 Sep 2026** → latest end **2 Oct 2026** (duration `"23.00"`). A shorter end, including the start date only (`"1.00"`), is allowed.
 
 Set `leave_reason` to the selected event label (same string as the dropdown). Admin still sees `assignment_type` and `special_leave_reason` on detail.
 
@@ -667,8 +667,8 @@ leave_reason            Death – spouse
 leave_attachment[]      (file: pdf, jpg, jpeg, png; max 10 MB each; 1–5 files)
 ```
 
-| `special_leave_reason` | Philippines-based | Long-term overseas |
-|------------------------|------------------:|-------------------:|
+| `special_leave_reason` | Philippines-based maximum | Long-term overseas maximum |
+|------------------------|--------------------------:|-----------------------------:|
 | `employee_marriage` | 6 workdays | 6 workdays |
 | `child_marriage` | 2 workdays | 2 workdays |
 | `death_spouse` | 7 workdays | 23 calendar |
@@ -691,7 +691,7 @@ Detail JSON also returns `assignment_type`, `assignment_type_label`, `special_le
 |-------|--------|
 | `emp_id` | Optional. Omit → self. Different from logged-in user → on-behalf (PIC rules, or president → P4). Use `id` from `GET /groups/{group}/members` or `GET /p4-members`. |
 | `code` | Optional. `VL` (default), `SL`, `PTB`, `EL`, `LL`, `ML`, `PL`, or `SPL` (case-insensitive). Other types → **422**. |
-| `start_date` / `end_date` | Required dates; end ≥ start. Overlap with another open leave for the same employee → **422** (`start_date`: "You already have leave filed for these dates.") Self-filed VL of 3 or more workdays with start sooner than 30 calendar days → **422** on `start_date` (on-behalf skips this). SPL end must match the matrix exactly (same idea as ML/PL). |
+| `start_date` / `end_date` | Required dates; end ≥ start. Overlap with another open leave for the same employee → **422** (`start_date`: "You already have leave filed for these dates.") Self-filed VL of 3 workdays with start sooner than 7 calendar days, or of 4 or more workdays with start sooner than 30 calendar days → **422** on `start_date` (on-behalf skips this). SPL duration must be from 1 day through the matrix maximum for that event (later than that maximum → **422** on `end_date`). ML/PL stay exact. |
 | `day_type` | `full` \| `half_am` \| `half_pm`. **PTB, EL, LL, ML, PL, and SPL: `full` only** |
 | `leave_reason` | Required string |
 | `assignment_type` | **Required** on SPL. **Prohibited** on other types. |
@@ -846,7 +846,7 @@ When status is `pending_conversion` (or after a conversion exists), `conversion`
 
 Store / update / cancel / approve / reject also return this **detail** shape.
 
-**Edit rules:** only while status is `pending_approval` and no approval history yet. **Self-file:** the employee may edit. **On-behalf:** the employee on leave or the original filer (`filed_by_emp_id`) may edit dates, reason, and attachments. Strangers get **403** (`You are not allowed to modify this leave request.`). Show edit when the viewer is `employee.id` or `filed_by.id`. VL and ML prohibit files. SL, PTB, EL, LL, PL, and SPL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). Self-filed VL still cannot be edited to 3 or more workdays inside the 30-calendar-day window. PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months (always unpaid). ML stays exactly 105 calendar days. PL stays exactly 7 workdays. SPL stays `day_type=full` and must keep the exact matrix duration for the posted `assignment_type` + `special_leave_reason`.  
+**Edit rules:** only while status is `pending_approval` and no approval history yet. **Self-file:** the employee may edit. **On-behalf:** the employee on leave or the original filer (`filed_by_emp_id`) may edit dates, reason, and attachments. Strangers get **403** (`You are not allowed to modify this leave request.`). Show edit when the viewer is `employee.id` or `filed_by.id`. VL and ML prohibit files. SL, PTB, EL, LL, PL, and SPL add files with `POST /leaves/{id}/attachments` and remove with `DELETE /leaves/{id}/attachments/{id}` (at least one file must remain; total ≤ 5). Self-filed VL still cannot be edited to 3 workdays inside the 7-calendar-day window, or to 4 or more workdays inside the 30-calendar-day window. PTB and EL stay `day_type=full` and cannot exceed remaining credits of that type. LL stays 1–3 calendar months (always unpaid). ML stays exactly 105 calendar days. PL stays exactly 7 workdays. SPL stays `day_type=full` and must stay within 1 day through the matrix maximum for the posted `assignment_type` + `special_leave_reason`.  
 **Cancel (employee):** open requests (`pending_approval`, including after a partial approval); reason required. Only the **employee on leave** may cancel (including on-behalf). Pending VL that should have been SL: cancel, then file SL with the med cert. Confirmed leave cannot be cancelled by the employee (**422**).
 **Cancel (admin):** confirmed leave only, via `POST /admin/leaves/{id}/cancel`. See **All Leave Requests (admin)**. `pending_conversion` / converted statuses cannot be cancelled — reject the conversion first if needed.
 
@@ -1873,7 +1873,7 @@ After **approve**, leave type becomes the target (`SL` or `EL`) and status becom
 ## Suggested UI screens
 
 1. **My leaves** — `GET /leaves` (+ status filter) → open detail with `GET /leaves/{id}`
-2. **File VL** — `POST /leaves` JSON (load `GET /holidays` for picker non-working days). Self-file: block 3+ workday VL whose start is inside 30 calendar days. After dates: `GET /leaves/quarter-usage` — warn at 9.00 VL days this quarter; warn + confirm when projected &gt; 9.00 (memo); never block submit. On-behalf (PIC): `GET /me` `pic_groups` → `GET /groups/{id}/members` → `GET /balances?emp_id=` then `emp_id` on submit. On-behalf (president): skip Group; `GET /p4-members` → `GET /balances?emp_id=` then `emp_id` on submit. **Do not** apply the 30-day banner on File Leave for Members (quarter-usage still applies to the member).
+2. **File VL** — `POST /leaves` JSON (load `GET /holidays` for picker non-working days). Self-file: block 3-workday VL whose start is inside 7 calendar days, and 4 or more workday VL whose start is inside 30 calendar days. After dates: `GET /leaves/quarter-usage` — warn at 9.00 VL days this quarter; warn + confirm when projected &gt; 9.00 (memo); never block submit. On-behalf (PIC): `GET /me` `pic_groups` → `GET /groups/{id}/members` → `GET /balances?emp_id=` then `emp_id` on submit. On-behalf (president): skip Group; `GET /p4-members` → `GET /balances?emp_id=` then `emp_id` on submit. **Do not** apply the advance-notice banner on File Leave for Members (quarter-usage still applies to the member).
 3. **File SL** — `POST /leaves` multipart with `code=SL` and required `leave_attachment[]` (1–5 med certs). Admin approves; PICs are CC'd. Overlap with an existing VL on those dates → **422** (convert confirmed VL, or cancel pending VL first)
 4. **File PTB** — `POST /leaves` multipart with `code=PTB`, `day_type=full`, required med cert. Calendar days (weekends/holidays count). Duration > remaining PTB credits → **422** (no unpaid PTB). Admin approves.
 5. **File EL** — `POST /leaves` multipart with `code=EL`, `day_type=full`, required supporting document. Workdays only. Duration > remaining EL credits → **422** (no unpaid EL; typical grant is 5). Admin approves.

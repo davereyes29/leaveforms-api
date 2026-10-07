@@ -3,7 +3,7 @@
 namespace App\Services\Leave;
 
 /**
- * Exact Special Leave span for one assignment type + qualifying event.
+ * Maximum Special Leave span for one assignment type + qualifying event.
  */
 final readonly class SpecialLeaveAllotment
 {
