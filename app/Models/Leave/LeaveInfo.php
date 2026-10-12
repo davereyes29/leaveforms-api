@@ -93,4 +93,9 @@ class LeaveInfo extends Model
             ->orderBy('sort_order')
             ->orderBy('id');
     }
+
+    public function dailyReportEntries(): HasMany
+    {
+        return $this->hasMany(LeaveDailyReportEntry::class, 'leave_id');
+    }
 }

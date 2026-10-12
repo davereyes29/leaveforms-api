@@ -284,6 +284,90 @@ class LegacyLeaveRowMapperTest extends TestCase
         );
     }
 
+    public function test_pending_leave_before_credit_cutoff_is_rejected_without_credit_hold(): void
+    {
+        $closed = $this->mapper->rejectPendingBeforeCutoff([
+            'status' => LeaveStatus::PendingApproval,
+            'start_date' => '2026-08-31',
+            'accepter_entries' => [['emp_id' => 10, 'time' => '2026-08-01 08:00:00']],
+            'last_accepter_emp_id' => 10,
+            'rejection_remarks' => null,
+            'confirmed_at' => '2026-08-01 08:00:00',
+        ], '2026-09-01');
+
+        $this->assertSame(LeaveStatus::Rejected, $closed['status']);
+        $this->assertSame([], $closed['accepter_entries']);
+        $this->assertNull($closed['last_accepter_emp_id']);
+        $this->assertNull($closed['confirmed_at']);
+        $this->assertSame(
+            'Rejected during legacy migration: pending leave starts before 2026-09-01 and is not counted against the credit sheet.',
+            $closed['rejection_remarks'],
+        );
+    }
+
+    public function test_pending_leave_on_credit_cutoff_stays_pending(): void
+    {
+        $mapped = [
+            'status' => LeaveStatus::PendingApproval,
+            'start_date' => '2026-09-01',
+        ];
+
+        $this->assertSame($mapped, $this->mapper->rejectPendingBeforeCutoff($mapped, '2026-09-01'));
+    }
+
+    public function test_confirmed_leave_before_cutoff_is_unchanged(): void
+    {
+        $mapped = [
+            'status' => LeaveStatus::Confirmed,
+            'start_date' => '2026-08-01',
+        ];
+
+        $this->assertSame($mapped, $this->mapper->rejectPendingBeforeCutoff($mapped, '2026-09-01'));
+    }
+
+    public function test_confirmed_leave_on_cutoff_uses_the_credit_sheet_balance(): void
+    {
+        $this->assertTrue($this->mapper->confirmedLeaveUsesCreditSheetBalance(
+            LeaveStatus::Confirmed,
+            '2026-10-16',
+            '2026-10-16',
+        ));
+        $this->assertTrue($this->mapper->confirmedLeaveUsesCreditSheetBalance(
+            LeaveStatus::Confirmed,
+            '2026-11-19',
+            '2026-10-16',
+        ));
+    }
+
+    public function test_confirmed_leave_before_cutoff_does_not_use_the_credit_sheet_balance(): void
+    {
+        $this->assertFalse($this->mapper->confirmedLeaveUsesCreditSheetBalance(
+            LeaveStatus::Confirmed,
+            '2026-10-15',
+            '2026-10-16',
+        ));
+        $this->assertFalse($this->mapper->confirmedLeaveUsesCreditSheetBalance(
+            LeaveStatus::PendingApproval,
+            '2026-11-19',
+            '2026-10-16',
+        ));
+        $this->assertFalse($this->mapper->confirmedLeaveUsesCreditSheetBalance(
+            LeaveStatus::Confirmed,
+            '2026-11-19',
+            '',
+        ));
+    }
+
+    public function test_empty_cutoff_does_not_reject_pending_leave(): void
+    {
+        $mapped = [
+            'status' => LeaveStatus::PendingApproval,
+            'start_date' => '2026-08-15',
+        ];
+
+        $this->assertSame($mapped, $this->mapper->rejectPendingBeforeCutoff($mapped, ''));
+    }
+
     public function test_accepter_emp_ids_are_unique_oldest_to_newest(): void
     {
         $accepts = [

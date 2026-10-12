@@ -58,6 +58,13 @@ class LeaveMigrateLegacyCommand extends Command
             $this->line('Mode: attachments-only (backfill onto imported leaves)');
         } else {
             $this->line('Open pendings: '.($includePending ? 'import as pending_approval (approve in revamp)' : 'skipped'));
+            $cutoff = trim((string) config('leave.legacy.pending_reject_before', ''));
+            if ($doLeaves && $cutoff !== '') {
+                if ($includePending) {
+                    $this->line('Pending before '.$cutoff.': import as rejected (no credit hold).');
+                }
+                $this->line('Confirmed VL/SL on or after '.$cutoff.': deduct paid days from the credit sheet.');
+            }
         }
         $this->newLine();
 
@@ -97,6 +104,14 @@ class LeaveMigrateLegacyCommand extends Command
                     ['read from formsdb', $leaves['read']],
                     [$dryRun ? 'would insert' : 'inserted', $leaves['inserted']],
                     [$dryRun ? 'would insert pending' : 'pending_approval inserted', $leaves['pending_inserted'] ?? 0],
+                    [
+                        'pending rejected (before '.config('leave.legacy.pending_reject_before').')',
+                        $leaves['stale_pending_rejected'] ?? 0,
+                    ],
+                    [
+                        'confirmed VL/SL deducted (on or after '.config('leave.legacy.pending_reject_before').')',
+                        $leaves['confirmed_deducted'] ?? 0,
+                    ],
                     ['skipped (already imported)', $leaves['skipped_existing']],
                     ['skipped (unmapped / invalid)', $leaves['skipped']],
                 ],

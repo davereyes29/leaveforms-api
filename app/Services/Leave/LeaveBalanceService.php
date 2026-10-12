@@ -238,7 +238,7 @@ class LeaveBalanceService
      *
      * Must be called inside an outer DB::transaction (e.g. from LeaveSubmissionService).
      */
-    public function reservePaidDays(LeaveInfo $leave): void
+    public function reservePaidDays(LeaveInfo $leave, ?string $remarks = null): void
     {
         $paidDays = (string) $leave->paid_days;
 
@@ -253,7 +253,7 @@ class LeaveBalanceService
             bcsub('0', $paidDays, 2),
             $paidDays,
             BalanceTransactionReason::LeaveReserved,
-            null,
+            $remarks,
             $leave->id,
         );
     }
@@ -314,7 +314,7 @@ class LeaveBalanceService
      *
      * Must be called inside an outer DB::transaction.
      */
-    public function confirmPaidDays(LeaveInfo $leave): void
+    public function confirmPaidDays(LeaveInfo $leave, ?string $remarks = null): void
     {
         $paidDays = (string) $leave->paid_days;
 
@@ -329,7 +329,7 @@ class LeaveBalanceService
             '0.00',
             bcsub('0', $paidDays, 2),
             BalanceTransactionReason::LeaveConfirmed,
-            null,
+            $remarks,
             $leave->id,
         );
     }

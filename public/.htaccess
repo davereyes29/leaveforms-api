@@ -21,5 +21,7 @@
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
+    RewriteRule ^ /leaveforms/index.php [L]
+
+    DirectoryIndex index.html index.php
 </IfModule>

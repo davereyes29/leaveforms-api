@@ -25,6 +25,7 @@ class LeaveConversionService
         private readonly LeaveAttachmentService $attachmentService,
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveNotificationService $notificationService,
+        private readonly DailyReportLeaveSyncService $dailyReportSync,
     ) {}
 
     /**
@@ -212,6 +213,10 @@ class LeaveConversionService
         });
 
         $this->notificationService->notifyEmployeeOnConversionApproved($conversion, $admin);
+
+        if ($conversion->leaveInfo !== null) {
+            $this->dailyReportSync->updateItem($conversion->leaveInfo);
+        }
 
         return $conversion;
     }

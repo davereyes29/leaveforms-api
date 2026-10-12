@@ -200,6 +200,34 @@ return [
             ]) : [],
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | webjmrdb — webjmr data (read-write)
+        |--------------------------------------------------------------------------
+        |
+        | webjmrdb live here.
+        | Use $connection = 'webjmrdb' on models for webjmr data.
+        |
+        */
+        'webjmrdb' => [
+            'driver' => 'mysql',
+            'host' => env('WEBJMR_DB_HOST', '127.0.0.1'),
+            'port' => env('WEBJMR_DB_PORT', '3306'),
+            'database' => env('WEBJMR_DB_DATABASE', 'webjmrdb'),
+            'username' => env('WEBJMR_DB_USERNAME', 'root'),
+            'password' => env('WEBJMR_DB_PASSWORD', ''),
+            'unix_socket' => env('WEBJMR_DB_SOCKET', ''),
+            'charset' => env('WEBJMR_DB_CHARSET', 'utf8mb4'),
+            'collation' => env('WEBJMR_DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
     ],
 
     /*

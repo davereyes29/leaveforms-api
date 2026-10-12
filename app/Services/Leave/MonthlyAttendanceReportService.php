@@ -13,7 +13,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Admin Monthly Attendance Report — confirmed leave days, not balances.
+ * Monthly Attendance Report — confirmed leave days, not balances.
+ *
+ * Admin: every active employee, with an optional group.
+ * Approver: active employees in the viewer's designated formspic groups.
+ * President: active P4 employees; designated groups are ignored.
  *
  * Statuses: confirmed, converted_to_sl, converted_to_el.
  * pending_approval / pending_conversion / rejected / cancelled are omitted.
@@ -53,13 +57,86 @@ class MonthlyAttendanceReportService
         }
 
         $empIds = array_values(array_unique(array_map('intval', $empIds)));
-        [$start, $end] = $this->matrix->period($month, $cutOff);
-
         $employees = $this->employeesForReport($empIds, $groupId);
+        $group = $groupId !== null ? Group::query()->find($groupId) : null;
+
+        return $this->assemble($employees, $month, $cutOff, $group);
+    }
+
+    /**
+     * Confirmed-leave matrix for an approver's team.
+     *
+     * PIC: active employees whose effective group is in the viewer's formspic groups.
+     * President: active P4 employees (formspic.fldRole = 4). group_id is ignored.
+     *
+     * @param  list<int>  $empIds  Empty means every employee in scope.
+     * @return array<string, mixed>
+     *
+     * @throws AuthorizationException
+     * @throws ValidationException
+     */
+    public function forApprover(
+        Employee $approver,
+        string $month,
+        MonthlyAttendanceCutOff $cutOff,
+        array $empIds,
+        ?int $groupId,
+    ): array {
+        [$allowedIds, $group] = $this->scopeForApprover($approver, $groupId);
+
+        return $this->assemble(
+            $this->employeesByIds($this->selectedIdsWithinScope($empIds, $allowedIds)),
+            $month,
+            $cutOff,
+            $group,
+        );
+    }
+
+    /**
+     * Active employees the approver may include on the team attendance report.
+     * Same scope as {@see forApprover}: PIC groups, or every active P4 for the president.
+     *
+     * @return Collection<int, Employee>
+     *
+     * @throws AuthorizationException
+     */
+    public function employeesForApprover(Employee $approver, ?int $groupId): Collection
+    {
+        [$allowedIds] = $this->scopeForApprover($approver, $groupId);
+
+        if ($allowedIds === []) {
+            return collect();
+        }
+
+        $employees = Employee::query()
+            ->with('group')
+            ->whereIn('id', $allowedIds)
+            ->orderBy('firstname')
+            ->orderBy('surname')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
+
+        return $employees;
+    }
+
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @return array<string, mixed>
+     */
+    private function assemble(
+        Collection $employees,
+        string $month,
+        MonthlyAttendanceCutOff $cutOff,
+        ?Group $group,
+    ): array {
+        [$start, $end] = $this->matrix->period($month, $cutOff);
         $resolvedEmpIds = $employees
             ->map(fn (Employee $employee): int => (int) $employee->id)
             ->all();
-        $group = $groupId !== null ? Group::query()->find($groupId) : null;
         $leaves = $this->leavesForPeriod($resolvedEmpIds, $start, $end);
 
         $holidayFrom = $start;
@@ -108,6 +185,138 @@ class MonthlyAttendanceReportService
             'rows' => $rows,
             'grand_totals' => $this->matrix->grandTotals($rowTotals),
         ];
+    }
+
+    /**
+     * Active employees in scope, plus the group when a PIC narrowed to one group.
+     * President scope is every active P4; the group argument is ignored.
+     *
+     * @return array{0: list<int>, 1: Group|null}
+     *
+     * @throws AuthorizationException
+     */
+    private function scopeForApprover(Employee $approver, ?int $groupId): array
+    {
+        $context = $this->approverResolver->contextFor((int) $approver->id);
+
+        if (! $context->isPresident && $context->approvalLevel === null) {
+            throw new AuthorizationException('Only approvers can view the team monthly attendance report.');
+        }
+
+        if ($context->isPresident) {
+            return [
+                $this->approverResolver->p4EmployeeIds(activeOnly: true),
+                null,
+            ];
+        }
+
+        if ($groupId !== null) {
+            $group = Group::query()->find($groupId);
+
+            if ($group === null || ! in_array($group->abbreviation, $context->groupCodes, true)) {
+                throw new AuthorizationException(
+                    'You are not allowed to view the monthly attendance report for this group.',
+                );
+            }
+
+            return [
+                $this->approverResolver->employeeIdsInEffectiveGroups([(int) $group->id], activeOnly: true),
+                $group,
+            ];
+        }
+
+        $groupIds = $this->groupIdsForCodes($context->groupCodes);
+
+        return [
+            $groupIds === []
+                ? []
+                : $this->approverResolver->employeeIdsInEffectiveGroups($groupIds, activeOnly: true),
+            null,
+        ];
+    }
+
+    /**
+     * Empty selection means the whole scope. Any id outside the scope is rejected.
+     *
+     * @param  list<int>  $empIds
+     * @param  list<int>  $allowedIds
+     * @return list<int>
+     *
+     * @throws ValidationException
+     */
+    private function selectedIdsWithinScope(array $empIds, array $allowedIds): array
+    {
+        $empIds = array_values(array_unique(array_map('intval', $empIds)));
+        $allowedIds = array_values(array_unique(array_map('intval', $allowedIds)));
+
+        if ($empIds === []) {
+            return $allowedIds;
+        }
+
+        $allowed = array_fill_keys($allowedIds, true);
+        $outside = array_values(array_filter(
+            $empIds,
+            fn (int $id): bool => ! isset($allowed[$id]),
+        ));
+
+        if ($outside !== []) {
+            throw ValidationException::withMessages([
+                'emp_ids' => ['One or more employees are outside your team.'],
+            ]);
+        }
+
+        return $empIds;
+    }
+
+    /**
+     * @param  list<int>  $empIds
+     * @return Collection<int, Employee>
+     *
+     * @throws ValidationException
+     */
+    private function employeesByIds(array $empIds): Collection
+    {
+        if ($empIds === []) {
+            return collect();
+        }
+
+        $employees = Employee::query()
+            ->with('group')
+            ->whereIn('id', $empIds)
+            ->get()
+            ->keyBy(fn (Employee $employee): int => (int) $employee->id);
+
+        $found = $employees->keys()->map(fn ($id): int => (int) $id)->all();
+        $missing = array_values(array_diff($empIds, $found));
+
+        if ($missing !== []) {
+            throw ValidationException::withMessages([
+                'emp_ids' => ['One or more employees were not found.'],
+            ]);
+        }
+
+        foreach ($employees as $employee) {
+            $this->approverResolver->applyEffectiveGroup($employee);
+        }
+
+        return $this->sortByEmployeeNumber($employees);
+    }
+
+    /**
+     * @param  list<string>  $groupCodes
+     * @return list<int>
+     */
+    private function groupIdsForCodes(array $groupCodes): array
+    {
+        if ($groupCodes === []) {
+            return [];
+        }
+
+        return Group::query()
+            ->whereIn('abbreviation', $groupCodes)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     /**

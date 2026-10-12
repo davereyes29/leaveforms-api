@@ -21,6 +21,7 @@ use App\Http\Controllers\LeaveConversionController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\P4MemberController;
 use App\Http\Controllers\TeamCalendarController;
+use App\Http\Controllers\TeamMonthlyAttendanceReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -61,6 +62,8 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/approvals', [LeaveApprovalController::class, 'index']);
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
+    Route::get('/team/reports/monthly-attendance/employees', [TeamMonthlyAttendanceReportController::class, 'employees']);
+    Route::get('/team/reports/monthly-attendance', [TeamMonthlyAttendanceReportController::class, 'show']);
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);
     Route::post('/admin/leaves/{leave}/cancel', [AdminLeaveController::class, 'cancel']);

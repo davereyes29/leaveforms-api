@@ -266,6 +266,53 @@ final class LegacyLeaveRowMapper
     }
 
     /**
+     * Pending leaves that start before the credit-sheet cutoff are closed as
+     * rejected so migration does not reserve credits. Leaves on or after the
+     * cutoff stay pending. Confirmed, rejected, and cancelled rows are unchanged.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @return array<string, mixed>
+     */
+    public function rejectPendingBeforeCutoff(array $mapped, string $cutoff): array
+    {
+        $cutoff = trim($cutoff);
+
+        if ($cutoff === '' || ($mapped['status'] ?? null) !== LeaveStatus::PendingApproval) {
+            return $mapped;
+        }
+
+        $startDate = (string) ($mapped['start_date'] ?? '');
+
+        if ($startDate === '' || $startDate >= $cutoff) {
+            return $mapped;
+        }
+
+        $mapped['status'] = LeaveStatus::Rejected;
+        $mapped['accepter_entries'] = [];
+        $mapped['last_accepter_emp_id'] = null;
+        $mapped['confirmed_at'] = null;
+        $mapped['rejection_remarks'] = "Rejected during legacy migration: pending leave starts before {$cutoff} and is not counted against the credit sheet.";
+
+        return $mapped;
+    }
+
+    /**
+     * A confirmed leave on or after the cutoff is not already inside the credit
+     * sheet, so its paid days must be deducted. Earlier dates and other statuses
+     * are unchanged.
+     */
+    public function confirmedLeaveUsesCreditSheetBalance(LeaveStatus $status, string $startDate, string $cutoff): bool
+    {
+        $cutoff = trim($cutoff);
+
+        if ($cutoff === '' || $status !== LeaveStatus::Confirmed || $startDate === '') {
+            return false;
+        }
+
+        return $startDate >= $cutoff;
+    }
+
+    /**
      * Reject history remarks: the rejecter's leave_accept text, then leave_info.l_remarks.
      */
     public function migrationRejectionRemarks(?string $acceptRemarks, ?string $leaveRemarks = null): string

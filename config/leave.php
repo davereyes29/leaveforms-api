@@ -112,6 +112,17 @@ return [
     */
     'legacy' => [
         'uploads_path' => env('LEGACY_UPLOADS_PATH', 'C:\\xampp\\htdocs\\forms\\Uploads'),
+
+        /*
+        | Credit-sheet cutoff used by leave:migrate-legacy. Load the sheet first.
+        | Pending leaves that start before this day are imported as rejected and
+        | do not reserve credits. Confirmed VL/SL that start on or after this day
+        | deduct paid days from that sheet balance. Earlier confirmed leaves stay
+        | as history and do not move credits. Set the next cutoff here (for
+        | example 2026-10-16) before re-running the migrate. Empty disables both.
+        |
+        */
+        'pending_reject_before' => env('LEAVE_LEGACY_PENDING_REJECT_BEFORE', '2026-09-01'),
     ],
 
     /*
@@ -299,6 +310,36 @@ return [
         'sl_retain' => '30.00',
         'balance_cut_off_month' => 11,
         'balance_cut_off_day' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Daily report (default values)
+    |--------------------------------------------------------------------------
+    |
+    | Default values for daily report.
+    |
+    */
+    'daily_report' => [
+        'location_id' => 1,
+        'mh_type' => 2,
+        'tow' => [
+            'half_am' => 10,
+            'half_pm' => 11,
+            'full' => 12,
+        ],
+        'duration_minutes' => [
+            'half_am' => 240,
+            'half_pm' => 240,
+            'full' => 480,
+        ],
+        /*
+         * webjmrdb.itemofworkstable name when it does not match leave_type.type.
+         * Other codes use leave_type.type (Vacation Leave, Sick Leave, ...).
+         */
+        'item_names' => [
+            'PTB' => 'Tubercolosis Leave',
+        ],
     ],
 
 ];

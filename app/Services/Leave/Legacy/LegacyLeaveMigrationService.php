@@ -3,6 +3,7 @@
 namespace App\Services\Leave\Legacy;
 
 use App\Enums\Leave\ApproverType;
+use App\Enums\Leave\BalanceTransactionReason;
 use App\Enums\Leave\LeaveStatus;
 use App\Enums\Leave\RequiredApproverType;
 use App\Models\Leave\LeaveApprovalHistory;
@@ -38,7 +39,7 @@ class LegacyLeaveMigrationService
     /**
      * @return array{
      *     dry_run: bool,
-     *     leaves: array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}},
+     *     leaves: array{read: int, inserted: int, pending_inserted: int, stale_pending_rejected: int, confirmed_deducted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}},
      *     balances: array{read: int, inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>},
      *     attachments: array{read: int, copied: int, missing: int, skipped_existing: int, skipped_no_name: int, skipped_reasons: array<string, int>},
      * }
@@ -90,7 +91,7 @@ class LegacyLeaveMigrationService
     }
 
     /**
-     * @return array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
+     * @return array{read: int, inserted: int, pending_inserted: int, stale_pending_rejected: int, confirmed_deducted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
      */
     private function emptyLeaveStats(): array
     {
@@ -98,6 +99,8 @@ class LegacyLeaveMigrationService
             'read' => 0,
             'inserted' => 0,
             'pending_inserted' => 0,
+            'stale_pending_rejected' => 0,
+            'confirmed_deducted' => 0,
             'skipped_existing' => 0,
             'skipped' => 0,
             'skipped_reasons' => [],
@@ -140,10 +143,11 @@ class LegacyLeaveMigrationService
     }
 
     /**
-     * @return array{read: int, inserted: int, pending_inserted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
+     * @return array{read: int, inserted: int, pending_inserted: int, stale_pending_rejected: int, confirmed_deducted: int, skipped_existing: int, skipped: int, skipped_reasons: array<string, int>, attachments: array{copied: int, missing: int, skipped_existing: int, skipped_no_name: int}}
      */
     private function migrateLeaves(bool $dryRun, bool $includePending): array
     {
+        $cutoff = $this->pendingRejectCutoff();
         $stats = $this->emptyLeaveStats();
 
         $typeIds = LeaveType::query()->pluck('id', 'code')->all();
@@ -157,7 +161,7 @@ class LegacyLeaveMigrationService
 
         $legacy->table('leave_info')
             ->orderBy('l_id')
-            ->chunkById(200, function ($rows) use ($legacy, $dryRun, $includePending, $typeIds, &$existing, &$stats) {
+            ->chunkById(200, function ($rows) use ($legacy, $dryRun, $includePending, $cutoff, $typeIds, &$existing, &$stats) {
                 $ids = $rows->pluck('l_id')->all();
                 $acceptsByLeave = $this->loadAccepts($legacy, $ids);
 
@@ -195,6 +199,11 @@ class LegacyLeaveMigrationService
                         continue;
                     }
 
+                    $wasPending = $mapped['status'] === LeaveStatus::PendingApproval;
+                    $mapped = $this->mapper->rejectPendingBeforeCutoff($mapped, $cutoff);
+                    $staleRejected = $wasPending && $mapped['status'] === LeaveStatus::Rejected;
+                    $deductConfirmed = $this->shouldDeductConfirmedCredits($mapped, $cutoff);
+
                     $typeId = $typeIds[$mapped['leave_type_code']] ?? null;
                     if ($typeId === null) {
                         $stats['skipped']++;
@@ -209,6 +218,12 @@ class LegacyLeaveMigrationService
                         if ($mapped['status'] === LeaveStatus::PendingApproval) {
                             $stats['pending_inserted']++;
                         }
+                        if ($staleRejected) {
+                            $stats['stale_pending_rejected']++;
+                        }
+                        if ($deductConfirmed) {
+                            $stats['confirmed_deducted']++;
+                        }
                         $this->tallyAttachmentPreview($stats['attachments'], $row);
                         $existing[$legacyId] = true;
 
@@ -216,7 +231,7 @@ class LegacyLeaveMigrationService
                     }
 
                     try {
-                        DB::transaction(function () use ($mapped, $typeId, $legacyId, $row, &$existing, &$stats) {
+                        DB::transaction(function () use ($mapped, $typeId, $legacyId, $row, $staleRejected, $deductConfirmed, &$existing, &$stats) {
                             $payload = $mapped;
 
                             if ($payload['status'] === LeaveStatus::PendingApproval) {
@@ -265,6 +280,15 @@ class LegacyLeaveMigrationService
                                 $stats['pending_inserted']++;
                             } else {
                                 $this->createApprovalStub($leave, $payload);
+                            }
+
+                            if ($staleRejected) {
+                                $stats['stale_pending_rejected']++;
+                            }
+
+                            if ($deductConfirmed) {
+                                $this->deductConfirmedCredits($leave->fresh(), (string) $payload['leave_type_code']);
+                                $stats['confirmed_deducted']++;
                             }
 
                             $this->tallyAttachmentResult(
@@ -526,6 +550,61 @@ class LegacyLeaveMigrationService
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $mapped
+     */
+    private function shouldDeductConfirmedCredits(array $mapped, string $cutoff): bool
+    {
+        $status = $mapped['status'] ?? null;
+
+        if (! $status instanceof LeaveStatus) {
+            return false;
+        }
+
+        if (! $this->mapper->confirmedLeaveUsesCreditSheetBalance($status, (string) ($mapped['start_date'] ?? ''), $cutoff)) {
+            return false;
+        }
+
+        if (! in_array($mapped['leave_type_code'] ?? '', ['VL', 'SL'], true)) {
+            return false;
+        }
+
+        return bccomp((string) ($mapped['paid_days'] ?? '0'), '0', 2) > 0;
+    }
+
+    private function deductConfirmedCredits(LeaveInfo $leave, string $leaveTypeCode): void
+    {
+        if (! in_array(strtoupper($leaveTypeCode), ['VL', 'SL'], true)) {
+            return;
+        }
+
+        $remarks = 'Approved in legacy leaveforms on or after the credit-sheet cutoff. Paid days are deducted from the sheet balance.';
+
+        $this->balanceService->reservePaidDays($leave, $remarks);
+        $this->balanceService->confirmPaidDays($leave, $remarks);
+    }
+
+    private function pendingRejectCutoff(): string
+    {
+        $cutoff = trim((string) config('leave.legacy.pending_reject_before', ''));
+
+        if ($cutoff === '') {
+            return '';
+        }
+
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $cutoff)) {
+            throw new RuntimeException('leave.legacy.pending_reject_before must be a date in Y-m-d form.');
+        }
+
+        [$year, $month, $day] = array_map('intval', explode('-', $cutoff));
+
+        if (! checkdate($month, $day, $year)) {
+            throw new RuntimeException('leave.legacy.pending_reject_before must be a real date.');
+        }
+
+        return $cutoff;
+    }
+
     private function manilaWallClockToUtcMysql(string $wallClock): string
     {
         try {
@@ -632,6 +711,35 @@ class LegacyLeaveMigrationService
     private function clearPreviousImport(bool $leaves, bool $balances): void
     {
         if ($leaves) {
+            LeaveInfo::query()
+                ->with('leaveType')
+                ->whereNotNull('legacy_leave_id')
+                ->where('status', LeaveStatus::Confirmed->value)
+                ->orderBy('id')
+                ->chunkById(100, function ($rows) {
+                    foreach ($rows as $leave) {
+                        $deducted = LeaveBalanceTransaction::query()
+                            ->where('leave_id', $leave->id)
+                            ->where('reason', BalanceTransactionReason::LeaveConfirmed)
+                            ->exists();
+
+                        if (! $deducted) {
+                            continue;
+                        }
+
+                        try {
+                            DB::transaction(function () use ($leave) {
+                                $this->balanceService->reverseConfirmedLeave(
+                                    $leave,
+                                    'Reversed legacy migration deduction before re-import',
+                                );
+                            });
+                        } catch (Throwable) {
+                            // Still delete the leave even if balance undo fails.
+                        }
+                    }
+                });
+
             LeaveInfo::query()
                 ->with('leaveType')
                 ->whereNotNull('legacy_leave_id')

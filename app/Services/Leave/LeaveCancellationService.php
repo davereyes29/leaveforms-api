@@ -20,6 +20,7 @@ class LeaveCancellationService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveNotificationService $notificationService,
         private readonly LeaveApproverResolver $approverResolver,
+        private readonly DailyReportLeaveSyncService $dailyReportSync,
     ) {}
 
     /**
@@ -112,6 +113,7 @@ class LeaveCancellationService
         });
 
         $this->notificationService->notifyEmployeeOnAdminCancel($leave, $admin, $cancellationReason);
+        $this->dailyReportSync->remove($leave);
 
         return $leave;
     }

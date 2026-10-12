@@ -23,6 +23,7 @@ class LeaveApprovalService
         private readonly LeaveBalanceService $balanceService,
         private readonly LeaveNotificationService $notificationService,
         private readonly VacationLeaveQuarterNoticeService $quarterNoticeService,
+        private readonly DailyReportLeaveSyncService $dailyReportSync,
     ) {}
 
     public function approve(LeaveInfo $leave, Employee $approver): LeaveInfo
@@ -64,6 +65,7 @@ class LeaveApprovalService
         if ($leave->status === LeaveStatus::Confirmed) {
             $this->notificationService->notifyEmployeeOnConfirm($leave, $approver);
             $this->quarterNoticeService->onConfirmed($leave);
+            $this->dailyReportSync->sync($leave);
         }
 
         return $leave;

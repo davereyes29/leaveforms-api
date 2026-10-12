@@ -6,6 +6,7 @@ use App\Enums\Leave\LeaveStatus;
 use App\Models\Kdtph\Employee;
 use App\Models\Leave\LeaveInfo;
 use App\Services\Leave\ApproverContext;
+use App\Services\Leave\DailyReportLeaveSyncService;
 use App\Services\Leave\LeaveApproverResolver;
 use App\Services\Leave\LeaveBalanceService;
 use App\Services\Leave\LeaveCancellationService;
@@ -122,6 +123,7 @@ class LeaveCancellationServiceTest extends TestCase
             Mockery::mock(LeaveBalanceService::class),
             Mockery::mock(LeaveNotificationService::class),
             $resolver,
+            Mockery::mock(DailyReportLeaveSyncService::class),
         );
     }
 
