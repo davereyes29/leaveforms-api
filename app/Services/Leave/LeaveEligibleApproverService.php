@@ -32,16 +32,19 @@ class LeaveEligibleApproverService
      */
     public function forLeave(LeaveInfo $leave): array
     {
+        // Conversion is an admin review even when the original VL was imported.
+        // The legacy shortcut would otherwise show the old P2/P3 history for
+        // pending_conversion, converted_to_sl, and converted_to_el.
+        if ($this->isConversionStage($leave->status)) {
+            return $this->adminEntries();
+        }
+
         // Settled migrated history only — live pending legacy leaves use normal PIC/admin pool.
         if (
             $leave->legacy_leave_id !== null
             && $leave->status !== LeaveStatus::PendingApproval
         ) {
             return $this->legacyHistoryEntries($leave);
-        }
-
-        if ($this->isConversionStage($leave->status)) {
-            return $this->adminEntries();
         }
 
         return $this->leaveApprovalEntries($leave);
