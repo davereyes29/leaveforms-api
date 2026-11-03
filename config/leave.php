@@ -122,7 +122,7 @@ return [
         | example 2026-10-16) before re-running the migrate. Empty disables both.
         |
         */
-        'pending_reject_before' => env('LEAVE_LEGACY_PENDING_REJECT_BEFORE', '2026-09-01'),
+        'pending_reject_before' => env('LEAVE_LEGACY_PENDING_REJECT_BEFORE', '2026-10-16'),
     ],
 
     /*
