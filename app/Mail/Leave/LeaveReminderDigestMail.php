@@ -35,7 +35,7 @@ class LeaveReminderDigestMail extends Mailable
             with: [
                 'approverName' => $this->approverName,
                 'pendingCount' => $this->pendingCount,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::approverQueue(),
             ],
         );
     }

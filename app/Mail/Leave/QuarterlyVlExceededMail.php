@@ -48,7 +48,7 @@ class QuarterlyVlExceededMail extends Mailable
                 'excessLabel' => $this->daysLabel($this->excessDays()),
                 'latestLeaveDates' => $this->latestLeaveDates(),
                 'durationLabel' => $this->durationLabel(),
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::adminView((int) $this->leave->id),
             ],
         );
     }

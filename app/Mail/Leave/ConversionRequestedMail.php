@@ -43,7 +43,7 @@ class ConversionRequestedMail extends Mailable
                 'conversion' => $this->conversion,
                 'employeeName' => $this->employeeName,
                 'adminName' => $this->adminName,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::adminValidate((int) $this->leave->id),
             ],
         );
     }

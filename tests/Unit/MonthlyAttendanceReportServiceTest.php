@@ -8,6 +8,7 @@ use App\Models\Kdtph\Group;
 use App\Services\Leave\ApproverContext;
 use App\Services\Leave\LeaveApproverResolver;
 use App\Services\Leave\LeaveDurationService;
+use App\Services\Kdtph\UserPermissionGate;
 use App\Services\Leave\MonthlyAttendanceMatrix;
 use App\Services\Leave\MonthlyAttendanceReportService;
 use App\Services\Leave\SpecialLeavePolicy;
@@ -27,6 +28,8 @@ class MonthlyAttendanceReportServiceTest extends TestCase
 
     /** @var list<int> */
     private array $p4Ids = [8, 9, 99];
+
+    private bool $canViewAllEmployees = false;
 
     protected function setUp(): void
     {
@@ -98,11 +101,17 @@ class MonthlyAttendanceReportServiceTest extends TestCase
         $duration = Mockery::mock(LeaveDurationService::class)->makePartial();
         $duration->shouldReceive('holidayDatesBetween')->andReturn([]);
 
+        $permissions = Mockery::mock(UserPermissionGate::class);
+        $permissions->shouldReceive('canViewAllEmployeeMonthlyReport')->andReturnUsing(
+            fn (): bool => $this->canViewAllEmployees,
+        );
+
         $this->service = new MonthlyAttendanceReportService(
             $resolver,
             $duration,
             new MonthlyAttendanceMatrix($duration),
             new SpecialLeavePolicy,
+            $permissions,
         );
     }
 
@@ -332,6 +341,91 @@ class MonthlyAttendanceReportServiceTest extends TestCase
             [],
             null,
         );
+    }
+
+    public function test_all_employee_grant_includes_every_active_employee(): void
+    {
+        $this->canViewAllEmployees = true;
+        $this->context = new ApproverContext(
+            empId: 1,
+            approvalLevel: null,
+            groupCodes: [],
+            isPresident: false,
+            isAdmin: false,
+        );
+
+        $report = $this->service->forApprover(
+            Employee::query()->findOrFail(1),
+            '2026-07',
+            MonthlyAttendanceCutOff::Monthly,
+            [],
+            null,
+        );
+
+        $this->assertSame(
+            [1, 8, 9, 20],
+            array_map(fn (array $row): int => $row['employee']['id'], $report['rows']),
+        );
+        $this->assertNull($report['group']);
+    }
+
+    public function test_all_employee_grant_overrides_pic_and_president_scope(): void
+    {
+        $this->canViewAllEmployees = true;
+        $this->context = new ApproverContext(
+            empId: 1,
+            approvalLevel: 1,
+            groupCodes: ['ENV'],
+            isPresident: true,
+            isAdmin: false,
+        );
+
+        $report = $this->service->forApprover(
+            Employee::query()->findOrFail(1),
+            '2026-07',
+            MonthlyAttendanceCutOff::Monthly,
+            [],
+            20,
+        );
+
+        $this->assertSame(
+            [9],
+            array_map(fn (array $row): int => $row['employee']['id'], $report['rows']),
+        );
+        $this->assertSame(20, $report['group']['id']);
+    }
+
+    public function test_all_employee_grant_employee_list_includes_every_active_employee(): void
+    {
+        $this->canViewAllEmployees = true;
+
+        $employees = $this->service->employeesForApprover(
+            Employee::query()->findOrFail(1),
+            null,
+        );
+
+        $ids = $employees->map(fn (Employee $employee): int => (int) $employee->id)->all();
+        sort($ids);
+
+        $this->assertSame([1, 8, 9, 20], $ids);
+    }
+
+    public function test_all_employee_grant_lists_every_group(): void
+    {
+        $this->canViewAllEmployees = true;
+
+        $ids = $this->service->groupsForAllEmployeeReport(Employee::query()->findOrFail(1))
+            ->map(fn (Group $group): int => (int) $group->id)
+            ->all();
+
+        $this->assertSame([20, 16], $ids);
+    }
+
+    public function test_viewer_without_the_grant_cannot_list_every_group(): void
+    {
+        $this->expectException(AuthorizationException::class);
+
+        $this->service->groupsForAllEmployeeReport(Employee::query()->findOrFail(1));
     }
 
     private function createSchema(): void

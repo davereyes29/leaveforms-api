@@ -42,7 +42,7 @@ class LeaveRejectedMail extends Mailable
                 'recipientName' => $this->recipientName,
                 'approverName' => $this->approverName,
                 'remarks' => $this->remarks,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );
     }

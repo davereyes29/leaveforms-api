@@ -7,7 +7,7 @@
 
 Hello {{ $recipientName }},
 
-Your request to convert your **{{ $leave->leaveType->mailLabel() }}** to **{{ $conversion->toLeaveType->mailLabel() }}** has been approved by **{{ $adminName }}**.
+Your request to convert your **{{ $conversion->fromLeaveType->mailLabel() }}** to **{{ $conversion->toLeaveType->mailLabel() }}** has been approved by **{{ $adminName }}**.
 
 Your leave is now recorded as **{{ $conversion->toLeaveType->mailLabel() }}**.
 

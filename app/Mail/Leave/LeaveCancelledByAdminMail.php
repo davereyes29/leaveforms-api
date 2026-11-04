@@ -42,7 +42,7 @@ class LeaveCancelledByAdminMail extends Mailable
                 'recipientName' => $this->recipientName,
                 'adminName' => $this->adminName,
                 'cancellationReason' => $this->cancellationReason,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );
     }

@@ -38,7 +38,7 @@ class LeaveReminderMail extends Mailable
                 'leave' => $this->leave,
                 'employeeName' => $this->employeeName,
                 'approverName' => $this->approverName,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::approverReview((int) $this->leave->id),
             ],
         );
     }

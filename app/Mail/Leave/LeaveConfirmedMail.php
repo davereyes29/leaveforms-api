@@ -40,7 +40,7 @@ class LeaveConfirmedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'recipientName' => $this->recipientName,
                 'approverName' => $this->approverName,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );
     }

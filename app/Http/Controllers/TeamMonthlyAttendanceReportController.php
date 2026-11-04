@@ -6,8 +6,10 @@ use App\Enums\Leave\MonthlyAttendanceCutOff;
 use App\Http\Requests\Leave\IndexMonthlyAttendanceReportRequest;
 use App\Http\Requests\Leave\IndexTeamMonthlyAttendanceEmployeesRequest;
 use App\Http\Resources\AdminEmployeeRefResource;
+use App\Http\Resources\GroupRefResource;
 use App\Http\Resources\MonthlyAttendanceReportResource;
 use App\Services\Leave\MonthlyAttendanceReportService;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class TeamMonthlyAttendanceReportController extends Controller
@@ -20,6 +22,7 @@ class TeamMonthlyAttendanceReportController extends Controller
      * GET /api/team/reports/monthly-attendance — confirmed leave matrix for the viewer's team.
      *
      * PIC: designated formspic groups only. President: active P4 employees (group_id ignored).
+     * All-employee grant: every active employee, with an optional group.
      *
      * Query: month=YYYY-MM, cut_off=monthly|first_half|second_half, optional emp_ids[]=, optional group_id
      */
@@ -42,7 +45,7 @@ class TeamMonthlyAttendanceReportController extends Controller
     /**
      * GET /api/team/reports/monthly-attendance/employees — picker rows for the team report.
      *
-     * Optional query: ?group_id=16 (ignored for the president).
+     * Optional query: ?group_id=16 (ignored for the president without the all-employee grant).
      */
     public function employees(IndexTeamMonthlyAttendanceEmployeesRequest $request): AnonymousResourceCollection
     {
@@ -54,5 +57,15 @@ class TeamMonthlyAttendanceReportController extends Controller
         );
 
         return AdminEmployeeRefResource::collection($employees);
+    }
+
+    /**
+     * GET /api/team/reports/monthly-attendance/groups — every group for the all-employee grant.
+     */
+    public function groups(Request $request): AnonymousResourceCollection
+    {
+        $groups = $this->reportService->groupsForAllEmployeeReport($request->employee());
+
+        return GroupRefResource::collection($groups);
     }
 }

@@ -63,6 +63,7 @@ Route::middleware('portal.auth')->group(function () {
     Route::get('/approvals/pending', [LeaveApprovalController::class, 'pending']);
     Route::get('/team/calendar', [TeamCalendarController::class, 'index']);
     Route::get('/team/reports/monthly-attendance/employees', [TeamMonthlyAttendanceReportController::class, 'employees']);
+    Route::get('/team/reports/monthly-attendance/groups', [TeamMonthlyAttendanceReportController::class, 'groups']);
     Route::get('/team/reports/monthly-attendance', [TeamMonthlyAttendanceReportController::class, 'show']);
 
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index']);

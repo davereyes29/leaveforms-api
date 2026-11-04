@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\Group;
+use App\Services\Kdtph\UserPermissionGate;
 use App\Services\Leave\LeaveApproverResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class MeController extends Controller
 {
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
+        private readonly UserPermissionGate $permissions,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -50,6 +52,7 @@ class MeController extends Controller
                 'approval_level' => $role->approvalLevel,
                 'is_president' => $role->isPresident,
                 'is_admin' => $role->isAdmin,
+                'can_view_all_monthly_attendance' => $this->permissions->canViewAllEmployeeMonthlyReport((int) $employee->id),
                 'pic_groups' => $this->picGroups($role->groupCodes),
             ],
         ]);

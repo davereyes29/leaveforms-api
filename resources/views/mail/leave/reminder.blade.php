@@ -13,7 +13,7 @@ This is a reminder that **{{ $employeeName }}'s {{ $leave->leaveType->mailLabel(
 
 @if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave request
+Review leave request
 </x-mail::button>
 @endif
 

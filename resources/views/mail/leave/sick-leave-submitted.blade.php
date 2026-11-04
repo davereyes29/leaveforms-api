@@ -17,7 +17,7 @@ Please review the leave request and submit your decision.
 
 @if ($frontendUrl)
 <x-mail::button :url="$frontendUrl">
-View leave request
+Review leave request
 </x-mail::button>
 @endif
 

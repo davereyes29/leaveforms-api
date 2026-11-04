@@ -7,6 +7,7 @@ use App\Enums\Leave\MonthlyAttendanceCutOff;
 use App\Models\Kdtph\Employee;
 use App\Models\Kdtph\Group;
 use App\Models\Leave\LeaveInfo;
+use App\Services\Kdtph\UserPermissionGate;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
@@ -18,6 +19,8 @@ use Illuminate\Validation\ValidationException;
  * Admin: every active employee, with an optional group.
  * Approver: active employees in the viewer's designated formspic groups.
  * President: active P4 employees; designated groups are ignored.
+ * All-employee grant: every active employee, with an optional group.
+ * The grant is kdtphdb.user_permissions for the configured permission id.
  *
  * Statuses: confirmed, converted_to_sl, converted_to_el.
  * pending_approval / pending_conversion / rejected / cancelled are omitted.
@@ -36,6 +39,7 @@ class MonthlyAttendanceReportService
         private readonly LeaveDurationService $durationService,
         private readonly MonthlyAttendanceMatrix $matrix,
         private readonly SpecialLeavePolicy $specialLeavePolicy,
+        private readonly UserPermissionGate $permissions,
     ) {}
 
     /**
@@ -64,10 +68,12 @@ class MonthlyAttendanceReportService
     }
 
     /**
-     * Confirmed-leave matrix for an approver's team.
+     * Confirmed-leave matrix for an approver's team, or every active employee
+     * when the viewer holds the all-employee monthly report grant.
      *
      * PIC: active employees whose effective group is in the viewer's formspic groups.
      * President: active P4 employees (formspic.fldRole = 4). group_id is ignored.
+     * Grant: every active employee. group_id narrows to that group.
      *
      * @param  list<int>  $empIds  Empty means every employee in scope.
      * @return array<string, mixed>
@@ -93,8 +99,9 @@ class MonthlyAttendanceReportService
     }
 
     /**
-     * Active employees the approver may include on the team attendance report.
-     * Same scope as {@see forApprover}: PIC groups, or every active P4 for the president.
+     * Active employees the viewer may include on the team attendance report.
+     * Same scope as {@see forApprover}: the all-employee grant, PIC groups,
+     * or every active P4 for the president.
      *
      * @return Collection<int, Employee>
      *
@@ -121,6 +128,27 @@ class MonthlyAttendanceReportService
         }
 
         return $employees;
+    }
+
+    /**
+     * Every group, for the group filter on the all-employee monthly report.
+     *
+     * @return Collection<int, Group>
+     *
+     * @throws AuthorizationException
+     */
+    public function groupsForAllEmployeeReport(Employee $viewer): Collection
+    {
+        if (! $this->permissions->canViewAllEmployeeMonthlyReport((int) $viewer->id)) {
+            throw new AuthorizationException(
+                'You are not allowed to view every group on the monthly attendance report.',
+            );
+        }
+
+        return Group::query()
+            ->orderBy('abbreviation')
+            ->orderBy('name')
+            ->get();
     }
 
     /**
@@ -188,7 +216,8 @@ class MonthlyAttendanceReportService
     }
 
     /**
-     * Active employees in scope, plus the group when a PIC narrowed to one group.
+     * Active employees in scope, plus the group when the viewer narrowed to one group.
+     * The all-employee grant covers every active employee.
      * President scope is every active P4; the group argument is ignored.
      *
      * @return array{0: list<int>, 1: Group|null}
@@ -197,6 +226,10 @@ class MonthlyAttendanceReportService
      */
     private function scopeForApprover(Employee $approver, ?int $groupId): array
     {
+        if ($this->permissions->canViewAllEmployeeMonthlyReport((int) $approver->id)) {
+            return $this->scopeForAllEmployees($groupId);
+        }
+
         $context = $this->approverResolver->contextFor((int) $approver->id);
 
         if (! $context->isPresident && $context->approvalLevel === null) {
@@ -231,6 +264,40 @@ class MonthlyAttendanceReportService
             $groupIds === []
                 ? []
                 : $this->approverResolver->employeeIdsInEffectiveGroups($groupIds, activeOnly: true),
+            null,
+        ];
+    }
+
+    /**
+     * Every active employee, optionally narrowed to one effective group.
+     *
+     * @return array{0: list<int>, 1: Group|null}
+     *
+     * @throws AuthorizationException
+     */
+    private function scopeForAllEmployees(?int $groupId): array
+    {
+        if ($groupId !== null) {
+            $group = Group::query()->find($groupId);
+
+            if ($group === null) {
+                throw new AuthorizationException(
+                    'You are not allowed to view the monthly attendance report for this group.',
+                );
+            }
+
+            return [
+                $this->approverResolver->employeeIdsInEffectiveGroups([(int) $group->id], activeOnly: true),
+                $group,
+            ];
+        }
+
+        return [
+            Employee::query()
+                ->where('emp_status', 1)
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all(),
             null,
         ];
     }

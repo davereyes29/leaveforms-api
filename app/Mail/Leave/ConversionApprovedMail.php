@@ -44,7 +44,7 @@ class ConversionApprovedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'recipientName' => $this->recipientName,
                 'adminName' => $this->adminName,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );
     }

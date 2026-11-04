@@ -40,7 +40,7 @@ class LeaveCancelledMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'approverName' => $this->approverName,
                 'cancellationReason' => $this->cancellationReason,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::cancellationNotice($this->leave),
             ],
         );
     }

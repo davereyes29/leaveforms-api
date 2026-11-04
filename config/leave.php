@@ -40,6 +40,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | All-employee monthly attendance report
+    |--------------------------------------------------------------------------
+    |
+    | kdtphdb.p_permissions.permission_id. An employee with this row in
+    | user_permissions can open the monthly attendance report for every
+    | active employee. Empty disables the grant. Default 59 is
+    | "All Employee Monthly Report" on the Leave Form module.
+    |
+    */
+    'all_employee_monthly_report_permission_id' => (static function (): ?int {
+        $raw = env('LEAVE_ALL_EMPLOYEE_MONTHLY_REPORT_PERMISSION_ID', '59');
+
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $raw = trim((string) $raw);
+
+        if ($raw === '' || ! ctype_digit($raw) || (int) $raw < 1) {
+            return null;
+        }
+
+        return (int) $raw;
+    })(),
+
+    /*
+    |--------------------------------------------------------------------------
     | Primary-group overrides (leaveforms only)
     |--------------------------------------------------------------------------
     |

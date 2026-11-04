@@ -38,7 +38,7 @@ class LeaveEditedMail extends Mailable
                 'leave' => $this->leave,
                 'employeeName' => $this->employeeName,
                 'approverName' => $this->approverName,
-                'frontendUrl' => config('leave.frontend_url'),
+                'frontendUrl' => LeaveMailLink::pendingReview($this->leave),
             ],
         );
     }
