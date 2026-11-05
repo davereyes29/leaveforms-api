@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
  *
  * | Person on leave | Who may file   |
  * |-----------------|----------------|
- * | Regular (not 1–4) | P1, P2       |
+ * | Regular (not 1–4) | P1, P2, P3, P4 |
  * | P1              | P2, P3, P4     |
  * | P2              | P3, P4         |
  * | P3              | P4             |
@@ -195,13 +195,15 @@ class LeaveOnBehalfAuthorizationService
     }
 
     /**
-     * Role matrix: higher PICs cover lower ones; only P1/P2 cover regulars.
-     * P4-as-target is president-only (handled in canFileFor, not this matrix).
+     * Role matrix: any PIC may file for a regular in a covered group.
+     * Higher PICs cover lower PIC targets. P4-as-target is president-only
+     * (handled in canFileFor, not this matrix). The on-behalf filer may
+     * also approve when their level is in the person-on-leave snapshot.
      */
     private function filerLevelMayActForTarget(int $filerLevel, ?int $targetLevel): bool
     {
         return match ($targetLevel) {
-            null => in_array($filerLevel, [1, 2], true),
+            null => in_array($filerLevel, [1, 2, 3, 4], true),
             1 => in_array($filerLevel, [2, 3, 4], true),
             2 => in_array($filerLevel, [3, 4], true),
             3 => $filerLevel === 4,

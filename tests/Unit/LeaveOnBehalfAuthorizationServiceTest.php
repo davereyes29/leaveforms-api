@@ -42,6 +42,39 @@ class LeaveOnBehalfAuthorizationServiceTest extends TestCase
         $this->assertFalse($service->canFileFor($this->employee(20), $this->employee(21)));
     }
 
+    public function test_p3_may_file_for_regular_in_covered_group(): void
+    {
+        $service = $this->service(
+            filer: $this->context(empId: 107, approvalLevel: 3, groupCodes: ['MPM']),
+            target: $this->context(empId: 240, approvalLevel: null),
+            targetGroup: 'MPM',
+        );
+
+        $this->assertTrue($service->canFileFor($this->employee(107), $this->employee(240)));
+    }
+
+    public function test_p4_may_file_for_regular_in_covered_group(): void
+    {
+        $service = $this->service(
+            filer: $this->context(empId: 104, approvalLevel: 4, groupCodes: ['MPM']),
+            target: $this->context(empId: 240, approvalLevel: null),
+            targetGroup: 'MPM',
+        );
+
+        $this->assertTrue($service->canFileFor($this->employee(104), $this->employee(240)));
+    }
+
+    public function test_p3_may_not_file_for_regular_outside_covered_group(): void
+    {
+        $service = $this->service(
+            filer: $this->context(empId: 107, approvalLevel: 3, groupCodes: ['CEM']),
+            target: $this->context(empId: 240, approvalLevel: null),
+            targetGroup: 'MPM',
+        );
+
+        $this->assertFalse($service->canFileFor($this->employee(107), $this->employee(240)));
+    }
+
     public function test_regular_employee_may_not_file_on_behalf(): void
     {
         $service = $this->service(

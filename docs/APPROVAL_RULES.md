@@ -54,13 +54,13 @@ When `POST /api/leaves` includes `emp_id` different from the logged-in user, `Le
 
 | Person on leave (`emp_id`) | Who may file (`filed_by_emp_id`) |
 |----------------------------|----------------------------------|
-| Regular (no `formspic` role 1–4) | P1, P2 |
+| Regular (no `formspic` role 1–4) | P1, P2, P3, P4 |
 | P1 | P2, P3, P4 |
 | P2 | P3, P4 |
 | P3 | P4 |
 | P4 | President |
 
-Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit.
+Approval requirements are still snapshotted from the **person on leave**, not the person who clicked submit. The on-behalf filer may approve that request when their level is in the snapshot.
 
 **VL advance notice** does not apply to this path. The employee on leave or the original filer may edit the pending request afterward.
 
