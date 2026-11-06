@@ -19,6 +19,7 @@ class LeaveRejectedMail extends Mailable
         public string $recipientName,
         public string $approverName,
         public string $remarks,
+        public bool $forFiler = false,
     ) {
         $this->embedLeaveMailIcons('rejected.png');
     }
@@ -26,7 +27,9 @@ class LeaveRejectedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your leave request has been rejected',
+            subject: $this->forFiler
+                ? "Leave request for {$this->employeeName} has been rejected"
+                : 'Your leave request has been rejected',
         );
     }
 
@@ -42,6 +45,7 @@ class LeaveRejectedMail extends Mailable
                 'recipientName' => $this->recipientName,
                 'approverName' => $this->approverName,
                 'remarks' => $this->remarks,
+                'forFiler' => $this->forFiler,
                 'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );

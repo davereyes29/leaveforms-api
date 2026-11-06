@@ -168,6 +168,7 @@ class LeaveNotificationService
                         employeeName: $employeeName,
                         recipientName: $recipient->firstname ?: 'there',
                         approverName: $approverName,
+                        forFiler: $this->isOnBehalfFiler($leave, $recipient),
                     ),
                 );
             } catch (\Throwable $exception) {
@@ -219,6 +220,7 @@ class LeaveNotificationService
                         recipientName: $recipient->firstname ?: 'there',
                         approverName: $approverName,
                         remarks: $remarks,
+                        forFiler: $this->isOnBehalfFiler($leave, $recipient),
                     ),
                 );
             } catch (\Throwable $exception) {
@@ -270,6 +272,7 @@ class LeaveNotificationService
                         recipientName: $recipient->firstname ?: 'there',
                         adminName: $adminName,
                         cancellationReason: $cancellationReason,
+                        forFiler: $this->isOnBehalfFiler($leave, $recipient),
                     ),
                 );
             } catch (\Throwable $exception) {
@@ -747,6 +750,11 @@ class LeaveNotificationService
     private function isAdminMedCertLeave(LeaveInfo $leave): bool
     {
         return LeaveTypeRules::isAdminApproved((string) $leave->leaveType?->code);
+    }
+
+    private function isOnBehalfFiler(LeaveInfo $leave, Employee $recipient): bool
+    {
+        return (int) $recipient->id !== (int) $leave->emp_id;
     }
 
     /**

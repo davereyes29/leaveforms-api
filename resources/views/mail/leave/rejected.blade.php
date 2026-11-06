@@ -1,13 +1,19 @@
 <x-mail::message>
 @include('mail.leave._heading', [
     'status' => 'Rejected',
-    'message' => 'Your '.$leave->leaveType->mailLabel().' request has been rejected',
+    'message' => $forFiler
+        ? $employeeName."'s ".$leave->leaveType->mailLabel().' request has been rejected'
+        : 'Your '.$leave->leaveType->mailLabel().' request has been rejected',
     'tone' => 'rejected',
 ])
 
 Hello {{ $recipientName }},
 
+@if ($forFiler)
+The **{{ $leave->leaveType->mailLabel() }}** request you filed for **{{ $employeeName }}** has been rejected by **{{ $approverName }}**.
+@else
 Your **{{ $leave->leaveType->mailLabel() }}** request has been rejected by **{{ $approverName }}**.
+@endif
 
 @include('mail.leave._details', [
     'leave' => $leave,

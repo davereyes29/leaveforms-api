@@ -1,13 +1,19 @@
 <x-mail::message>
 @include('mail.leave._heading', [
     'status' => 'Cancelled',
-    'message' => 'Your '.$leave->leaveType->mailLabel().' request has been cancelled',
+    'message' => $forFiler
+        ? $employeeName."'s ".$leave->leaveType->mailLabel().' request has been cancelled'
+        : 'Your '.$leave->leaveType->mailLabel().' request has been cancelled',
     'tone' => 'cancelled',
 ])
 
 Hello {{ $recipientName }},
 
+@if ($forFiler)
+The **{{ $leave->leaveType->mailLabel() }}** request you filed for **{{ $employeeName }}** has been cancelled by **{{ $adminName }}**.
+@else
 Your **{{ $leave->leaveType->mailLabel() }}** request has been cancelled by **{{ $adminName }}**.
+@endif
 
 @include('mail.leave._details', [
     'leave' => $leave,

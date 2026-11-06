@@ -19,6 +19,7 @@ class LeaveCancelledByAdminMail extends Mailable
         public string $recipientName,
         public string $adminName,
         public string $cancellationReason,
+        public bool $forFiler = false,
     ) {
         $this->embedLeaveMailIcons('cancelled.png');
     }
@@ -26,7 +27,9 @@ class LeaveCancelledByAdminMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your leave request has been cancelled',
+            subject: $this->forFiler
+                ? "Leave request for {$this->employeeName} has been cancelled"
+                : 'Your leave request has been cancelled',
         );
     }
 
@@ -42,6 +45,7 @@ class LeaveCancelledByAdminMail extends Mailable
                 'recipientName' => $this->recipientName,
                 'adminName' => $this->adminName,
                 'cancellationReason' => $this->cancellationReason,
+                'forFiler' => $this->forFiler,
                 'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );

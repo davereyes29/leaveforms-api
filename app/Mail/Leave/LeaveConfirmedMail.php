@@ -18,6 +18,7 @@ class LeaveConfirmedMail extends Mailable
         public string $employeeName,
         public string $recipientName,
         public string $approverName,
+        public bool $forFiler = false,
     ) {
         $this->embedLeaveMailIcons('approved.png');
     }
@@ -25,7 +26,9 @@ class LeaveConfirmedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your leave request has been approved',
+            subject: $this->forFiler
+                ? "Leave request for {$this->employeeName} has been approved"
+                : 'Your leave request has been approved',
         );
     }
 
@@ -40,6 +43,7 @@ class LeaveConfirmedMail extends Mailable
                 'employeeName' => $this->employeeName,
                 'recipientName' => $this->recipientName,
                 'approverName' => $this->approverName,
+                'forFiler' => $this->forFiler,
                 'frontendUrl' => LeaveMailLink::employeeView((int) $this->leave->id),
             ],
         );
