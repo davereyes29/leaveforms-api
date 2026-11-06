@@ -277,6 +277,7 @@ class LeaveDurationService
     public function holidayDatesBetween(string $from, string $to): array
     {
         return KdtHoliday::query()
+            ->where('fldLocID', KdtHoliday::KDT_LOCATION_ID)
             ->whereDate('fldDate', '>=', $from)
             ->whereDate('fldDate', '<=', $to)
             ->pluck('fldDate')
@@ -369,6 +370,7 @@ class LeaveDurationService
         }
 
         return ! KdtHoliday::query()
+            ->where('fldLocID', KdtHoliday::KDT_LOCATION_ID)
             ->whereDate('fldDate', $ymd)
             ->exists();
     }
