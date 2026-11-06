@@ -213,6 +213,11 @@ class LegacyLeaveMigrationService
                         continue;
                     }
 
+                    if ($deductConfirmed) {
+                        $mapped = $this->clampConfirmedPaidDays($mapped, $typeId);
+                        $deductConfirmed = bccomp((string) $mapped['paid_days'], '0', 2) > 0;
+                    }
+
                     if ($dryRun) {
                         $stats['inserted']++;
                         if ($mapped['status'] === LeaveStatus::PendingApproval) {
@@ -570,6 +575,38 @@ class LegacyLeaveMigrationService
         }
 
         return bccomp((string) ($mapped['paid_days'] ?? '0'), '0', 2) > 0;
+    }
+
+    /**
+     * A confirmed VL/SL on or after the cutoff is still imported when the sheet
+     * cannot cover it. Paid days shrink to the current available balance and the
+     * remainder stays on the leave as LWOP.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @return array<string, mixed>
+     */
+    private function clampConfirmedPaidDays(array $mapped, int $leaveTypeId): array
+    {
+        $paidDays = (string) ($mapped['paid_days'] ?? '0');
+        $duration = (string) ($mapped['duration'] ?? '0');
+
+        if (bccomp($paidDays, '0', 2) <= 0) {
+            return $mapped;
+        }
+
+        $available = $this->balanceService->availableFor((int) $mapped['emp_id'], $leaveTypeId);
+        if (bccomp($available, '0', 2) < 0) {
+            $available = '0.00';
+        }
+
+        if (bccomp($paidDays, $available, 2) <= 0) {
+            return $mapped;
+        }
+
+        $mapped['paid_days'] = $available;
+        $mapped['lwop_days'] = bcsub($duration, $available, 2);
+
+        return $mapped;
     }
 
     private function deductConfirmedCredits(LeaveInfo $leave, string $leaveTypeCode): void
